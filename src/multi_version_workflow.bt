@@ -1,0 +1,24 @@
+/// Test workflow with multiple version markers.
+///
+/// Uses two different version names to verify they coexist independently.
+/// Returns a string combining both version paths.
+///
+///   workflow := MultiVersionWorkflow new
+///   workflow run: "test" ctx: ctx
+///   // => "pay-v1:notify-v2"
+Object subclass: MultiVersionWorkflow
+
+  run: _args ctx: ctx -> String =>
+    payV := ctx
+      version: "payment-flow"
+      defaultVersion: 1
+      maxVersion: 2
+    notifyV := ctx
+      version: "notification-flow"
+      defaultVersion: 2
+      maxVersion: 3
+    payLabel := payV == 1 ifTrue: ["pay-v1"] ifFalse: ["pay-v2"]
+    notifyLabel := notifyV == 2 ifTrue: ["notify-v2"] ifFalse: ["notify-v3"]
+    "{payLabel}:{notifyLabel}"
+
+  registerQueries: _ctx => nil

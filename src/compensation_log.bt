@@ -1,0 +1,18 @@
+/// Mutable log for tracking compensation execution order in tests.
+///
+///   log := CompensationLog spawn
+///   log add: "step-1"
+///   log add: "step-2"
+///   log entries  // => #("step-1", "step-2")
+Actor subclass: CompensationLog
+  state: entries :: List = #()
+
+  /// Append an entry to the log.
+  ///
+  ///   log add: "debit"
+  add: entry :: String => self.entries := self.entries add: entry
+
+  /// Return all logged entries in order.
+  ///
+  ///   log entries  // => #("step-1", "step-2")
+  entries -> List => self.entries

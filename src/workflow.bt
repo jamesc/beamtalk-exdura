@@ -39,6 +39,19 @@
 ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #(item)
 ///   result := handle result   // blocks until child completes
 ///
+/// Continue-as-new resets the event history for long-running workflows:
+///
+///   nextCursor isNil
+///     ifTrue: ["done"]
+///     ifFalse: [ctx continueAsNew: #(nextCursor)]
+///
+/// Versioning enables safe code changes for in-flight workflows:
+///
+///   v := ctx version: "payment-flow" defaultVersion: 2 maxVersion: 2
+///   v == 1
+///     ifTrue: [ctx runActivity: PaymentActivities method: #chargeV1: with: #(orderId)]
+///     ifFalse: [ctx runActivity: PaymentActivities method: #chargeV2: with: #(orderId)]
+///
 /// Query handlers are registered in `registerQueries:` and receive an
 /// ActorSnapshot proxy as their argument. Workflow state visible to
 /// queries is managed through the context's setState:to: method:

@@ -1,0 +1,18 @@
+/// Test fixture: batch processing activities for continue-as-new tests.
+///
+/// fetchBatch: returns a result with a #nextCursor key. When the cursor
+/// is "last", returns nil for nextCursor to signal completion.
+///
+///   BatchActivities fetchBatch: #("batch-1")
+///   // => #{#nextCursor => "batch-2", #processed => 10}
+Activity subclass: BatchActivities
+
+  /// Fetch and process a batch. Returns a Dictionary with #nextCursor
+  /// (nil when done) and #processed count.
+  ///
+  ///   BatchActivities fetchBatch: #("batch-1")
+  class fetchBatch: args :: List =>
+    cursor := args at: 1
+    cursor =:= "last" ifTrue: [
+      #{#nextCursor => nil, #processed => 5}
+    ] ifFalse: [#{#nextCursor => "last", #processed => 10}]

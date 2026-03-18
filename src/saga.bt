@@ -1,0 +1,34 @@
+/// Helper for multi-step workflows that need rollback on failure.
+///
+/// Tracks compensation blocks in registration order and executes them
+/// in reverse (LIFO) when compensate is called. Compensation blocks
+/// that fail are caught so remaining compensations still run.
+///
+///   saga := Saga spawn
+///   saga addCompensation: [account credit: 100]
+///   saga addCompensation: [inventory restock: item]
+///   saga compensate  // restocks first, then credits
+Actor subclass: Saga
+  state: compensations :: List = #()
+
+  /// Append a compensation block to the list.
+  ///
+  ///   saga addCompensation: [account credit: amount]
+  addCompensation: block :: Block =>
+    self.compensations := self.compensations add: block
+
+  /// Return the list of registered compensation blocks.
+  ///
+  ///   saga compensations  // => #(block1, block2, ...)
+  compensations -> List => self.compensations
+
+  /// Execute all compensation blocks in reverse (LIFO) order.
+  ///
+  /// Each block is wrapped in error handling so that a failing
+  /// compensation does not prevent remaining compensations from running.
+  ///
+  ///   saga compensate
+  compensate =>
+    self.compensations reversed do: [:block |
+      [block value] on: Exception do: [:e | nil]
+    ]

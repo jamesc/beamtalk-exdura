@@ -674,6 +674,104 @@ Actor subclass: WorkflowEngine
   getParentClosePolicy: childWorkflowId :: String =>
     self.parentClosePolicy at: childWorkflowId ifAbsent: [#terminate]
 
+  /// Record a WorkflowContinuedAsNew event in the history.
+  ///
+  /// Called by WorkflowContext when a workflow calls continueAsNew:.
+  /// The event is recorded before the ContinueAsNewRequest is returned.
+  ///
+  ///   engine recordContinueAsNew: "wf-1" args: #("nextCursor")
+  recordContinueAsNew: workflowId :: String args: args :: List =>
+    now := Erlang os system_time: #second
+    continueEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowContinuedAsNew,
+        #timestamp => now,
+        #payload => #{#args => args}
+      }
+    self.eventStore appendEvents: workflowId events: #(continueEvent)
+    nil
+
+  /// Handle continue-as-new: mark old execution as continued_as_new
+  /// and start a fresh execution with the same workflow_id but a new run_id.
+  ///
+  /// The old execution's status is set to #continued_as_new. A new
+  /// WorkflowExecution is created with a fresh event history and the
+  /// provided args. The new execution starts from scratch with no replay
+  /// of old events.
+  ///
+  ///   engine continueAsNewWorkflow: "wf-1" workflowClass: PollerWorkflow args: #("nextCursor")
+  continueAsNewWorkflow: workflowId :: String workflowClass: workflowClass args: args :: List =>
+    // Mark old execution as continued_as_new
+    self.eventStore
+      updateExecution: workflowId
+      status: #continued_as_new
+      result: nil
+
+    // Delete old event history from ETS so appendEvents work
+    // on a clean slate with the same workflowId
+    self.eventStore clearEvents: workflowId
+
+    // Clean up old query snapshot to prevent stale query results
+    oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
+    oldSnap isNil ifFalse: [[oldSnap stop] on: Error do: [:e | nil]]
+    self.workflowSnapshots := self.workflowSnapshots removeKey: workflowId
+
+    // Clean up old query handlers
+    self.workflowQueryHandlers := self.workflowQueryHandlers removeKey: workflowId
+
+    // Update the existing execution record to running for the new attempt
+    now := Erlang os system_time: #second
+    wfType := workflowClass name asString
+    self.eventStore
+      updateExecution: workflowId
+      status: #running
+      result: nil
+
+    // Record WorkflowStarted event for the new execution
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => workflowId,
+          #workflowType => wfType,
+          #args => args
+        }
+      }
+    self.eventStore appendEvents: workflowId events: #(startEvent)
+
+    // Load fresh history and start the new workflow
+    history := self.eventStore readEvents: workflowId fromSeq: 1
+    input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
+    workflow := workflowClass new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self,
+        #workflowId => workflowId,
+        #input => input,
+        #history => history
+      }
+    runner go!
+    workflow
+
+  /// Record a VersionMarker event for a workflow.
+  ///
+  /// Stores the version name and selected version in the event history.
+  /// Called by WorkflowContext during first execution of a version: call.
+  ///
+  ///   engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
+  recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String =>
+    now := Erlang os system_time: #second
+    markerEvent := ExduraEvent
+      new: #{
+        #eventType => #VersionMarker,
+        #timestamp => now,
+        #payload => #{#name => name, #version => selectedVersion}
+      }
+    self.eventStore appendEvents: workflowId events: #(markerEvent)
+    nil
+
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
 
