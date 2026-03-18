@@ -1,0 +1,143 @@
+/// BT-1503: BUnit tests for query handler registration and Engine-side serving.
+///
+/// Tests that query handlers registered via onQuery:do: on WorkflowContext
+/// are evaluated against cached ActorSnapshot proxies, returning
+/// stale-but-correct results during mid-execution.
+TestCase subclass: QueryTest
+  state: client = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{}
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+
+  // === onQuery:do: registers handler with block receiving snapshot argument ===
+  testOnQueryDoRegistersHandler =>
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: (self.client engine)
+      workflowId: "wf-test"
+      history: #()
+    ctx onQuery: "getStatus" do: [:snap | snap status]
+    handlers := ctx queryHandlers
+    self assert: handlers size equals: 1
+    self assert: (handlers at: "getStatus" ifAbsent: [nil]) isNil not
+
+  // === Multiple query handlers can be registered ===
+  testMultipleQueryHandlers =>
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: (self.client engine)
+      workflowId: "wf-test"
+      history: #()
+    ctx onQuery: "getStatus" do: [:snap | snap status]
+    ctx onQuery: "getOrder" do: [:snap | #{#status => snap status}]
+    handlers := ctx queryHandlers
+    self assert: handlers size equals: 2
+
+  // === Engine captures snapshot at safe point ===
+  testEngineCapturesSnapshotAtSafePoint =>
+    handle := self.client
+      start: OrderWorkflow
+      id: "wf-query-snap"
+      args: #("order-99")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for workflow to complete
+    handle result: 5000
+
+    // Engine should have a snapshot for this workflow
+    engine := self.client engine
+    snap := engine getSnapshot: "wf-query-snap"
+    self assert: snap isNil not
+
+  // === Query returns result evaluated against snapshot ===
+  testQueryReturnsResultFromSnapshot =>
+    handle := self.client
+      start: OrderWorkflow
+      id: "wf-query-result"
+      args: #("order-100")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for workflow to complete
+    handle result: 5000
+
+    // Query should evaluate handler against snapshot
+    status := self.client query: "wf-query-result" name: "getStatus"
+    self assert: status equals: "completed"
+
+  // === Query returns structured result ===
+  testQueryReturnsStructuredResult =>
+    handle := self.client
+      start: OrderWorkflow
+      id: "wf-query-struct"
+      args: #("order-101")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for workflow to complete
+    handle result: 5000
+
+    // getOrder query returns a dictionary
+    order := self.client query: "wf-query-struct" name: "getOrder"
+    self assert: (order at: #orderId) equals: "order-101"
+    self assert: (order at: #status) equals: "completed"
+
+  // === Query while workflow is mid-activity returns last safe-point state ===
+  testQueryDuringActivityReturnsLastSafePointState =>
+    // Start a slow workflow that has query handlers and sleeps mid-execution
+    handle := self.client
+      start: SlowOrderWorkflow
+      id: "wf-query-mid"
+      args: #("order-mid")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for the first activity to complete and workflow to enter sleep
+    Erlang timer sleep: 500
+
+    // Query mid-execution — should return state from after first activity
+    status := self.client query: "wf-query-mid" name: "getStatus"
+    self assert: status equals: "processing"
+
+    // Wait for workflow to complete
+    handle result: 10000
+
+    // After completion, snapshot reflects final state
+    status2 := self.client query: "wf-query-mid" name: "getStatus"
+    self assert: status2 equals: "completed"
+
+  // === OrderWorkflow query pattern from SPEC.md §5.5 ===
+  testOrderWorkflowQueryPattern =>
+    handle := self.client
+      start: OrderWorkflow
+      id: "wf-spec-query"
+      args: #("order-spec-1")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for completion
+    result := handle result: 5000
+    self assert: (result at: #status) equals: "completed"
+
+    // Query getStatus
+    status := self.client query: "wf-spec-query" name: "getStatus"
+    self assert: status equals: "completed"
+
+    // Query getOrder — returns structured data
+    order := self.client query: "wf-spec-query" name: "getOrder"
+    self assert: (order at: #orderId) equals: "order-spec-1"
+    self assert: (order at: #status) equals: "completed"

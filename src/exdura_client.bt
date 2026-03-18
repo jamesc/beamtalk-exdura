@@ -60,15 +60,15 @@ Actor subclass: ExduraClient
       name: signalName
       payload: data
 
-  /// Query a running workflow's state (Phase 2 stub).
+  /// Query a running workflow's state via a registered query handler.
   ///
-  /// Returns nil in Phase 1. Full query support will be implemented
-  /// in Phase 2 with ActorSnapshot-based query handlers.
+  /// Evaluates the named query handler against the workflow's cached
+  /// snapshot (captured at the last safe point). Returns the handler's
+  /// result. Raises an error if no handler or snapshot exists.
   ///
   ///   status := client query: "wf-1" name: "getStatus"
-  query: _workflowId :: String name: _queryName :: String =>
-    // Phase 2: will evaluate query handler against workflow snapshot
-    nil
+  query: workflowId :: String name: queryName :: String =>
+    self.engine handleQuery: workflowId name: queryName
 
   /// Cancel a running workflow (Phase 3 stub).
   ///

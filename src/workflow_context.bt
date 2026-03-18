@@ -16,6 +16,8 @@ Actor subclass: WorkflowContext
   state: eventHistory :: List = #()
   state: isReplaying :: Boolean = false
   state: deliveredSignals :: List = #()
+  state: queryHandlers :: Dictionary = #{}
+  state: workflowState :: Dictionary = #{}
 
   /// Collect consecutive SignalReceived events from a history starting at fromIdx.
   ///
@@ -112,6 +114,8 @@ Actor subclass: WorkflowContext
                 replaySignals := WorkflowContext collectReplaySignalsFrom: completedIdx + 1 history: self.eventHistory
                 self.replayCursor := completedIdx + replaySignals size
                 self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Safe point: capture workflow snapshot for queries
+                self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
                 ^completedEvent payload at: #result
               ]
           ]
@@ -130,6 +134,8 @@ Actor subclass: WorkflowContext
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals
     ]
+    // Safe point: capture workflow snapshot for queries
+    self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     result
 
   /// Sleep for the given duration (milliseconds), recording timer events.
@@ -160,6 +166,8 @@ Actor subclass: WorkflowContext
                 replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
                 self.replayCursor := firedIdx + replaySignals size
                 self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Safe point: capture workflow snapshot for queries
+                self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
                 ^nil
               ]
           ]
@@ -173,7 +181,38 @@ Actor subclass: WorkflowContext
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals
     ]
+    // Safe point: capture workflow snapshot for queries
+    self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     nil
+
+  /// Register a query handler block for the given query name.
+  ///
+  /// The handler block receives an ActorSnapshot proxy as its argument
+  /// and should return the query result. Handlers are stored locally and
+  /// registered with the engine for query evaluation.
+  ///
+  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
+  onQuery: queryName :: String do: handlerBlock =>
+    self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
+
+  /// Return all registered query handlers.
+  ///
+  ///   ctx queryHandlers   // => #{"getStatus" => [:snap | ...]}
+  queryHandlers => self.queryHandlers
+
+  /// Set a workflow state field visible in query snapshots.
+  ///
+  /// Workflow state is captured at each safe point and used to build
+  /// the ActorSnapshot proxy that query handlers receive.
+  ///
+  ///   ctx setState: #status to: "processing"
+  setState: fieldName to: value =>
+    self.workflowState := self.workflowState at: fieldName put: value
+
+  /// Return the current workflow state as a Dictionary.
+  ///
+  ///   ctx workflowState   // => #{#status => "processing"}
+  workflowState => self.workflowState
 
   /// Return the list of signals delivered at safe points.
   ///
