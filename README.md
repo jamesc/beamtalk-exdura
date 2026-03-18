@@ -95,11 +95,11 @@ If the process crashes after step 3, the engine replays events 1-3 (skipping the
 beamtalk repl
 ```
 
-Load the project and a test workflow:
+Load the project and example workflows:
 
 ```beamtalk
-Workspace load: "src"               // load all library source
-Workspace load: "test/fixtures"     // load test workflows + activities
+:load "src/"
+:load "examples/"
 ```
 
 Start the engine and run a workflow:
@@ -108,7 +108,7 @@ Start the engine and run a workflow:
 client := ExduraClient connect: #{}
 
 handle := client
-  start: TwoActivityWorkflow
+  start: DoubleWorkflow
   id: "demo-1"
   args: #(5)
   taskQueue: "default"
