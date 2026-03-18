@@ -341,6 +341,9 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine captureSnapshot: #{#status => "processing"} forWorkflow: "wf-1"
   captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String =>
+    // Stop the previous snapshot Actor to avoid process leaks
+    oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
+    oldSnap isNil ifFalse: [[oldSnap stop] on: Error do: [:e | nil]]
     snap := ActorSnapshot spawnWith: #{#fields => stateDict}
     self.workflowSnapshots := self.workflowSnapshots at: workflowId put: snap
 
