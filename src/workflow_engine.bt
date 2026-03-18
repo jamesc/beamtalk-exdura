@@ -16,6 +16,7 @@
 Actor subclass: WorkflowEngine
   state: eventStore = nil
   state: activityPool = nil
+  state: signalBuffers :: Dictionary = #{}
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
@@ -244,10 +245,48 @@ Actor subclass: WorkflowEngine
   getEventHistory: workflowId =>
     self.eventStore readEvents: workflowId fromSeq: 1
 
-  /// Return buffered signals for a workflow (Phase 2 stub).
+  /// Buffer a signal for a workflow and record a SignalReceived event.
+  ///
+  /// The signal is appended to a per-workflow buffer (FIFO order) and a
+  /// SignalReceived event is recorded in the event history. The signal will
+  /// be delivered at the next safe point when the workflow drains its buffer.
+  ///
+  ///   engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  bufferSignal: workflowId :: String name: signalName :: String payload: data =>
+    now := Erlang os system_time: #second
+
+    // Record SignalReceived event
+    signalEvent := ExduraEvent
+      new: #{
+        #eventType => #SignalReceived,
+        #timestamp => now,
+        #payload => #{#signalName => signalName, #payload => data}
+      }
+    self.eventStore appendEvents: workflowId events: #(signalEvent)
+
+    // Append to per-workflow signal buffer
+    existing := self.signalBuffers at: workflowId ifAbsent: [#()]
+    signal := #{#name => signalName, #payload => data}
+    self.signalBuffers := self.signalBuffers at: workflowId put: (existing ++ #(signal))
+    nil
+
+  /// Drain and return all buffered signals for a workflow.
+  ///
+  /// Returns the list of buffered signals (in arrival order) and clears
+  /// the buffer. Each signal is a Dictionary with #name and #payload keys.
+  ///
+  ///   signals := engine drainSignals: "wf-1"
+  ///   // => #(#{#name => "approve", #payload => #{#user => "alice"}})
+  drainSignals: workflowId :: String =>
+    signals := self.signalBuffers at: workflowId ifAbsent: [#()]
+    self.signalBuffers := self.signalBuffers at: workflowId put: #()
+    signals
+
+  /// Return buffered signals for a workflow (without clearing).
   ///
   ///   engine getBufferedSignals: "wf-1"
-  getBufferedSignals: _workflowId => #()
+  getBufferedSignals: workflowId :: String =>
+    self.signalBuffers at: workflowId ifAbsent: [#()]
 
   /// Record a WorkflowCompleted event and update execution status.
   ///

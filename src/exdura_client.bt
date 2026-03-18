@@ -47,15 +47,18 @@ Actor subclass: ExduraClient
       args: args
     WorkflowHandle for: workflowId client: self
 
-  /// Send a signal to a running workflow (Phase 2 stub).
+  /// Send a signal to a running workflow.
   ///
-  /// Records the intent but does not yet deliver signals. Full signal
-  /// support will be implemented in Phase 2.
+  /// Records a SignalReceived event in the workflow's history and buffers
+  /// the signal in the engine. The signal will be delivered to the workflow
+  /// at the next safe point (after the current command completes).
   ///
   ///   client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
-  signal: _workflowId :: String name: _signalName :: String payload: _data =>
-    // Phase 2: will buffer signal and deliver to workflow
-    nil
+  signal: workflowId :: String name: signalName :: String payload: data =>
+    self.engine
+      bufferSignal: workflowId
+      name: signalName
+      payload: data
 
   /// Query a running workflow's state (Phase 2 stub).
   ///
