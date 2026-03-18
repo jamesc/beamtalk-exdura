@@ -1,0 +1,30 @@
+/// Test workflow that runs many activities in sequence (BT-1505).
+///
+/// Used by SnapshotTest to verify snapshot creation and replay optimization.
+/// Runs N activities (configurable via input), accumulating results.
+///
+///   engine startWorkflow: ManyStepWorkflow id: "wf-1" args: #(120)
+Workflow subclass: ManyStepWorkflow
+
+  /// Recursive helper: run activities from `from` to `count`, accumulating total.
+  class runSteps: count :: Integer from: idx :: Integer total: acc :: Integer ctx: ctx -> Integer =>
+    idx > count ifTrue: [^acc]
+    ctx
+      runActivity: CountingActivity
+      method: #doWork:
+      with: #(#{#input => idx asString})
+    self
+      runSteps: count
+      from: idx + 1
+      total: acc + 1
+      ctx: ctx
+
+  /// Run N sequential activities, accumulating a running total.
+  /// Input is the number of activities to run.
+  /// Uses class helper to avoid block mutation gotcha with activity calls.
+  run: count ctx: ctx -> Integer =>
+    ManyStepWorkflow
+      runSteps: count
+      from: 1
+      total: 0
+      ctx: ctx
