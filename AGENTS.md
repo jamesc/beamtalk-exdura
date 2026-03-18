@@ -100,6 +100,14 @@ whether code is correct, evaluate it directly rather than inferring from source.
 | `show_codegen` | Inspect generated Core Erlang |
 | `inspect` | Examine a live actor's state |
 
+## Code Style
+
+- **Always add type annotations** using `::` syntax on state declarations, method parameters, and return types
+- State: `state: count :: Integer = 0`
+- Parameters: `createExecution: execution :: WorkflowExecution =>`
+- Return types: `count -> Integer => self.count`
+- Nullable fields with `= nil` may omit the type if genuinely untyped
+
 ## Essential Patterns
 
 ### Class Hierarchy
