@@ -1,0 +1,22 @@
+/// Workflow that calls CountingActivity twice in sequence (BT-1493).
+///
+/// Used by ReplayProofTest to verify deterministic replay. Each call to
+/// doWork: increments the ETS call counter, so replayed runs can be
+/// distinguished from fresh runs by checking the counter.
+///
+///   engine startWorkflow: TwoStepWorkflow id: "wf-1" args: #("hello")
+Workflow subclass: TwoStepWorkflow
+
+  /// Run two sequential activities: first processes the input,
+  /// second processes the first result.
+  run: input ctx: ctx -> Dictionary =>
+    a := ctx
+      runActivity: CountingActivity
+      method: #doWork:
+      with: #(#{#input => input})
+    aResult := a at: #result
+    b := ctx
+      runActivity: CountingActivity
+      method: #doWork:
+      with: #(#{#input => aResult})
+    #{#first => a, #second => b}
