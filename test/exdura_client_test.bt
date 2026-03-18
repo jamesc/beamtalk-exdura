@@ -126,8 +126,8 @@ TestCase subclass: ExduraClientTest
       self assert: e workflowType equals: "PassthroughWorkflow"
     ]
 
-  // === Signal/query/cancel stubs ===
-  testSignalStubReturnsNil =>
+  // === Signal/query/cancel ===
+  testSignalReturnsNil =>
     result := self.client
       signal: "wf-1"
       name: "test"

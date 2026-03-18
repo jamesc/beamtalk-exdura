@@ -1,8 +1,10 @@
-/// Provides activity dispatch and replay capabilities for workflow execution.
+/// Provides activity dispatch, replay, and signal delivery for workflow execution.
 ///
 /// WorkflowContext is an Actor that manages the replay cursor and event
 /// history. It dispatches activities to the engine during normal execution
-/// and returns cached results during replay.
+/// and returns cached results during replay. At each safe point (after
+/// runActivity: or sleep: returns), it drains buffered signals from the
+/// engine and makes them available for processing.
 ///
 ///   ctx := WorkflowContext spawn
 ///   ctx initWith: engine workflowId: "wf-1" history: events
@@ -13,6 +15,38 @@ Actor subclass: WorkflowContext
   state: replayCursor :: Integer = 0
   state: eventHistory :: List = #()
   state: isReplaying :: Boolean = false
+  state: deliveredSignals :: List = #()
+
+  /// Collect consecutive SignalReceived events from a history starting at fromIdx.
+  ///
+  /// Returns a list of signal dictionaries (#{#name => ..., #payload => ...}).
+  /// Class method to avoid self-send deadlock when called from Actor handlers.
+  ///
+  ///   WorkflowContext collectReplaySignalsFrom: 4 history: events
+  ///   // => #(#{#name => "approve", #payload => #{#user => "alice"}})
+  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List =>
+    self
+      collectReplaySignalsFrom: fromIdx
+      history: eventHistory
+      acc: #()
+
+  /// Recursive helper to collect consecutive SignalReceived events.
+  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List acc: acc :: List =>
+    fromIdx > eventHistory size ifTrue: [^acc]
+    event := eventHistory at: fromIdx
+    event eventType =:= #SignalReceived
+      ifTrue: [
+        sigPayload := event payload
+        sig := #{
+          #name => (sigPayload at: #signalName),
+          #payload => (sigPayload at: #payload)
+        }
+        self
+          collectReplaySignalsFrom: fromIdx + 1
+          history: eventHistory
+          acc: (acc ++ #(sig))
+      ]
+      ifFalse: [acc]
 
   /// Initialize with engine, workflow ID, and event history.
   ///
@@ -70,8 +104,14 @@ Actor subclass: WorkflowContext
             isCompleted := completedEvent eventType =:= #ActivityCompleted
             (isScheduled and: [isCompleted])
               ifTrue: [
-                // Consume replay: advance cursor and return cached result
+                // Consume replay: advance cursor past Scheduled+Completed
                 self.replayCursor := completedIdx
+                // Safe point: collect consecutive SignalReceived events from history.
+                // Scan ahead to count how many signals follow, then consume them all.
+                // Avoids reading self.replayCursor in a loop (block mutation gotcha).
+                replaySignals := WorkflowContext collectReplaySignalsFrom: completedIdx + 1 history: self.eventHistory
+                self.replayCursor := completedIdx + replaySignals size
+                self.deliveredSignals := self.deliveredSignals ++ replaySignals
                 ^completedEvent payload at: #result
               ]
           ]
@@ -85,6 +125,11 @@ Actor subclass: WorkflowContext
       workflowId: self.workflowId
       options: options
     self.replayCursor := self.replayCursor + 2
+    // Safe point: drain buffered signals from the engine
+    signals := self.engine drainSignals: self.workflowId
+    signals size > 0 ifTrue: [
+      self.deliveredSignals := self.deliveredSignals ++ signals
+    ]
     result
 
   /// Sleep for the given duration (milliseconds), recording timer events.
@@ -111,6 +156,10 @@ Actor subclass: WorkflowContext
               ifTrue: [
                 // Consume replay: advance cursor and return immediately
                 self.replayCursor := firedIdx
+                // Safe point: collect consecutive SignalReceived events from history
+                replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
+                self.replayCursor := firedIdx + replaySignals size
+                self.deliveredSignals := self.deliveredSignals ++ replaySignals
                 ^nil
               ]
           ]
@@ -119,4 +168,17 @@ Actor subclass: WorkflowContext
     self.isReplaying := false
     self.engine scheduleTimer: duration workflowId: self.workflowId
     self.replayCursor := self.replayCursor + 2
+    // Safe point: drain buffered signals from the engine
+    signals := self.engine drainSignals: self.workflowId
+    signals size > 0 ifTrue: [
+      self.deliveredSignals := self.deliveredSignals ++ signals
+    ]
     nil
+
+  /// Return the list of signals delivered at safe points.
+  ///
+  /// Each signal is a Dictionary with #name and #payload keys.
+  /// Useful for testing and for future signal handler dispatch (BT-1501).
+  ///
+  ///   ctx deliveredSignals
+  deliveredSignals => self.deliveredSignals

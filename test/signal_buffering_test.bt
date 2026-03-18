@@ -1,0 +1,350 @@
+/// BT-1500: BUnit tests for signal buffering in WorkflowEngine.
+///
+/// Tests that signals sent during workflow execution are buffered by the
+/// engine and delivered at safe points. Verifies SignalReceived events are
+/// recorded in the event history and delivery order matches arrival order.
+TestCase subclass: SignalBufferingTest
+  state: client = nil
+  state: testDir = "target/bt-test-tmp/signal-buffering"
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.client := ExduraClient connect: #{}
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+
+  // === Engine bufferSignal records SignalReceived event ===
+  testBufferSignalRecordsEvent =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    // Create a dummy execution so we can append events
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-sig-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    store createExecution: exec
+
+    engine
+      bufferSignal: "wf-sig-1"
+      name: "approve"
+      payload: #{#user => "alice"}
+
+    events := store readEvents: "wf-sig-1" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventType equals: #SignalReceived
+    payload := (events at: 1) payload
+    self assert: (payload at: #signalName) equals: "approve"
+    self assert: ((payload at: #payload) at: #user) equals: "alice"
+
+  // === Engine bufferSignal adds to buffer ===
+  testBufferSignalAddsToBuffer =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-sig-2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    store createExecution: exec
+
+    engine
+      bufferSignal: "wf-sig-2"
+      name: "approve"
+      payload: #{#user => "alice"}
+    buffered := engine getBufferedSignals: "wf-sig-2"
+    self assert: buffered size equals: 1
+    self assert: ((buffered at: 1) at: #name) equals: "approve"
+
+  // === Engine drainSignals returns and clears buffer ===
+  testDrainSignalsReturnsAndClears =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-sig-3",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    store createExecution: exec
+
+    engine
+      bufferSignal: "wf-sig-3"
+      name: "sig1"
+      payload: #{#v => 1}
+    engine
+      bufferSignal: "wf-sig-3"
+      name: "sig2"
+      payload: #{#v => 2}
+
+    drained := engine drainSignals: "wf-sig-3"
+    self assert: drained size equals: 2
+    self assert: ((drained at: 1) at: #name) equals: "sig1"
+    self assert: ((drained at: 2) at: #name) equals: "sig2"
+
+    // Buffer should now be empty
+    remaining := engine getBufferedSignals: "wf-sig-3"
+    self assert: remaining size equals: 0
+
+  // === Signal delivery order matches arrival order ===
+  testSignalDeliveryOrderMatchesArrivalOrder =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-sig-order",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    store createExecution: exec
+
+    engine
+      bufferSignal: "wf-sig-order"
+      name: "first"
+      payload: #{}
+    engine
+      bufferSignal: "wf-sig-order"
+      name: "second"
+      payload: #{}
+    engine
+      bufferSignal: "wf-sig-order"
+      name: "third"
+      payload: #{}
+
+    drained := engine drainSignals: "wf-sig-order"
+    self assert: drained size equals: 3
+    self assert: ((drained at: 1) at: #name) equals: "first"
+    self assert: ((drained at: 2) at: #name) equals: "second"
+    self assert: ((drained at: 3) at: #name) equals: "third"
+
+  // === Client signal: delegates to engine ===
+  testClientSignalDelegatesToEngine =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-client-sig",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    store createExecution: exec
+
+    self.client
+      signal: "wf-client-sig"
+      name: "notify"
+      payload: #{#msg => "hello"}
+
+    // Signal should be in the buffer
+    buffered := engine getBufferedSignals: "wf-client-sig"
+    self assert: buffered size equals: 1
+    self assert: ((buffered at: 1) at: #name) equals: "notify"
+
+    // SignalReceived event should be in history
+    events := store readEvents: "wf-client-sig" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventType equals: #SignalReceived
+
+  // === Signals sent during activity are buffered and delivered at safe point ===
+  testSignalDuringActivityDeliveredAtSafePoint =>
+    engine := self.client engine
+
+    // Start a workflow with a sleep (gives us time to send signals)
+    _handle := self.client
+      start: SlowWorkflow
+      id: "wf-sig-safe"
+      args: #(2000)
+      taskQueue: "default"
+      options: #{}
+
+    // Wait a bit for workflow to start executing
+    Erlang timer sleep: 200
+
+    // Send signal while workflow is sleeping
+    self.client
+      signal: "wf-sig-safe"
+      name: "interrupt"
+      payload: #{#reason => "test"}
+
+    // Wait for workflow to complete
+    Erlang timer sleep: 3000
+
+    // Verify SignalReceived event is in history
+    events := self.client eventStore readEvents: "wf-sig-safe" fromSeq: 1
+    signalEvents := events select: [:e | e eventType =:= #SignalReceived]
+    self assert: signalEvents size equals: 1
+    self assert: ((signalEvents at: 1) payload at: #signalName) equals: "interrupt"
+
+    // Verify signal buffer was drained (signal delivered at safe point)
+    remaining := engine getBufferedSignals: "wf-sig-safe"
+    self assert: remaining size equals: 0
+
+  // === Replay: signals at safe points replayed from history, not re-buffered ===
+  testReplaySignalsFromHistoryNotRebuffered =>
+    engine := self.client engine
+    store := self.client eventStore
+
+    // Build a synthetic event history with a signal at a safe point
+    // WorkflowStarted, ActivityScheduled, ActivityCompleted, SignalReceived
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-replay-sig",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    events := #((ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-replay-sig",
+          #workflowType => "TestWorkflow",
+          #args => #(5)
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityScheduled,
+        #timestamp => now,
+        #payload => #{
+          #activityClass => "TestActivities",
+          #selector => "doubleIt:",
+          #args => #(5),
+          #options => #{}
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityCompleted,
+        #timestamp => now,
+        #payload => #{#result => 10}
+      }), (ExduraEvent
+      new: #{
+        #eventType => #SignalReceived,
+        #timestamp => now,
+        #payload => #{#signalName => "approve", #payload => #{#user => "alice"}}
+      }))
+    store appendEvents: "wf-replay-sig" events: events
+
+    // Create a WorkflowContext in replay mode with this history
+    history := store readEvents: "wf-replay-sig" fromSeq: 1
+    self assert: history size equals: 4
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-replay-sig"
+      history: history
+
+    // Replay the activity — should return cached result
+    result := ctx
+      runActivity: TestActivities
+      method: #doubleIt:
+      with: #(5)
+    self assert: result equals: 10
+
+  // === Replay signals are delivered from history ===
+  testReplaySignalsDeliveredFromHistory =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-replay-sig2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    events := #((ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-replay-sig2",
+          #workflowType => "TestWorkflow",
+          #args => #(5)
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityScheduled,
+        #timestamp => now,
+        #payload => #{
+          #activityClass => "TestActivities",
+          #selector => "doubleIt:",
+          #args => #(5),
+          #options => #{}
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityCompleted,
+        #timestamp => now,
+        #payload => #{#result => 10}
+      }), (ExduraEvent
+      new: #{
+        #eventType => #SignalReceived,
+        #timestamp => now,
+        #payload => #{#signalName => "approve", #payload => #{#user => "alice"}}
+      }))
+    store appendEvents: "wf-replay-sig2" events: events
+
+    history := store readEvents: "wf-replay-sig2" fromSeq: 1
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-replay-sig2"
+      history: history
+
+    // Replay the activity
+    ctx
+      runActivity: TestActivities
+      method: #doubleIt:
+      with: #(5)
+
+    // The SignalReceived event should have been consumed during replay
+    delivered := ctx deliveredSignals
+    self assert: delivered size equals: 1
+    self assert: ((delivered at: 1) at: #name) equals: "approve"
+
+    // Engine buffer should be empty (signal came from history, not engine)
+    buffered := engine getBufferedSignals: "wf-replay-sig2"
+    self assert: buffered size equals: 0
