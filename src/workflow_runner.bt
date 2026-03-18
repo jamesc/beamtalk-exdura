@@ -23,6 +23,10 @@ Actor subclass: WorkflowRunner
   state: snapshotInterval :: Integer = 100
 
   /// Execute the workflow. Called as an async cast (go!).
+  ///
+  /// Creates a WorkflowContext, lets the workflow register query handlers,
+  /// registers them with the engine, captures an initial snapshot, runs
+  /// the workflow, captures a final snapshot, and records completion.
   go =>
     ctx := WorkflowContext spawn
     ctx setSnapshotInterval: self.snapshotInterval
@@ -40,5 +44,16 @@ Actor subclass: WorkflowRunner
           workflowId: self.workflowId
           history: self.history
       ]
+    // Let the workflow register query handlers via the context
+    self.workflow registerQueries: ctx
+    // Register query handlers with the engine for query evaluation
+    handlers := ctx queryHandlers
+    handlers size > 0 ifTrue: [
+      self.engine registerQueryHandlers: handlers forWorkflow: self.workflowId
+    ]
+    // Capture initial snapshot before execution starts
+    self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
     result := self.workflow run: self.input ctx: ctx
+    // Capture final snapshot after workflow completes
+    self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
     self.engine completeWorkflow: self.workflowId result: result

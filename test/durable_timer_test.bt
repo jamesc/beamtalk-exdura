@@ -1,0 +1,284 @@
+/// BT-1504: Durable timer reconstruction on replay.
+///
+/// Tests that sleep: survives restarts by correctly handling:
+/// 1. Normal execution (TimerStarted + TimerFired recorded)
+/// 2. Full replay (both events in history — returns immediately)
+/// 3. Partial replay with pending timer (TimerStarted but no TimerFired)
+/// 4. Expired timer on replay (fire time passed — fires immediately)
+/// 5. TimerManager scanning and reconstruction
+TestCase subclass: DurableTimerTest
+  state: store = nil
+  state: engine = nil
+  state: counterTable = nil
+  state: testDir = "target/bt-test-tmp/durable-timer"
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.counterTable := [
+      Ets named: #counting_activity_calls
+    ] on: Error do: [:e | Ets new: #counting_activity_calls type: #set]
+    self.counterTable at: #callCount put: 0
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
+    self.store := nil
+    self.engine := nil
+    self.counterTable := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+
+  // ── Helpers ──
+
+  /// Read the current call count from the ETS counter table.
+  callCount => (Ets named: #counting_activity_calls) at: #callCount
+
+  /// Reset the call count to zero.
+  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+
+  // ── Tests ──
+
+  /// Normal execution: sleep records TimerStarted with fireAt and TimerFired.
+  testNormalSleepRecordsFireAt =>
+    // Directly test the engine's scheduleTimer to verify payload format.
+    // This avoids depending on SleepWorkflow + CountingActivity ETS race.
+    wfId := "wf-timer-direct"
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => wfId,
+        #runId => wfId,
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #args => #(),
+        #status => #running,
+        #startedAt => (Erlang os system_time: #second)
+      }
+    self.store createExecution: execution
+
+    // Schedule a short timer directly through the engine
+    self.engine scheduleTimer: 50 workflowId: wfId
+
+    // Verify TimerStarted event has fireAt in payload
+    events := self.store readEvents: wfId fromSeq: 1
+    timerStarted := events detect: [:e |
+      e eventType =:= #TimerStarted
+    ] ifNone: [nil]
+    self assert: timerStarted notNil
+    payload := timerStarted payload
+    self assert: (payload includesKey: #fireAt)
+    self assert: (payload includesKey: #duration)
+    self assert: (payload at: #duration) equals: 50
+
+    // fireAt should be approximately timestamp + duration
+    fireAt := payload at: #fireAt
+    self assert: fireAt > timerStarted timestamp
+
+    // Verify TimerFired was also recorded
+    timerFired := events detect: [:e |
+      e eventType =:= #TimerFired
+    ] ifNone: [nil]
+    self assert: timerFired notNil
+
+  /// Full replay: TimerStarted + TimerFired both present — returns immediately.
+  testFullReplaySkipsTimer =>
+    self resetCallCount
+
+    // Step 1: Run workflow normally
+    self.engine
+      startWorkflow: SleepWorkflow
+      id: "wf-timer-2"
+      args: #("hello")
+    Erlang timer sleep: 3000
+
+    exec := self.store getExecution: "wf-timer-2"
+    self assert: exec status equals: #completed
+    self assert: self callCount equals: 2
+
+    // Step 2: Replay with full history — should NOT re-execute activities or sleep
+    self resetCallCount
+    replayHistory := self.store readEvents: "wf-timer-2" fromSeq: 1
+    workflow := SleepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-timer-2",
+        #input => "hello",
+        #history => replayHistory
+      }
+    runner go!
+    Erlang timer sleep: 500
+
+    // Activities should not have been called again
+    self assert: self callCount equals: 0
+
+  /// Partial replay with pending timer: TimerStarted but no TimerFired.
+  /// The engine should reconstruct the timer and fire it (immediately,
+  /// since the fire time will have passed by the time we replay).
+  testPartialReplayReconstructsExpiredTimer =>
+    self resetCallCount
+
+    // Step 1: Run workflow normally to get full history
+    self.engine
+      startWorkflow: SleepWorkflow
+      id: "wf-timer-3"
+      args: #("hello")
+    Erlang timer sleep: 3000
+
+    fullHistory := self.store readEvents: "wf-timer-3" fromSeq: 1
+    self assert: self callCount equals: 2
+
+    // Step 2: Build partial history — up to TimerStarted but NOT TimerFired.
+    // History: WorkflowStarted(1), ActivityScheduled(2), ActivityCompleted(3),
+    //          TimerStarted(4), TimerFired(5), ActivityScheduled(6), ActivityCompleted(7), ...
+    // Find the index of the first TimerStarted event.
+    // Use inject to track #{#idx => counter, #found => index} and find the first match.
+    searchResult := fullHistory
+      inject: #{#idx => 1, #found => 0}
+      into: [:acc :evt |
+        (acc at: #found) > 0
+          ifTrue: [acc]
+          ifFalse: [
+            evt eventType =:= #TimerStarted ifTrue: [
+              #{#idx => (acc at: #idx) + 1, #found => (acc at: #idx)}
+            ] ifFalse: [#{#idx => (acc at: #idx) + 1, #found => 0}]
+          ]
+      ]
+    timerStartedIdx := searchResult at: #found
+    self assert: timerStartedIdx > 0
+    partialHistory := fullHistory take: timerStartedIdx
+
+    // Verify we captured up to TimerStarted
+    lastEvt := partialHistory at: partialHistory size
+    self assert: lastEvt eventType equals: #TimerStarted
+
+    // Step 3: Replay with partial history — timer fire time has passed,
+    // so it should fire immediately and continue to second activity.
+    self resetCallCount
+    workflow := SleepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-timer-3",
+        #input => "hello",
+        #history => partialHistory
+      }
+    runner go!
+    Erlang timer sleep: 3000
+
+    // Only the second activity should execute (first was replayed from history)
+    self assert: self callCount equals: 1
+
+  /// TimerManager: findPendingTimers identifies unresolved timers.
+  testTimerManagerFindsPendingTimers =>
+    nowMs := Erlang os system_time: #millisecond
+
+    // Build a history with TimerStarted but no TimerFired
+    events := #(ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => nowMs,
+        #payload => #{#workflowId => "wf-tm-1"}
+      }, ExduraEvent
+      new: #{
+        #eventType => #TimerStarted,
+        #timestamp => nowMs,
+        #payload => #{#duration => 5000, #fireAt => nowMs + 5000}
+      })
+    pending := TimerManager findPendingTimers: events
+    self assert: pending size equals: 1
+    info := pending at: 1
+    self assert: (info at: #duration) equals: 5000
+    self assert: (info at: #fireAt) equals: nowMs + 5000
+
+  /// TimerManager: no pending timers when all are matched.
+  testTimerManagerNoPendingWhenAllFired =>
+    nowMs := Erlang os system_time: #millisecond
+
+    events := #(ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => nowMs,
+        #payload => #{#workflowId => "wf-tm-2"}
+      }, ExduraEvent
+      new: #{
+        #eventType => #TimerStarted,
+        #timestamp => nowMs,
+        #payload => #{#duration => 5000, #fireAt => nowMs + 5000}
+      }, ExduraEvent
+      new: #{
+        #eventType => #TimerFired,
+        #timestamp => nowMs + 5000,
+        #payload => #{#duration => 5000}
+      })
+    pending := TimerManager findPendingTimers: events
+    self assert: pending size equals: 0
+
+  /// TimerManager: reconstructPendingTimers re-arms expired timers.
+  testTimerManagerReconstructsPendingTimers =>
+    // Create a workflow with a pending timer in the store
+    pastMs := (Erlang os system_time: #millisecond) - 10000
+    wfId := "wf-tm-3"
+
+    // Create execution record
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => wfId,
+        #runId => wfId,
+        #workflowType => "SleepWorkflow",
+        #taskQueue => "default",
+        #args => #("test"),
+        #status => #running,
+        #startedAt => pastMs
+      }
+    self.store createExecution: execution
+
+    // Append events: WorkflowStarted + TimerStarted (no TimerFired)
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => pastMs,
+        #payload => #{
+          #workflowId => wfId,
+          #workflowType => "SleepWorkflow",
+          #args => #("test")
+        }
+      }
+    timerEvent := ExduraEvent
+      new: #{
+        #eventType => #TimerStarted,
+        #timestamp => pastMs,
+        #payload => #{#duration => 5000, #fireAt => pastMs + 5000}
+      }
+    self.store appendEvents: wfId events: #(startEvent, timerEvent)
+
+    // Create TimerManager and reconstruct
+    manager := TimerManager spawn
+    manager initWith: self.engine eventStore: self.store
+    count := manager reconstructPendingTimers: #(wfId)
+
+    // Should have found and reconstructed 1 timer
+    self assert: count equals: 1
+    self assert: manager pendingCount equals: 1
+    self assert: manager status equals: #ready
+
+    // Verify TimerFired was recorded
+    events := self.store readEvents: wfId fromSeq: 1
+    firedEvents := events select: [:e | e eventType =:= #TimerFired]
+    self assert: firedEvents size equals: 1
+
+    [manager stop] on: Error do: [:e | nil]
