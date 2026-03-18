@@ -43,6 +43,20 @@ Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
   runActivity: activityClass method: selector with: args =>
+    self
+      runActivity: activityClass
+      method: selector
+      with: args
+      options: #{}
+
+  /// Execute an activity with options, or return cached result during replay.
+  ///
+  /// Options may include #retryPolicy and #startToCloseTimeout. During replay,
+  /// options are ignored and the cached result is returned.
+  ///
+  ///   result := ctx runActivity: TestActivities method: #doubleIt:
+  ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  runActivity: activityClass method: selector with: args options: options =>
     // Try replay: check for Scheduled+Completed pair at current cursor
     self.isReplaying
       ifTrue: [
@@ -69,5 +83,40 @@ Actor subclass: WorkflowContext
       selector: selector
       args: args
       workflowId: self.workflowId
+      options: options
     self.replayCursor := self.replayCursor + 2
     result
+
+  /// Sleep for the given duration (milliseconds), recording timer events.
+  ///
+  /// During replay, if a TimerStarted + TimerFired pair exists at the
+  /// current cursor position, returns immediately without sleeping.
+  /// During normal execution, delegates to the engine to record events
+  /// and perform the actual sleep.
+  ///
+  ///   ctx sleep: 5000   // sleep for 5 seconds
+  sleep: duration :: Integer =>
+    // Try replay: check for TimerStarted+TimerFired pair at current cursor
+    self.isReplaying
+      ifTrue: [
+        startedIdx := self.replayCursor + 1
+        firedIdx := startedIdx + 1
+        firedIdx <= self.eventHistory size
+          ifTrue: [
+            startedEvent := self.eventHistory at: startedIdx
+            firedEvent := self.eventHistory at: firedIdx
+            isStarted := startedEvent eventType =:= #TimerStarted
+            isFired := firedEvent eventType =:= #TimerFired
+            (isStarted and: [isFired])
+              ifTrue: [
+                // Consume replay: advance cursor and return immediately
+                self.replayCursor := firedIdx
+                ^nil
+              ]
+          ]
+      ]
+    // No replay match — transition to live execution
+    self.isReplaying := false
+    self.engine scheduleTimer: duration workflowId: self.workflowId
+    self.replayCursor := self.replayCursor + 2
+    nil

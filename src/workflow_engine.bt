@@ -86,6 +86,22 @@ Actor subclass: WorkflowEngine
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
   scheduleActivity: activityClass selector: selector args: args workflowId: workflowId =>
+    self
+      scheduleActivity: activityClass
+      selector: selector
+      args: args
+      workflowId: workflowId
+      options: #{}
+
+  /// Execute an activity with options (retry policy, timeouts).
+  ///
+  /// Records ActivityScheduled, executes with retry logic per RetryPolicy,
+  /// and records ActivityCompleted or ActivityFailed.
+  ///
+  ///   engine scheduleActivity: TestActivities selector: #doubleIt:
+  ///     args: #(5) workflowId: "wf-1"
+  ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId options: options =>
     now := Erlang os system_time: #second
 
     // Record ActivityScheduled event
@@ -96,23 +112,58 @@ Actor subclass: WorkflowEngine
         #payload => #{
           #activityClass => activityClass name asString,
           #selector => selector asString,
-          #args => args
+          #args => args,
+          #options => options
         }
       }
     self.eventStore appendEvents: workflowId events: #(scheduledEvent)
 
-    // Execute activity directly (Phase 0 — no worker pool)
-    // Wrap args in a list for perform:withArguments: which spreads arguments
-    result := activityClass perform: selector withArguments: #(args)
-    completedNow := Erlang os system_time: #second
-    completedEvent := ExduraEvent
+    // Build retry policy from options
+    rpDict := options at: #retryPolicy ifAbsent: [#{}]
+    rp := (rpDict isKindOf: RetryPolicy) ifTrue: [
+      rpDict
+    ] ifFalse: [RetryPolicy new: rpDict]
+
+    // Delegate to ActivityRetryExecutor (plain Object, avoids Actor deadlock)
+    ActivityRetryExecutor
+      execute: activityClass
+      selector: selector
+      args: args
+      eventStore: self.eventStore
+      workflowId: workflowId
+      retryPolicy: rp
+
+  /// Record a TimerStarted event and sleep for the given duration (ms).
+  ///
+  /// During replay, the WorkflowContext handles returning immediately
+  /// if TimerFired is already in the history.
+  ///
+  ///   engine scheduleTimer: 5000 workflowId: "wf-1"
+  scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
+    now := Erlang os system_time: #second
+
+    // Record TimerStarted event
+    startedEvent := ExduraEvent
       new: #{
-        #eventType => #ActivityCompleted,
-        #timestamp => completedNow,
-        #payload => #{#result => result}
+        #eventType => #TimerStarted,
+        #timestamp => now,
+        #payload => #{#duration => duration}
       }
-    self.eventStore appendEvents: workflowId events: #(completedEvent)
-    result
+    self.eventStore appendEvents: workflowId events: #(startedEvent)
+
+    // Phase 1: use Timer sleep: for the actual delay
+    Timer sleep: duration
+
+    // Record TimerFired event
+    firedNow := Erlang os system_time: #second
+    firedEvent := ExduraEvent
+      new: #{
+        #eventType => #TimerFired,
+        #timestamp => firedNow,
+        #payload => #{#duration => duration}
+      }
+    self.eventStore appendEvents: workflowId events: #(firedEvent)
+    nil
 
   /// Return the event history for a workflow.
   ///
