@@ -1,7 +1,9 @@
 /// Drives workflow execution in a separate Actor process.
 ///
 /// The runner creates a WorkflowContext, calls the workflow's run:ctx: method,
-/// and records completion via the engine.
+/// and records completion via the engine. Supports snapshot-based replay
+/// optimization: if a snapshot exists, the context starts from the snapshot
+/// point and replays only subsequent events.
 ///
 ///   runner := WorkflowRunner spawnWith: #{
 ///     #workflow => TwoActivityWorkflow new,
@@ -17,13 +19,26 @@ Actor subclass: WorkflowRunner
   state: workflowId :: String = ""
   state: input = nil
   state: history :: List = #()
+  state: snapshot = nil
+  state: snapshotInterval :: Integer = 100
 
   /// Execute the workflow. Called as an async cast (go!).
   go =>
     ctx := WorkflowContext spawn
-    ctx
-      initWith: self.engine
-      workflowId: self.workflowId
-      history: self.history
+    ctx setSnapshotInterval: self.snapshotInterval
+    self.snapshot isNil
+      ifTrue: [
+        ctx
+          initWith: self.engine
+          workflowId: self.workflowId
+          history: self.history
+      ]
+      ifFalse: [
+        ctx
+          initWithSnapshot: self.snapshot
+          engine: self.engine
+          workflowId: self.workflowId
+          history: self.history
+      ]
     result := self.workflow run: self.input ctx: ctx
     self.engine completeWorkflow: self.workflowId result: result

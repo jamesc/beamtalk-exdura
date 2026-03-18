@@ -6,7 +6,10 @@
 ///
 /// Events are also persisted to disk as ETF-encoded append-only files:
 ///   {dataDir}/events/{workflow_id}.etf — one file per workflow
-///   {dataDir}/snapshots/ — reserved for Phase 2 state snapshots
+///   {dataDir}/snapshots/{workflow_id}.etf — latest state snapshot
+///
+/// Snapshots enable replay optimization: instead of replaying all events,
+/// the engine loads the latest snapshot and replays only subsequent events.
 ///
 /// On startup, existing event files are scanned and reloaded into ETS,
 /// so workflows survive node restarts.
@@ -15,6 +18,8 @@
 ///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", ...})
 ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
 ///   store readEvents: "wf-1" fromSeq: 1
+///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
+///   store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
 Actor subclass: EventStore
   state: executions = nil
   state: events = nil
@@ -122,6 +127,65 @@ Actor subclass: EventStore
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
 
+  // --- Snapshot persistence ---
+
+  /// Save a state snapshot for a workflow at the given eventId.
+  ///
+  /// The snapshot is an ETF-serialized Dictionary containing the workflow
+  /// context state at the time of the snapshot. It is written to
+  /// `data/snapshots/{workflowId}.etf`, overwriting any previous snapshot.
+  ///
+  ///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
+  saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
+    path := self snapshotFilePath: workflowId
+    data := #{#state => state, #eventId => eventId}
+    binary := Erlang erlang term_to_binary: data
+    {#ok, fd} := Erlang file open: path with: #(#write, #binary, #raw)
+    [Erlang file write: fd with: binary]
+      on: Error
+      do: [:e |
+        Erlang file close: fd
+        self error: "Failed to write snapshot for {workflowId}: " ++ e printString
+      ]
+    Erlang file close: fd
+    nil
+
+  /// Load the latest snapshot for a workflow and return events after it.
+  ///
+  /// Returns a Dictionary with #snapshot (the saved state Dictionary and
+  /// #eventId) and #events (events with eventId > snapshot eventId).
+  /// If no snapshot exists, returns nil.
+  ///
+  ///   result := store readEventsFromSnapshot: "wf-1"
+  ///   result isNil ifFalse: [
+  ///     snap := result at: #snapshot
+  ///     events := result at: #events
+  ///   ]
+  readEventsFromSnapshot: workflowId :: String =>
+    path := self snapshotFilePath: workflowId
+    readResult := Erlang file read_file: path
+    readResult isError ifTrue: [^nil]
+    {#ok, content} := readResult
+    contentSize := Erlang erlang byte_size: content
+    contentSize =:= 0 ifTrue: [^nil]
+    snapshot := Erlang erlang binary_to_term: content
+    snapEventId := snapshot at: #eventId
+    snapState := snapshot at: #state
+    // Read only events after the snapshot point
+    allEvents := self.events at: workflowId ifAbsent: [#()]
+    laterEvents := allEvents select: [:evt | evt eventId > snapEventId]
+    #{
+      #snapshot => #{#state => snapState, #eventId => snapEventId},
+      #events => laterEvents
+    }
+
+  /// Check whether a snapshot file exists for a workflow.
+  ///
+  ///   store hasSnapshot: "wf-1"   // => true or false
+  hasSnapshot: workflowId :: String =>
+    path := self snapshotFilePath: workflowId
+    File isFile: path
+
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).
   destroy =>
@@ -148,6 +212,10 @@ Actor subclass: EventStore
   /// Path to the ETF event file for a given workflow.
   eventFilePath: workflowId :: String =>
     self.dataDir ++ "/events/{workflowId}.etf"
+
+  /// Path to the ETF snapshot file for a given workflow.
+  snapshotFilePath: workflowId :: String =>
+    self.dataDir ++ "/snapshots/{workflowId}.etf"
 
   // --- Private: File I/O ---
 

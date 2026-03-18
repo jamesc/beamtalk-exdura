@@ -93,6 +93,64 @@ Actor subclass: WorkflowEngine
     runner go!
     workflow
 
+  /// Replay a workflow, using a snapshot if available for optimization.
+  ///
+  /// If a snapshot exists, loads the snapshot state and only replays events
+  /// after the snapshot point. Otherwise replays from the full event history.
+  /// The snapshotInterval controls how often new snapshots are recorded
+  /// during replay (default: 100 events).
+  ///
+  ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello"
+  replayWorkflow: workflowClass id: workflowId input: input =>
+    self
+      replayWorkflow: workflowClass
+      id: workflowId
+      input: input
+      snapshotInterval: 100
+
+  /// Replay a workflow with a custom snapshot interval.
+  ///
+  /// When a snapshot exists, the full event history is still passed to the
+  /// context but the replay cursor starts at the snapshot point. This means
+  /// activities before the snapshot are replayed from history (fast, no
+  /// execution), while only truly new activities execute live.
+  ///
+  ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
+  replayWorkflow: workflowClass id: workflowId input: input snapshotInterval: interval :: Integer =>
+    workflow := workflowClass new
+    history := self.eventStore readEvents: workflowId fromSeq: 1
+    snapResult := self.eventStore readEventsFromSnapshot: workflowId
+    snapResult isNil
+      ifTrue: [
+        // No snapshot — full replay from event history
+        runner := WorkflowRunner
+          spawnWith: #{
+            #workflow => workflow,
+            #engine => self,
+            #workflowId => workflowId,
+            #input => input,
+            #history => history,
+            #snapshotInterval => interval
+          }
+        runner go!
+      ]
+      ifFalse: [
+        // Snapshot found — use snapshot state with full history
+        snapshot := snapResult at: #snapshot
+        runner := WorkflowRunner
+          spawnWith: #{
+            #workflow => workflow,
+            #engine => self,
+            #workflowId => workflowId,
+            #input => input,
+            #history => history,
+            #snapshot => (snapshot at: #state),
+            #snapshotInterval => interval
+          }
+        runner go!
+      ]
+    workflow
+
   /// Execute an activity class method and record events (no options).
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
@@ -321,6 +379,28 @@ Actor subclass: WorkflowEngine
       updateExecution: workflowId
       status: #failed
       result: reason
+
+  /// Save a state snapshot for a workflow at the given eventId.
+  ///
+  /// Records a StateSnapshot event in the event history and persists the
+  /// snapshot state to disk via the EventStore. Used by WorkflowContext
+  /// at configurable intervals to enable replay optimization.
+  ///
+  ///   engine saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
+  saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
+    now := Erlang os system_time: #second
+    snapshotEvent := ExduraEvent
+      new: #{
+        #eventType => #StateSnapshot,
+        #timestamp => now,
+        #payload => #{#eventId => eventId}
+      }
+    self.eventStore appendEvents: workflowId events: #(snapshotEvent)
+    self.eventStore
+      saveSnapshot: workflowId
+      state: state
+      eventId: eventId
+    nil
 
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
