@@ -120,15 +120,13 @@ whether code is correct, evaluate it directly rather than inferring from source.
   ```
 - **Always run `beamtalk fmt` before committing** — CI enforces `beamtalk fmt-check`
 
-## Known Actor Limitations
+## Known Actor Constraints
 
-These are current Beamtalk compiler/runtime constraints. Use composition instead of inheritance for Actor hierarchies.
-
-1. **Actor dispatch tables exclude inherited methods for self-sends** — if a superclass defines `foo =>`, an Actor subclass can't call `self foo`. Only methods defined directly on the class are in the dispatch table.
-2. **Actor state fields are inaccessible on subclasses** — `self.field` in a subclass can't read/write state declared on the superclass.
+1. **Inherited self-sends work but are slower** — Actor dispatch tables only contain locally-defined methods. Inherited method self-sends fall through to a hierarchy walk (`beamtalk_dispatch:super/5`) which is functional but less optimized than direct `__sealed_*` calls. **Caution:** inherited self-sends inside blocks can interact badly with the `calling_self` deadlock-prevention mechanism, potentially causing deadlocks.
+2. **Actor state fields are inaccessible on subclasses** — `self.field` in a subclass can't directly access state declared on the superclass. Use the superclass's public getter/setter methods instead (subject to constraint #1).
 3. **Objects have no state** — `Object` is for stateless behavior only. Use `Value` for immutable data (auto-generates getters, `withX:` setters, equality). Use `Actor` when mutable state is needed.
 
-**Workaround:** Use composition — pass collaborator actors rather than subclassing. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows instead of workflows inheriting from a stateful base.
+**Preferred pattern:** Use composition — pass collaborator actors rather than deep Actor inheritance. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows instead of workflows inheriting from a stateful base.
 
 ## Essential Patterns
 
