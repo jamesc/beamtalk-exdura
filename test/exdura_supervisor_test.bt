@@ -1,0 +1,75 @@
+/// BT-1499: BUnit tests for ExduraSupervisor and ExduraWorker.
+///
+/// Tests the supervision tree structure, one_for_one strategy, and the
+/// full ExduraWorker start: flow including running workflows through
+/// the client. Structure and lifecycle are tested together to avoid
+/// ETS named-table conflicts between independent supervisor instances.
+TestCase subclass: ExduraSupervisorTest
+  state: client = nil
+
+  setUp =>
+    // Clean up any leftover ETS tables from previous test runs
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    [File deleteAll: "data"] on: Error do: [:e | nil]
+    Erlang timer sleep: 200
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    [File deleteAll: "data"] on: Error do: [:e | nil]
+
+  // === ExduraSupervisor class-side config ===
+  testSupervisorStrategyIsOneForOne =>
+    self assert: ExduraSupervisor strategy equals: #oneForOne
+
+  // === ExduraWorker boots supervision tree and runs workflows ===
+  testWorkerBootsAndRunsWorkflows =>
+    // Start worker with custom config
+    self.client := ExduraWorker start: #{#maxConcurrentActivities => 25}
+    self assert: self.client notNil
+    self assert: self.client engine notNil
+    self assert: self.client eventStore notNil
+
+    // Verify the supervisor started all 4 children
+    sup := self.client supervisor
+    self assert: sup notNil
+    self assert: sup count equals: 4
+    self assert: (sup which: EventStore) notNil
+    self assert: (sup which: ActivityWorkerPool) notNil
+    self assert: (sup which: WorkflowEngine) notNil
+    self assert: (sup which: TimerManager) notNil
+
+    // Verify config was applied to the pool
+    pool := self.client engine activityPool
+    self assert: pool maxConcurrent equals: 25
+
+    // Run a simple passthrough workflow through the supervised engine
+    handle := self.client
+      start: PassthroughWorkflow
+      id: "sup-wf-1"
+      args: #("supervised")
+      taskQueue: "default"
+      options: #{}
+    result := handle result: 5000
+    self assert: result equals: "supervised"
+
+    // Run a two-activity workflow through the supervised engine
+    self.client
+      start: TwoActivityWorkflow
+      id: "sup-wf-2"
+      args: #(5)
+      taskQueue: "default"
+      options: #{}
+    Erlang timer sleep: 2000
+    exec := self.client getExecution: "sup-wf-2"
+    self assert: exec notNil
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 20

@@ -1,0 +1,58 @@
+/// Convenience entry point for booting the Exdura workflow engine.
+///
+/// ExduraWorker starts the full ExduraSupervisor supervision tree and
+/// returns an ExduraClient connected to the supervised WorkflowEngine.
+/// This is the recommended way to start Exdura in application code.
+///
+///   client := ExduraWorker start: #{
+///     #taskQueue => "orders",
+///     #workflows => #(OrderWorkflow),
+///     #activities => #(OrderActivities),
+///     #maxConcurrentWorkflows => 100,
+///     #maxConcurrentActivities => 50
+///   }
+///   handle := client start: OrderWorkflow id: "order-1"
+///     args: #("data") taskQueue: "orders" options: #{}
+///   result := handle result
+Object subclass: ExduraWorker
+
+  /// Boot the full supervision tree and return a connected ExduraClient.
+  ///
+  /// Starts ExduraSupervisor which spawns all children in order:
+  /// EventStore, ActivityWorkerPool, WorkflowEngine, TimerManager.
+  /// Then wires WorkflowEngine to EventStore and ActivityWorkerPool,
+  /// applies configuration, and returns a connected ExduraClient.
+  ///
+  /// Config keys:
+  ///   #taskQueue => String — name of the task queue (reserved for Phase 2 routing)
+  ///   #workflows => List — workflow classes to register (reserved for Phase 2)
+  ///   #activities => List — activity classes to register (reserved for Phase 2)
+  ///   #maxConcurrentWorkflows => Integer — max concurrent workflows (reserved)
+  ///   #maxConcurrentActivities => Integer — max concurrent activity workers
+  ///
+  /// Returns an ExduraClient actor connected to the supervised engine.
+  ///
+  ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
+  class start: config :: Dictionary =>
+    // Boot the supervision tree
+    sup := ExduraSupervisor supervise
+
+    // Retrieve supervised children
+    store := sup which: EventStore
+    pool := sup which: ActivityWorkerPool
+    engine := sup which: WorkflowEngine
+
+    // Wire engine to supervised EventStore and ActivityWorkerPool
+    engine initWithStore: store pool: pool
+
+    // Apply config: max concurrent activities
+    maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]
+    pool setMaxConcurrent: maxActivities
+
+    // Create client actor connected to the supervised engine and store
+    client := ExduraClient spawnWith: #{#engine => engine, #eventStore => store}
+
+    // Attach supervisor for lifecycle management (enables clean destroy)
+    client setSupervisor: sup
+
+    client

@@ -1,0 +1,29 @@
+/// Top-level OTP supervision tree for the Exdura durable workflow engine.
+///
+/// Manages the core components under a one_for_one strategy:
+///   - EventStore: durable event persistence (ETS + ETF files)
+///   - WorkflowEngine: workflow orchestration
+///   - ActivityWorkerPool: supervised activity execution
+///   - TimerManager: placeholder for Phase 2 durable timers
+///
+/// Children start in declaration order, ensuring EventStore and
+/// ActivityWorkerPool are available before WorkflowEngine. The
+/// one_for_one strategy restarts only the crashed child without
+/// affecting siblings.
+///
+///   sup := ExduraSupervisor supervise
+///   sup count               // => 4
+///   sup which: EventStore   // => the EventStore actor
+Supervisor subclass: ExduraSupervisor
+
+  /// Restart strategy: only restart the crashed child.
+  class strategy -> Symbol => #oneForOne
+
+  /// Child specifications in start order.
+  ///
+  /// EventStore starts first (WorkflowEngine depends on it).
+  /// ActivityWorkerPool starts second (WorkflowEngine dispatches through it).
+  /// WorkflowEngine starts third (wired to store/pool by ExduraWorker).
+  /// TimerManager starts last (Phase 2 placeholder).
+  class children -> List =>
+    #(EventStore supervisionSpec withRestart: #permanent, ActivityWorkerPool supervisionSpec withRestart: #permanent, WorkflowEngine supervisionSpec withRestart: #permanent, TimerManager supervisionSpec withRestart: #permanent)

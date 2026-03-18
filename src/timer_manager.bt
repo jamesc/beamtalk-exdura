@@ -1,0 +1,16 @@
+/// Placeholder Actor for timer management (Phase 2).
+///
+/// TimerManager will coordinate durable timers for workflow sleep and
+/// timeout operations. In Phase 1, timers use direct Timer sleep: calls.
+/// This placeholder ensures the supervision tree has the correct shape
+/// for Phase 2 integration.
+///
+///   manager := TimerManager spawn
+///   manager status   // => #ready
+Actor subclass: TimerManager
+  state: status :: Symbol = #ready
+
+  /// Return the current status of the timer manager.
+  ///
+  ///   manager status   // => #ready
+  status -> Symbol => self.status
