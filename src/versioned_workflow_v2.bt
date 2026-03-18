@@ -1,0 +1,20 @@
+/// Test workflow that uses version: with defaultVersion 2.
+///
+/// Same branching logic as VersionedWorkflowV1 but defaultVersion changed
+/// to 2. When replaying a workflow originally run with V1, the recorded
+/// VersionMarker (version: 1) takes precedence over the new default.
+///
+///   workflow := VersionedWorkflowV2 new
+///   workflow run: "order-1" ctx: ctx
+///   // => "v2-result" (first execution with defaultVersion 2)
+///   // => "v1-result" (replay of workflow originally run with V1)
+Object subclass: VersionedWorkflowV2
+
+  run: _args ctx: ctx -> String =>
+    v := ctx
+      version: "payment-flow"
+      defaultVersion: 2
+      maxVersion: 2
+    v == 1 ifTrue: ["v1-result"] ifFalse: ["v2-result"]
+
+  registerQueries: _ctx => nil
