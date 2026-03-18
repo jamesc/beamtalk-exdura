@@ -18,14 +18,15 @@ TestCase subclass: WorkflowExecutionTest
     self assert: wf searchAttributes equals: #{}
 
   testNewWithMap =>
-    wf := WorkflowExecution new: #{
-      #workflowId => "order-123",
-      #runId => "run-abc",
-      #workflowType => "OrderWorkflow",
-      #taskQueue => "default",
-      #args => #("arg1", "arg2"),
-      #startedAt => 1710000000
-    }
+    wf := WorkflowExecution
+      new: #{
+        #workflowId => "order-123",
+        #runId => "run-abc",
+        #workflowType => "OrderWorkflow",
+        #taskQueue => "default",
+        #args => #("arg1", "arg2"),
+        #startedAt => 1710000000
+      }
     self assert: wf workflowId equals: "order-123"
     self assert: wf runId equals: "run-abc"
     self assert: wf workflowType equals: "OrderWorkflow"

@@ -16,7 +16,6 @@ Actor subclass: EventStore
     self.events := Ets new: #exdura_events type: #set
 
   // --- Execution CRUD ---
-
   createExecution: execution :: WorkflowExecution =>
     wfId := execution workflowId
     (self.executions includesKey: wfId) ifTrue: [
@@ -25,14 +24,11 @@ Actor subclass: EventStore
     self.executions at: wfId put: execution
     execution
 
-  getExecution: workflowId :: String =>
-    self.executions at: workflowId
+  getExecution: workflowId :: String => self.executions at: workflowId
 
   updateExecution: workflowId :: String status: status :: Symbol result: result =>
     existing := self.executions at: workflowId
-    existing isNil ifTrue: [
-      self error: "Execution not found: {workflowId}"
-    ]
+    existing isNil ifTrue: [self error: "Execution not found: {workflowId}"]
     updated := (existing withStatus: status) withResult: result
     self.executions at: workflowId put: updated
     updated
@@ -44,24 +40,26 @@ Actor subclass: EventStore
     filterStatus := filter at: #status ifAbsent: [nil]
     filterType := filter at: #workflowType ifAbsent: [nil]
     // Apply both filters using select: — check each condition inline
-    allExecs select: [:e |
-      statusOk := filterStatus isNil or: [e status =:= filterStatus]
-      typeOk := filterType isNil or: [e workflowType =:= filterType]
-      statusOk and: [typeOk]
-    ]
+    allExecs
+      select: [:e |
+        statusOk := filterStatus isNil or: [e status =:= filterStatus]
+        typeOk := filterType isNil or: [e workflowType =:= filterType]
+        statusOk and: [typeOk]
+      ]
 
   // --- Event history ---
-
   appendEvents: workflowId :: String events: newEvents :: List =>
     existing := self.events at: workflowId ifAbsent: [#()]
     // Determine the next eventId from the last event in the existing list
     startId := existing size + 1
     // Build stamped list with monotonically increasing eventIds
-    stamped := newEvents inject: #{#id => startId, #list => #()} into: [:acc :evt |
-      curId := acc at: #id
-      numbered := evt withEventId: curId
-      #{#id => curId + 1, #list => ((acc at: #list) add: numbered)}
-    ]
+    stamped := newEvents
+      inject: #{#id => startId, #list => #()}
+      into: [:acc :evt |
+        curId := acc at: #id
+        numbered := evt withEventId: curId
+        #{#id => curId + 1, #list => ((acc at: #list) add: numbered)}
+      ]
     stampedEvents := stamped at: #list
     self.events at: workflowId put: (existing ++ stampedEvents)
     stampedEvents
@@ -72,7 +70,8 @@ Actor subclass: EventStore
     existing select: [:evt | evt eventId >= fromSeq]
 
   // --- Cleanup ---
-
   destroy =>
-    self.executions isNil ifFalse: [[self.executions delete] on: Error do: [:e | nil]]
+    self.executions isNil ifFalse: [
+      [self.executions delete] on: Error do: [:e | nil]
+    ]
     self.events isNil ifFalse: [[self.events delete] on: Error do: [:e | nil]]

@@ -12,11 +12,12 @@ TestCase subclass: TimeoutConfigTest
     self assert: tc heartbeatTimeout equals: nil
 
   testNewWithMap =>
-    tc := TimeoutConfig new: #{
-      #workflowExecutionTimeout => 86400000,
-      #startToCloseTimeout => 30000,
-      #heartbeatTimeout => 10000
-    }
+    tc := TimeoutConfig
+      new: #{
+        #workflowExecutionTimeout => 86400000,
+        #startToCloseTimeout => 30000,
+        #heartbeatTimeout => 10000
+      }
     self assert: tc workflowExecutionTimeout equals: 86400000
     self assert: tc workflowRunTimeout equals: nil
     self assert: tc startToCloseTimeout equals: 30000

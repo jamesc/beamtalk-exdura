@@ -15,14 +15,15 @@ TestCase subclass: ActivityTaskTest
     self assert: task attempt equals: 1
 
   testNewWithMap =>
-    task := ActivityTask new: #{
-      #taskId => "task-1",
-      #workflowId => "wf-1",
-      #activityType => "SendEmail",
-      #args => #(#{#to => "user@example.com"}),
-      #taskQueue => "email-queue",
-      #attempt => 3
-    }
+    task := ActivityTask
+      new: #{
+        #taskId => "task-1",
+        #workflowId => "wf-1",
+        #activityType => "SendEmail",
+        #args => #(#{#to => "user@example.com"}),
+        #taskQueue => "email-queue",
+        #attempt => 3
+      }
     self assert: task taskId equals: "task-1"
     self assert: task workflowId equals: "wf-1"
     self assert: task activityType equals: "SendEmail"

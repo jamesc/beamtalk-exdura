@@ -10,29 +10,52 @@ TestCase subclass: ExduraEventTest
     self assert: e payload equals: #{}
 
   testNewWithMap =>
-    e := ExduraEvent new: #{
-      #eventId => 1,
-      #eventType => #WorkflowStarted,
-      #timestamp => 1710000000,
-      #payload => #{#workflowId => "wf-1"}
-    }
+    e := ExduraEvent
+      new: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 1710000000,
+        #payload => #{#workflowId => "wf-1"}
+      }
     self assert: e eventId equals: 1
     self assert: e eventType equals: #WorkflowStarted
     self assert: e timestamp equals: 1710000000
     self assert: (e payload at: #workflowId) equals: "wf-1"
 
   testKeywordConstructor =>
-    e := ExduraEvent eventId: 2 eventType: #ActivityScheduled timestamp: 1710000001 payload: #{}
+    e := ExduraEvent
+      eventId: 2
+      eventType: #ActivityScheduled
+      timestamp: 1710000001
+      payload: #{}
     self assert: e eventId equals: 2
     self assert: e eventType equals: #ActivityScheduled
 
   testEquality =>
-    e1 := ExduraEvent new: #{#eventId => 1, #eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
-    e2 := ExduraEvent new: #{#eventId => 1, #eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    e1 := ExduraEvent
+      new: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
+    e2 := ExduraEvent
+      new: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
     self assert: e1 equals: e2
 
   testWithSetter =>
-    e := ExduraEvent new: #{#eventId => 1, #eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    e := ExduraEvent
+      new: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
     e2 := e withEventId: 2
     self assert: e eventId equals: 1
     self assert: e2 eventId equals: 2
