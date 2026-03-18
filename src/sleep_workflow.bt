@@ -1,0 +1,20 @@
+/// Workflow that sleeps between two activity calls (BT-1494).
+///
+/// Used to test durable sleep recording and replay behavior.
+/// Calls CountingActivity, sleeps, then calls CountingActivity again.
+///
+///   engine startWorkflow: SleepWorkflow id: "wf-1" args: #("hello")
+Workflow subclass: SleepWorkflow
+
+  /// Run two activities with a sleep in between.
+  run: input ctx: ctx -> Dictionary =>
+    a := ctx
+      runActivity: CountingActivity
+      method: #doWork:
+      with: #(#{#input => input})
+    ctx sleep: 50
+    b := ctx
+      runActivity: CountingActivity
+      method: #doWork:
+      with: #(#{#input => (a at: #result)})
+    #{#first => a, #second => b}

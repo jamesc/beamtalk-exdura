@@ -1,0 +1,25 @@
+/// Activity that fails a configurable number of times before succeeding (BT-1494).
+///
+/// Uses an ETS table (#flaky_activity_state) to track attempts per key.
+/// The test setUp creates the table and resets it between tests.
+///
+///   FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
+///   // Fails first 2 calls, succeeds on 3rd
+Activity subclass: FlakyActivity
+
+  /// Fail `failCount` times, then return success.
+  ///
+  /// Args: a list containing a dictionary with #key and #failCount.
+  /// Uses ETS to track how many times each key has been attempted.
+  ///
+  ///   FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
+  class doWork: args :: List -> Dictionary =>
+    dict := args at: 1
+    key := dict at: #key
+    failCount := dict at: #failCount
+    counter := Ets named: #flaky_activity_state
+    current := counter at: key ifAbsent: [0]
+    counter at: key put: current + 1
+    current < failCount ifTrue: [
+      self error: "FlakyActivity failed (attempt {current + 1})"
+    ] ifFalse: [#{#result => "success", #attempts => current + 1}]

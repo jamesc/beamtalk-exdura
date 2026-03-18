@@ -1,0 +1,20 @@
+/// Helper for recording ActivityFailed events (BT-1494).
+///
+/// Separated from ActivityRetryExecutor to work around a compiler limitation
+/// with multiple class methods on a single Object subclass.
+Object subclass: ActivityRetryHelper
+
+  /// Record an ActivityFailed event and raise the error message.
+  ///
+  ///   ActivityRetryHelper
+  ///     recordFailedAndRaise: store workflowId: "wf-1"
+  ///     payload: #{#error => "boom", #attempt => 1, #nonRetryable => true}
+  class recordFailedAndRaise: eventStore workflowId: workflowId payload: payload =>
+    failedNow := Erlang os system_time: #second
+    failedEvent := ExduraEvent new: #{
+      #eventType => #ActivityFailed,
+      #timestamp => failedNow,
+      #payload => payload
+    }
+    eventStore appendEvents: workflowId events: #(failedEvent)
+    self error: (payload at: #error)

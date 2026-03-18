@@ -4,11 +4,22 @@
 /// parameter is a WorkflowContext that provides activity dispatch and replay.
 /// No Actor — no inherited state issues.
 ///
+/// Activity dispatch supports options for retry and timeouts:
+///
 ///   Workflow subclass: GreetingWorkflow
 ///     run: name ctx: ctx -> String =>
 ///       ctx runActivity: GreetingActivities method: #greet: with: #(name)
+///         options: #{
+///           #retryPolicy => #{#maximumAttempts => 3},
+///           #startToCloseTimeout => 30000
+///         }
+///
+/// Durable sleep records timer events and skips during replay:
+///
+///   ctx sleep: 5000   // sleep for 5 seconds
 Object subclass: Workflow
 
   /// Subclass hook — override this with workflow logic.
-  /// ctx is a WorkflowContext that provides runActivity:method:with:.
+  /// ctx is a WorkflowContext that provides runActivity:method:with:,
+  /// runActivity:method:with:options:, and sleep:.
   run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"

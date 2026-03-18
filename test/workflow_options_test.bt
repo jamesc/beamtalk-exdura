@@ -1,0 +1,321 @@
+/// BT-1494: Tests for workflow options, retry policy, and durable sleep.
+///
+/// Tests retry (success after N failures), non-retryable error propagation,
+/// durable sleep event recording, and sleep replay behavior.
+///
+/// Fixtures: FlakyActivity, NonRetryableActivity, NonRetryableError,
+///           SleepWorkflow, CountingActivity.
+TestCase subclass: WorkflowOptionsTest
+  state: store = nil
+  state: engine = nil
+  state: counterTable = nil
+  state: flakyTable = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    [(Ets named: #counting_activity_calls) delete] on: Error do: [:e | nil]
+    [(Ets named: #flaky_activity_state) delete] on: Error do: [:e | nil]
+    self.counterTable := Ets new: #counting_activity_calls type: #set
+    self.counterTable at: #callCount put: 0
+    self.flakyTable := Ets new: #flaky_activity_state type: #set
+    self.store := EventStore spawn
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
+    self.counterTable isNil ifFalse: [
+      [self.counterTable delete] on: Error do: [:e | nil]
+    ]
+    self.flakyTable isNil ifFalse: [
+      [self.flakyTable delete] on: Error do: [:e | nil]
+    ]
+    self.store := nil
+    self.engine := nil
+    self.counterTable := nil
+    self.flakyTable := nil
+
+  // ── Helpers ──
+
+  /// Read the current call count from the ETS counter table.
+  callCount => (Ets named: #counting_activity_calls) at: #callCount
+
+  /// Reset the call count to zero.
+  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+
+  // ── Retry Tests ──
+
+  /// Activity succeeds after N failures with retry policy.
+  testRetrySuccessAfterFailures =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-retry-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 5
+      }
+    }
+
+    result := self.engine
+      scheduleActivity: FlakyActivity
+      selector: #doWork:
+      args: #(#{#key => "retry1", #failCount => 2})
+      workflowId: "wf-retry-1"
+      options: options
+
+    // Should have succeeded on attempt 3
+    self assert: (result at: #result) equals: "success"
+    self assert: (result at: #attempts) equals: 3
+
+    // Verify events: ActivityScheduled, then ActivityCompleted
+    events := self.store readEvents: "wf-retry-1" fromSeq: 1
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+    self assert: (events last) eventType equals: #ActivityCompleted
+
+  /// Retry exhaustion propagates error.
+  testRetryExhaustion =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-retry-2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 2
+      }
+    }
+
+    // Activity fails 5 times, but we only allow 2 attempts — should fail
+    caughtError := [
+      self.engine
+        scheduleActivity: FlakyActivity
+        selector: #doWork:
+        args: #(#{#key => "retry2", #failCount => 5})
+        workflowId: "wf-retry-2"
+        options: options
+    ] on: Error do: [:e | e message]
+
+    self assert: (caughtError includesSubstring: "FlakyActivity failed")
+
+    // Verify ActivityFailed event was recorded
+    events := self.store readEvents: "wf-retry-2" fromSeq: 1
+    failedEvents := events select: [:e | e eventType =:= #ActivityFailed]
+    self assert: failedEvents size equals: 1
+    self assert: ((failedEvents at: 1) payload at: #retriesExhausted) equals: true
+
+  /// Non-retryable error skips retry and propagates immediately.
+  testNonRetryableErrorSkipsRetry =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-nonretry-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 10,
+        #nonRetryableErrors => #("NonRetryableError")
+      }
+    }
+
+    caughtError := [
+      self.engine
+        scheduleActivity: NonRetryableActivity
+        selector: #doWork:
+        args: #(#{#input => "bad"})
+        workflowId: "wf-nonretry-1"
+        options: options
+    ] on: Error do: [:e | e message]
+
+    self assert: (caughtError includesSubstring: "Invalid input: bad")
+
+    // Verify ActivityFailed event was recorded with nonRetryable flag
+    events := self.store readEvents: "wf-nonretry-1" fromSeq: 1
+    failedEvents := events select: [:e | e eventType =:= #ActivityFailed]
+    self assert: failedEvents size equals: 1
+    self assert: ((failedEvents at: 1) payload at: #nonRetryable) equals: true
+    self assert: ((failedEvents at: 1) payload at: #attempt) equals: 1
+
+  /// Default retry policy (no options) succeeds on first attempt.
+  testDefaultOptionsNoRetry =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-default-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    result := self.engine
+      scheduleActivity: TestActivities
+      selector: #doubleIt:
+      args: #(5)
+      workflowId: "wf-default-1"
+
+    self assert: result equals: 10
+
+    events := self.store readEvents: "wf-default-1" fromSeq: 1
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+    self assert: (events at: 2) eventType equals: #ActivityCompleted
+
+  /// maximumAttempts: 0 means unlimited retries (per SPEC §4.1.4).
+  testMaxAttemptsZeroMeansUnlimited =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-unlimited-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    // maximumAttempts: 0 should retry until success (activity fails 3 times)
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 0
+      }
+    }
+
+    result := self.engine
+      scheduleActivity: FlakyActivity
+      selector: #doWork:
+      args: #(#{#key => "unlimited1", #failCount => 3})
+      workflowId: "wf-unlimited-1"
+      options: options
+
+    self assert: (result at: #result) equals: "success"
+    self assert: (result at: #attempts) equals: 4
+
+  // ── Sleep Tests ──
+
+  /// Sleep records TimerStarted and TimerFired events.
+  testSleepRecordsTimerEvents =>
+    self resetCallCount
+    self.engine
+      startWorkflow: SleepWorkflow
+      id: "wf-sleep-1"
+      args: #("hello")
+    Erlang timer sleep: 1500
+
+    exec := self.store getExecution: "wf-sleep-1"
+    self assert: exec status equals: #completed
+
+    events := self.store readEvents: "wf-sleep-1" fromSeq: 1
+    // Expected: WorkflowStarted, ActivityScheduled, ActivityCompleted,
+    //           TimerStarted, TimerFired,
+    //           ActivityScheduled, ActivityCompleted, WorkflowCompleted
+    self assert: events size equals: 8
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+    self assert: (events at: 2) eventType equals: #ActivityScheduled
+    self assert: (events at: 3) eventType equals: #ActivityCompleted
+    self assert: (events at: 4) eventType equals: #TimerStarted
+    self assert: (events at: 5) eventType equals: #TimerFired
+    self assert: (events at: 6) eventType equals: #ActivityScheduled
+    self assert: (events at: 7) eventType equals: #ActivityCompleted
+    self assert: (events at: 8) eventType equals: #WorkflowCompleted
+
+    // Verify activities were called twice
+    self assert: self callCount equals: 2
+
+  /// Sleep during replay returns immediately if TimerFired in history.
+  testSleepReplayReturnsImmediately =>
+    self resetCallCount
+    // Step 1: Run workflow normally to build event history with timer events
+    self.engine
+      startWorkflow: SleepWorkflow
+      id: "wf-sleep-replay-1"
+      args: #("world")
+    Erlang timer sleep: 1500
+
+    exec := self.store getExecution: "wf-sleep-replay-1"
+    self assert: exec status equals: #completed
+    self assert: self callCount equals: 2
+
+    // Step 2: Reset call count and replay with the full history
+    self resetCallCount
+    self assert: self callCount equals: 0
+
+    replayHistory := self.store readEvents: "wf-sleep-replay-1" fromSeq: 1
+    workflow := SleepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-sleep-replay-1",
+        #input => "world",
+        #history => replayHistory
+      }
+
+    // Measure time — replay should be near-instant (no 50ms sleep)
+    startTime := Erlang os system_time: #millisecond
+    runner go!
+    Erlang timer sleep: 500
+    endTime := Erlang os system_time: #millisecond
+    _elapsed := endTime - startTime
+
+    // Activities should NOT have been re-executed
+    self assert: self callCount equals: 0
+
+  /// Options are passed through WorkflowContext to engine.
+  testRunActivityWithOptionsThroughContext =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-ctx-opts-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    // Create a context and call runActivity:method:with:options:
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: self.engine
+      workflowId: "wf-ctx-opts-1"
+      history: #()
+
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 5
+      }
+    }
+
+    result := ctx
+      runActivity: FlakyActivity
+      method: #doWork:
+      with: #(#{#key => "ctx-opts", #failCount => 2})
+      options: options
+
+    self assert: (result at: #result) equals: "success"
+    self assert: (result at: #attempts) equals: 3

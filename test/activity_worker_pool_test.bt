@@ -223,7 +223,7 @@ TestCase subclass: ActivityWorkerPoolTest
           selector: #slowIt:
           args: #(5000)
           workflowId: "wf-pool-timeout-1"
-          timeout: 100
+          options: #{#startToCloseTimeout => 100}
       ]
       raise: #user_error
     // Verify events were recorded (either TimedOut or Failed)

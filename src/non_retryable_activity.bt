@@ -1,0 +1,15 @@
+/// Activity that always throws a NonRetryableError (BT-1494).
+///
+/// Used in tests to verify that non-retryable errors skip the retry policy.
+///
+///   NonRetryableActivity doWork: #(#{#input => "bad"})
+///   // Raises NonRetryableError: "Invalid input: bad"
+Activity subclass: NonRetryableActivity
+
+  /// Always raises a NonRetryableError.
+  ///
+  ///   NonRetryableActivity doWork: #(#{#input => "bad"})
+  class doWork: args :: List =>
+    dict := args at: 1
+    input := dict at: #input
+    NonRetryableError new signal: "Invalid input: {input}"

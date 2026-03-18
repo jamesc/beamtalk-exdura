@@ -92,14 +92,7 @@ Actor subclass: WorkflowEngine
     runner go!
     workflow
 
-  /// Execute an activity class method and record events.
-  ///
-  /// Called by Workflow actors during normal (non-replay) execution.
-  /// Dispatches through the ActivityWorkerPool if available, or falls
-  /// back to direct execution (Phase 0 mode).
-  ///
-  /// Worker crashes are caught and recorded as ActivityFailed events.
-  /// Timeout expiry is recorded as ActivityTimedOut.
+  /// Execute an activity class method and record events (no options).
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
@@ -109,13 +102,18 @@ Actor subclass: WorkflowEngine
       selector: selector
       args: args
       workflowId: workflowId
-      timeout: nil
+      options: #{}
 
-  /// Execute an activity with an optional startToCloseTimeout (ms).
+  /// Execute an activity with options (retry policy, timeouts).
+  ///
+  /// Records ActivityScheduled, executes with retry logic per RetryPolicy,
+  /// and records ActivityCompleted or ActivityFailed. If an ActivityWorkerPool
+  /// is available, dispatches through it; otherwise falls back to direct execution.
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
-  ///     args: #(5) workflowId: "wf-1" timeout: 30000
-  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId timeout: timeout =>
+  ///     args: #(5) workflowId: "wf-1"
+  ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId options: options =>
     now := Erlang os system_time: #second
 
     // Record ActivityScheduled event
@@ -126,21 +124,33 @@ Actor subclass: WorkflowEngine
         #payload => #{
           #activityClass => activityClass name asString,
           #selector => selector asString,
-          #args => args
+          #args => args,
+          #options => options
         }
       }
     self.eventStore appendEvents: workflowId events: #(scheduledEvent)
 
-    // Dispatch through pool if available, otherwise direct execution
+    // Build retry policy from options
+    rpDict := options at: #retryPolicy ifAbsent: [#{}]
+    rp := (rpDict isKindOf: RetryPolicy) ifTrue: [
+      rpDict
+    ] ifFalse: [RetryPolicy new: rpDict]
+
+    // Dispatch through pool if available, otherwise use ActivityRetryExecutor
     self.activityPool isNil
       ifTrue: [
-        // Phase 0 fallback — direct execution
-        result := activityClass perform: selector withArguments: #(args)
-        self recordActivityCompleted: result workflowId: workflowId
-        result
+        // No pool — use retry executor with direct execution
+        ActivityRetryExecutor
+          execute: activityClass
+          selector: selector
+          args: args
+          eventStore: self.eventStore
+          workflowId: workflowId
+          retryPolicy: rp
       ]
       ifFalse: [
-        // Phase 1 — supervised worker pool execution
+        // Pool available — supervised worker execution with timeout
+        timeout := options at: #startToCloseTimeout ifAbsent: [nil]
         outcome := self.activityPool
           executeActivity: activityClass
           selector: selector
@@ -198,6 +208,35 @@ Actor subclass: WorkflowEngine
       #payload => #{}
     }
     self.eventStore appendEvents: workflowId events: #(timedOutEvent)
+
+  /// Record a TimerStarted event and sleep for the given duration (ms).
+  ///
+  ///   engine scheduleTimer: 5000 workflowId: "wf-1"
+  scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
+    now := Erlang os system_time: #second
+
+    // Record TimerStarted event
+    startedEvent := ExduraEvent
+      new: #{
+        #eventType => #TimerStarted,
+        #timestamp => now,
+        #payload => #{#duration => duration}
+      }
+    self.eventStore appendEvents: workflowId events: #(startedEvent)
+
+    // Phase 1: use Timer sleep: for the actual delay
+    Timer sleep: duration
+
+    // Record TimerFired event
+    firedNow := Erlang os system_time: #second
+    firedEvent := ExduraEvent
+      new: #{
+        #eventType => #TimerFired,
+        #timestamp => firedNow,
+        #payload => #{#duration => duration}
+      }
+    self.eventStore appendEvents: workflowId events: #(firedEvent)
+    nil
 
   /// Return the event history for a workflow.
   ///
