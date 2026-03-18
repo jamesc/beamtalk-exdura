@@ -1,0 +1,69 @@
+/// Handle to a running workflow execution, returned by ExduraClient start:.
+///
+/// Provides methods to wait for the workflow result, either indefinitely
+/// or with a timeout. The handle polls the underlying EventStore for
+/// completion status.
+///
+///   handle := client start: MyWorkflow id: "wf-1" args: #("hello")
+///     taskQueue: "default" options: #{}
+///   result := handle result          // blocks until complete
+///   result := handle result: 5000    // blocks with 5s timeout
+Value subclass: WorkflowHandle
+  state: workflowId :: String = ""
+  state: client = nil
+
+  /// Create a new WorkflowHandle for the given workflow and client.
+  ///
+  ///   WorkflowHandle for: "wf-1" client: aClient
+  class for: workflowId :: String client: aClient =>
+    self new: #{#workflowId => workflowId, #client => aClient}
+
+  /// Block until the workflow completes and return the result.
+  ///
+  /// Polls the execution status every 100ms. If the workflow fails
+  /// or is cancelled, raises an error with the reason.
+  ///
+  ///   result := handle result   // blocks until done
+  result =>
+    [true]
+      whileTrue: [
+        exec := self client getExecution: self workflowId
+        exec isNil
+          ifFalse: [
+            exec status =:= #completed ifTrue: [^exec result]
+            exec status =:= #failed ifTrue: [
+              self error: "Workflow failed: {exec result}"
+            ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Workflow cancelled: {self workflowId}"
+            ]
+          ]
+        Timer sleep: 100
+      ]
+
+  /// Block until the workflow completes or the timeout (ms) expires.
+  ///
+  /// Returns the workflow result on success. Raises an error if the
+  /// workflow fails, is cancelled, or if the timeout is exceeded.
+  ///
+  ///   result := handle result: 5000   // 5 second timeout
+  result: timeout :: Integer =>
+    deadline := (Erlang os system_time: #millisecond) + timeout
+    [true]
+      whileTrue: [
+        exec := self client getExecution: self workflowId
+        exec isNil
+          ifFalse: [
+            exec status =:= #completed ifTrue: [^exec result]
+            exec status =:= #failed ifTrue: [
+              self error: "Workflow failed: {exec result}"
+            ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Workflow cancelled: {self workflowId}"
+            ]
+          ]
+        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+          self error: "Workflow result timed out after {timeout}ms"
+        ]
+        Timer sleep: 100
+      ]

@@ -1,0 +1,143 @@
+/// BT-1498: BUnit tests for ExduraClient and WorkflowHandle.
+///
+/// Tests the full client flow: connect, start workflow, wait for result,
+/// list executions, and handle timeout. Uses PassthroughWorkflow and
+/// TwoActivityWorkflow as test fixtures.
+TestCase subclass: ExduraClientTest
+  state: client = nil
+
+  setUp =>
+    // Clean up any leftover ETS tables
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{}
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+
+  // === ExduraClient connect: ===
+  testConnectCreatesClient =>
+    self assert: self.client notNil
+    self assert: self.client engine notNil
+    self assert: self.client eventStore notNil
+
+  // === Start workflow and receive handle ===
+  testStartReturnsHandle =>
+    handle := self.client
+      start: PassthroughWorkflow
+      id: "client-wf-1"
+      args: #("hello")
+      taskQueue: "default"
+      options: #{}
+    self assert: handle notNil
+    self assert: handle workflowId equals: "client-wf-1"
+
+  // === Handle result blocks until complete ===
+  testHandleResultBlocksAndReturns =>
+    handle := self.client
+      start: PassthroughWorkflow
+      id: "client-wf-2"
+      args: #("hello")
+      taskQueue: "default"
+      options: #{}
+    result := handle result: 5000
+    self assert: result equals: "hello"
+
+  // === Handle result: timeout raises on timeout ===
+  testHandleResultTimesOut =>
+    handle := self.client
+      start: SlowWorkflow
+      id: "client-wf-timeout"
+      args: #(10000)
+      taskQueue: "default"
+      options: #{}
+    // SlowWorkflow sleeps for 10s; we give 500ms timeout
+    result := [handle result: 500] on: Error do: [:e | #timedOut]
+    self assert: result equals: #timedOut
+
+  // === Full client flow: start, wait, verify ===
+  testFullClientFlow =>
+    self.client
+      start: TwoActivityWorkflow
+      id: "client-wf-full"
+      args: #(5)
+      taskQueue: "default"
+      options: #{}
+    // Allow workflow to complete
+    Erlang timer sleep: 2000
+
+    // Verify execution completed with correct result
+    exec := self.client getExecution: "client-wf-full"
+    self assert: exec notNil
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 20
+
+  // === list: returns filtered executions ===
+  testListReturnsAllExecutions =>
+    self.client
+      start: PassthroughWorkflow
+      id: "client-list-1"
+      args: #("a")
+      taskQueue: "default"
+      options: #{}
+    self.client
+      start: PassthroughWorkflow
+      id: "client-list-2"
+      args: #("b")
+      taskQueue: "default"
+      options: #{}
+    // Wait for workflows to complete
+    Erlang timer sleep: 1000
+    all := self.client list: #{}
+    self assert: all size >= 2
+
+  testListFiltersByStatus =>
+    self.client
+      start: PassthroughWorkflow
+      id: "client-filter-1"
+      args: #("x")
+      taskQueue: "default"
+      options: #{}
+    // Wait for completion
+    Erlang timer sleep: 1000
+    completed := self.client list: #{#status => #completed}
+    self assert: completed size >= 1
+    completed do: [:e | self assert: e status equals: #completed]
+
+  testListFiltersByWorkflowType =>
+    self.client
+      start: PassthroughWorkflow
+      id: "client-type-1"
+      args: #("x")
+      taskQueue: "default"
+      options: #{}
+    Erlang timer sleep: 1000
+    filtered := self.client list: #{#workflowType => "PassthroughWorkflow"}
+    self assert: filtered size >= 1
+    filtered do: [:e |
+      self assert: e workflowType equals: "PassthroughWorkflow"
+    ]
+
+  // === Signal/query/cancel stubs ===
+  testSignalStubReturnsNil =>
+    result := self.client
+      signal: "wf-1"
+      name: "test"
+      payload: #{}
+    self assert: result equals: nil
+
+  testQueryStubReturnsNil =>
+    result := self.client query: "wf-1" name: "getStatus"
+    self assert: result equals: nil
+
+  testCancelStubReturnsNil =>
+    result := self.client cancel: "wf-1"
+    self assert: result equals: nil
