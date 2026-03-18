@@ -1,0 +1,18 @@
+/// Test workflow that uses version: with defaultVersion 1.
+///
+/// Branches on version to return different results:
+/// version 1 => "v1-result", version 2 => "v2-result".
+///
+///   workflow := VersionedWorkflowV1 new
+///   workflow run: "order-1" ctx: ctx
+///   // => "v1-result" (first execution with defaultVersion 1)
+Object subclass: VersionedWorkflowV1
+
+  run: _args ctx: ctx -> String =>
+    v := ctx
+      version: "payment-flow"
+      defaultVersion: 1
+      maxVersion: 2
+    v == 1 ifTrue: ["v1-result"] ifFalse: ["v2-result"]
+
+  registerQueries: _ctx => nil

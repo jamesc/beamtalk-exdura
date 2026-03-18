@@ -569,6 +569,46 @@ Actor subclass: WorkflowContext
     ]
     self drainAndClearSignals
 
+  /// Return the version to use for a named code change.
+  ///
+  /// During first execution, records a VersionMarker event with
+  /// `defaultVersion` as the selected version and returns `defaultVersion`.
+  /// During replay, reads the recorded version from the event history
+  /// and returns it — even if `defaultVersion` has changed in the new code.
+  /// This enables branching: old workflows replay with the old version,
+  /// new workflows get the new default version.
+  ///
+  ///   v := ctx version: "payment-flow" defaultVersion: 1 maxVersion: 2
+  ///   v == 1
+  ///     ifTrue: [ctx runActivity: PaymentActivities method: #chargeV1: with: #(orderId)]
+  ///     ifFalse: [ctx runActivity: PaymentActivities method: #chargeV2: with: #(orderId)]
+  version: name :: String defaultVersion: defaultVer :: Integer maxVersion: _maxVer :: Integer =>
+    // Try replay: check for VersionMarker at current cursor
+    self.isReplaying
+      ifTrue: [
+        // Skip any StateSnapshot/SignalReceived events before the next event
+        skippable := WorkflowContext countSkippableEventsFrom: self.replayCursor + 1 history: self.eventHistory
+        markerIdx := self.replayCursor + skippable + 1
+        markerIdx <= self.eventHistory size
+          ifTrue: [
+            markerEvent := self.eventHistory at: markerIdx
+            markerEvent eventType =:= #VersionMarker
+              ifTrue: [
+                // Consume the VersionMarker event
+                self.replayCursor := markerIdx
+                ^markerEvent payload at: #version
+              ]
+          ]
+      ]
+    // No replay match — first execution, record the marker
+    self.isReplaying := false
+    self.engine
+      recordVersionMarker: name
+      version: defaultVer
+      workflowId: self.workflowId
+    self.replayCursor := self.replayCursor + 1
+    defaultVer
+
   /// Return the current replay cursor position (for testing/inspection).
   ///
   ///   ctx getReplayCursor   // => 5
