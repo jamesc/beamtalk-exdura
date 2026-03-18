@@ -1,0 +1,8 @@
+# Copyright 2026 exdura authors
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "exdura"
+version = "0.1.0"
+
+[dependencies]
