@@ -24,6 +24,10 @@ Actor subclass: WorkflowContext
   state: signalHandlers :: Dictionary = #{}
   state: workflowVars :: Dictionary = #{}
   state: receivedSignals :: List = #()
+  state: snapshotInterval :: Integer = 100
+  state: eventsSinceSnapshot :: Integer = 0
+  state: queryHandlers :: Dictionary = #{}
+  state: workflowState :: Dictionary = #{}
 
   /// Collect consecutive SignalReceived events from a history starting at fromIdx.
   ///
@@ -39,22 +43,67 @@ Actor subclass: WorkflowContext
       acc: #()
 
   /// Recursive helper to collect consecutive SignalReceived events.
+  /// Skips StateSnapshot events that may be interleaved.
+  /// Uses single-^ + ifTrue:ifFalse: pattern to avoid a codegen issue
+  /// with multiple non-local returns in recursive multi-keyword class methods.
   class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List acc: acc :: List =>
     fromIdx > eventHistory size ifTrue: [^acc]
     event := eventHistory at: fromIdx
-    event eventType =:= #SignalReceived
+    eventType := event eventType
+    nextIdx := fromIdx + 1
+    isSignal := eventType =:= #SignalReceived
+    // Build the new accumulator: add signal if SignalReceived, pass through otherwise
+    newAcc := isSignal
       ifTrue: [
         sigPayload := event payload
         sig := #{
           #name => (sigPayload at: #signalName),
           #payload => (sigPayload at: #payload)
         }
-        self
-          collectReplaySignalsFrom: fromIdx + 1
-          history: eventHistory
-          acc: (acc ++ #(sig))
+        acc ++ #(sig)
       ]
       ifFalse: [acc]
+    // Continue recursing if event is skippable, stop otherwise
+    isSkippable := isSignal or: [eventType =:= #StateSnapshot]
+    isSkippable
+      ifTrue: [
+        self
+          collectReplaySignalsFrom: nextIdx
+          history: eventHistory
+          acc: newAcc
+      ]
+      ifFalse: [acc]
+
+  /// Count consecutive non-command events (StateSnapshot, SignalReceived)
+  /// starting from a given index. Used to advance the replay cursor past
+  /// metadata events that don't correspond to workflow commands.
+  ///
+  ///   WorkflowContext countSkippableEventsFrom: 5 history: events
+  ///   // => 2  (if events 5 and 6 are StateSnapshot/SignalReceived)
+  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List =>
+    self
+      countSkippableEventsFrom: fromIdx
+      history: eventHistory
+      count: 0
+
+  /// Recursive helper for counting skippable events.
+  /// Uses ifTrue:ifFalse: to avoid codegen issue with multiple ^ returns.
+  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List count: count :: Integer =>
+    fromIdx > eventHistory size ifTrue: [^count]
+    event := eventHistory at: fromIdx
+    eventType := event eventType
+    nextIdx := fromIdx + 1
+    isSkippable := (eventType =:= #StateSnapshot) or: [
+      eventType =:= #SignalReceived
+    ]
+    isSkippable
+      ifTrue: [
+        self
+          countSkippableEventsFrom: nextIdx
+          history: eventHistory
+          count: count + 1
+      ]
+      ifFalse: [count]
 
   /// Find a signal by name in a list. Returns a Dictionary with #found, #signal,
   /// and #remaining keys. Class method to avoid self-send deadlock.
@@ -94,6 +143,31 @@ Actor subclass: WorkflowContext
     self.replayCursor := 1
     self.isReplaying := aHistory size > 1
 
+  /// Initialize from a snapshot for optimized replay.
+  ///
+  /// The full event history is passed so the context can match all activity
+  /// calls during replay. The snapshot provides pre-computed deliveredSignals
+  /// so they don't need to be re-derived from the event history.
+  /// The replay cursor starts at 1 (after WorkflowStarted) since the
+  /// workflow always runs from the beginning.
+  ///
+  ///   ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
+  initWithSnapshot: snapshot :: Dictionary engine: anEngine workflowId: anId history: aHistory =>
+    self.engine := anEngine
+    self.workflowId := anId
+    self.eventHistory := aHistory
+    // Cursor starts at 1 — workflow replays all activities from the beginning
+    self.replayCursor := 1
+    // Pre-populate delivered signals from snapshot
+    self.deliveredSignals := snapshot at: #deliveredSignals ifAbsent: [#()]
+    self.eventsSinceSnapshot := 0
+    self.isReplaying := aHistory size > 1
+
+  /// Set the snapshot interval (number of events between snapshots).
+  ///
+  ///   ctx setSnapshotInterval: 50
+  setSnapshotInterval: interval :: Integer => self.snapshotInterval := interval
+
   /// Get the engine reference (for testing).
   getEngine => self.engine
 
@@ -129,6 +203,35 @@ Actor subclass: WorkflowContext
   onSignal: name :: String do: block =>
     self.signalHandlers := self.signalHandlers at: name put: block
 
+  /// Register a query handler block for the given query name.
+  ///
+  /// The handler block receives an ActorSnapshot proxy as its argument
+  /// and should return the query result. Handlers are stored locally and
+  /// registered with the engine for query evaluation.
+  ///
+  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
+  onQuery: queryName :: String do: handlerBlock =>
+    self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
+
+  /// Return all registered query handlers.
+  ///
+  ///   ctx queryHandlers   // => #{"getStatus" => [:snap | ...]}
+  queryHandlers => self.queryHandlers
+
+  /// Set a workflow state field visible in query snapshots.
+  ///
+  /// Workflow state is captured at each safe point and used to build
+  /// the ActorSnapshot proxy that query handlers receive.
+  ///
+  ///   ctx setState: #status to: "processing"
+  setState: fieldName to: value =>
+    self.workflowState := self.workflowState at: fieldName put: value
+
+  /// Return the current workflow state as a Dictionary.
+  ///
+  ///   ctx workflowState   // => #{#status => "processing"}
+  workflowState => self.workflowState
+
   /// Execute an activity or return its cached result during replay.
   ///
   /// During replay, checks if the current cursor position has a matching
@@ -161,7 +264,9 @@ Actor subclass: WorkflowContext
     // Try replay: check for Scheduled+Completed pair at current cursor
     self.isReplaying
       ifTrue: [
-        scheduledIdx := self.replayCursor + 1
+        // Skip any StateSnapshot events before the next command pair
+        skippable := WorkflowContext countSkippableEventsFrom: self.replayCursor + 1 history: self.eventHistory
+        scheduledIdx := self.replayCursor + skippable + 1
         completedIdx := scheduledIdx + 1
         completedIdx <= self.eventHistory size
           ifTrue: [
@@ -173,12 +278,13 @@ Actor subclass: WorkflowContext
               ifTrue: [
                 // Consume replay: advance cursor past Scheduled+Completed
                 self.replayCursor := completedIdx
-                // Safe point: collect consecutive SignalReceived events from history.
-                // Scan ahead to count how many signals follow, then consume them all.
-                // Avoids reading self.replayCursor in a loop (block mutation gotcha).
+                // Safe point: collect consecutive SignalReceived/StateSnapshot events.
                 replaySignals := WorkflowContext collectReplaySignalsFrom: completedIdx + 1 history: self.eventHistory
-                self.replayCursor := completedIdx + replaySignals size
+                skipCount := WorkflowContext countSkippableEventsFrom: completedIdx + 1 history: self.eventHistory
+                self.replayCursor := completedIdx + skipCount
                 self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Safe point: capture workflow snapshot for queries
+                self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
                 ^completedEvent payload at: #result
               ]
           ]
@@ -197,36 +303,86 @@ Actor subclass: WorkflowContext
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals
     ]
+    // Safe point: check if snapshot is due (inlined to avoid self-send state issues)
+    self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
+    self.eventsSinceSnapshot >= self.snapshotInterval
+      ifTrue: [
+        snapState := #{
+          #replayCursor => self.replayCursor,
+          #deliveredSignals => self.deliveredSignals
+        }
+        self.engine
+          saveSnapshot: self.workflowId
+          state: snapState
+          eventId: self.replayCursor
+        self.eventsSinceSnapshot := 0
+      ]
+    // Safe point: capture workflow snapshot for queries
+    self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     result
 
   /// Sleep for the given duration (milliseconds), recording timer events.
   ///
   /// During replay, if a TimerStarted + TimerFired pair exists at the
   /// current cursor position, returns immediately without sleeping.
+  /// If TimerStarted exists but TimerFired does not, the engine
+  /// reconstructs the timer by calculating the remaining wall-clock
+  /// duration from the stored fireAt timestamp and waiting for the
+  /// remainder (or firing immediately if the time has passed).
   /// During normal execution, delegates to the engine to record events
   /// and perform the actual sleep.
   ///
   ///   ctx sleep: 5000   // sleep for 5 seconds
   sleep: duration :: Integer =>
-    // Try replay: check for TimerStarted+TimerFired pair at current cursor
+    // Try replay: check for TimerStarted at current cursor
     self.isReplaying
       ifTrue: [
-        startedIdx := self.replayCursor + 1
-        firedIdx := startedIdx + 1
-        firedIdx <= self.eventHistory size
+        // Skip any StateSnapshot events before the next command pair
+        skippable := WorkflowContext countSkippableEventsFrom: self.replayCursor + 1 history: self.eventHistory
+        startedIdx := self.replayCursor + skippable + 1
+        startedIdx <= self.eventHistory size
           ifTrue: [
             startedEvent := self.eventHistory at: startedIdx
-            firedEvent := self.eventHistory at: firedIdx
-            isStarted := startedEvent eventType =:= #TimerStarted
-            isFired := firedEvent eventType =:= #TimerFired
-            (isStarted and: [isFired])
+            startedEvent eventType =:= #TimerStarted
               ifTrue: [
-                // Consume replay: advance cursor and return immediately
-                self.replayCursor := firedIdx
-                // Safe point: collect consecutive SignalReceived events from history
-                replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
-                self.replayCursor := firedIdx + replaySignals size
-                self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Check if TimerFired follows
+                firedIdx := startedIdx + 1
+                firedIdx <= self.eventHistory size
+                  ifTrue: [
+                    firedEvent := self.eventHistory at: firedIdx
+                    firedEvent eventType =:= #TimerFired
+                      ifTrue: [
+                        // Both events present — skip immediately
+                        self.replayCursor := firedIdx
+                        // Safe point: collect consecutive SignalReceived/StateSnapshot events
+                        replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
+                        skipCount := WorkflowContext countSkippableEventsFrom: firedIdx + 1 history: self.eventHistory
+                        self.replayCursor := firedIdx + skipCount
+                        self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                        // Safe point: capture workflow snapshot for queries
+                        self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+                        ^nil
+                      ]
+                  ]
+                // TimerStarted exists but no TimerFired — reconstruct the timer.
+                payload := startedEvent payload
+                fireAt := payload at: #fireAt ifAbsent: [
+                  startedEvent timestamp + duration
+                ]
+                storedDuration := payload at: #duration ifAbsent: [duration]
+                self.isReplaying := false
+                self.engine
+                  reconstructTimer: storedDuration
+                  fireAt: fireAt
+                  workflowId: self.workflowId
+                self.replayCursor := startedIdx + 1
+                // Safe point: drain buffered signals from the engine
+                signals := self.engine drainSignals: self.workflowId
+                signals size > 0 ifTrue: [
+                  self.deliveredSignals := self.deliveredSignals ++ signals
+                ]
+                // Safe point: capture workflow snapshot for queries
+                self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
                 ^nil
               ]
           ]
@@ -240,6 +396,22 @@ Actor subclass: WorkflowContext
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals
     ]
+    // Safe point: check if snapshot is due (inlined to avoid self-send state issues)
+    self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
+    self.eventsSinceSnapshot >= self.snapshotInterval
+      ifTrue: [
+        snapState := #{
+          #replayCursor => self.replayCursor,
+          #deliveredSignals => self.deliveredSignals
+        }
+        self.engine
+          saveSnapshot: self.workflowId
+          state: snapState
+          eventId: self.replayCursor
+        self.eventsSinceSnapshot := 0
+      ]
+    // Safe point: capture workflow snapshot for queries
+    self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     nil
 
   /// Block until a signal with the given name arrives or timeout expires.
@@ -396,3 +568,8 @@ Actor subclass: WorkflowContext
       self.deliveredSignals := self.deliveredSignals ++ signals
     ]
     self drainAndClearSignals
+
+  /// Return the current replay cursor position (for testing/inspection).
+  ///
+  ///   ctx getReplayCursor   // => 5
+  getReplayCursor => self.replayCursor

@@ -32,10 +32,33 @@
 ///
 ///   payload := ctx waitForSignal: "approve" timeout: 60000
 ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+///
+/// Query handlers are registered in `registerQueries:` and receive an
+/// ActorSnapshot proxy as their argument. Workflow state visible to
+/// queries is managed through the context's setState:to: method:
+///
+///   Workflow subclass: OrderWorkflow
+///     registerQueries: ctx =>
+///       ctx onQuery: "getStatus" do: [:snap | snap status]
+///
+///     run: orderId ctx: ctx =>
+///       ctx setState: #status to: "processing"
+///       ctx runActivity: OrderActivities method: #process: with: #(orderId)
+///       ctx setState: #status to: "completed"
+///       "done"
 Object subclass: Workflow
 
   /// Subclass hook — override this with workflow logic.
   /// ctx is a WorkflowContext that provides runActivity:method:with:,
   /// runActivity:method:with:options:, sleep:, onSignal:do:,
-  /// waitForSignal:timeout:, and waitForCondition:timeout:.
+  /// waitForSignal:timeout:, waitForCondition:timeout:, and setState:to:.
   run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"
+
+  /// Subclass hook — register query handlers via the context.
+  ///
+  /// Called by the WorkflowRunner before run:ctx:. Override to register
+  /// query handlers. The default implementation does nothing.
+  ///
+  ///   registerQueries: ctx =>
+  ///     ctx onQuery: "getStatus" do: [:snap | snap status]
+  registerQueries: _ctx => nil

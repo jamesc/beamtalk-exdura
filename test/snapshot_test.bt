@@ -1,0 +1,364 @@
+/// BT-1505: State snapshot tests for replay optimization.
+///
+/// Verifies that:
+/// - Snapshots are recorded every N events (configurable)
+/// - Replay from snapshot skips earlier events
+/// - Replayed state from snapshot matches full replay
+/// - Snapshot serialization handles all permitted types
+///
+/// Fixtures: CountingActivity, ManyStepWorkflow
+TestCase subclass: SnapshotTest
+  state: store = nil
+  state: engine = nil
+  state: counterTable = nil
+  state: testDir = "target/bt-test-tmp/snapshot"
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    [(Ets named: #counting_activity_calls) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.counterTable := Ets new: #counting_activity_calls type: #set
+    self.counterTable at: #callCount put: 0
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
+    self.counterTable isNil ifFalse: [
+      [self.counterTable delete] on: Error do: [:e | nil]
+    ]
+    self.store := nil
+    self.engine := nil
+    self.counterTable := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+
+  // ── Helpers ──
+
+  /// Read the current call count from the ETS counter table.
+  callCount => (Ets named: #counting_activity_calls) at: #callCount
+
+  /// Reset the call count to zero.
+  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+
+  // ── EventStore snapshot persistence tests ──
+
+  /// saveSnapshot persists a snapshot file to disk.
+  testSaveSnapshotWritesFile =>
+    // Create an execution with some events first
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-snap-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #args => #(),
+        #status => #running,
+        #startedAt => 0
+      }
+    self.store createExecution: execution
+    startEvent := ExduraEvent new: #{
+      #eventType => #WorkflowStarted,
+      #timestamp => 0,
+      #payload => #{}
+    }
+    self.store appendEvents: "wf-snap-1" events: #(startEvent)
+
+    // Save a snapshot
+    self.store
+      saveSnapshot: "wf-snap-1"
+      state: #{#replayCursor => 1}
+      eventId: 1
+
+    // Verify snapshot file exists
+    self assert: (self.store hasSnapshot: "wf-snap-1")
+
+  /// readEventsFromSnapshot returns nil when no snapshot exists.
+  testReadEventsFromSnapshotReturnsNilWhenMissing =>
+    result := self.store readEventsFromSnapshot: "wf-no-snap"
+    self assert: result isNil
+
+  /// readEventsFromSnapshot returns snapshot and later events.
+  testReadEventsFromSnapshotReturnsLaterEvents =>
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-snap-2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #args => #(),
+        #status => #running,
+        #startedAt => 0
+      }
+    self.store createExecution: execution
+    // Append 5 events
+    events := (1 to: 5)
+      collect: [:i |
+        ExduraEvent new: #{
+          #eventType => #ActivityScheduled,
+          #timestamp => i,
+          #payload => #{#i => i}
+        }
+      ]
+    self.store appendEvents: "wf-snap-2" events: events
+
+    // Save snapshot at eventId 3
+    self.store
+      saveSnapshot: "wf-snap-2"
+      state: #{#replayCursor => 3}
+      eventId: 3
+
+    // Read from snapshot — should get only events 4 and 5
+    result := self.store readEventsFromSnapshot: "wf-snap-2"
+    self assert: result notNil
+    laterEvents := result at: #events
+    self assert: laterEvents size equals: 2
+    self assert: (laterEvents at: 1) eventId equals: 4
+    self assert: (laterEvents at: 2) eventId equals: 5
+    // Check snapshot state
+    snapshot := result at: #snapshot
+    snapState := snapshot at: #state
+    self assert: (snapState at: #replayCursor) equals: 3
+    self assert: (snapshot at: #eventId) equals: 3
+
+  // ── Integration tests: snapshot during workflow execution ──
+
+  /// Workflow with many activities records a snapshot at the configured interval.
+  testSnapshotRecordedDuringExecution =>
+    self resetCallCount
+    // Use a small snapshot interval (every 10 events = 5 activities)
+    // to trigger snapshot creation with fewer activities.
+    // 8 activities at interval 10 triggers 1 snapshot (at event 10).
+    workflow := ManyStepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-snap-exec",
+        #input => 8,
+        #history => #(),
+        #snapshotInterval => 10
+      }
+    // Create execution and start event first
+    now := Erlang os system_time: #second
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-snap-exec",
+        #runId => "wf-snap-exec",
+        #workflowType => "ManyStepWorkflow",
+        #taskQueue => "default",
+        #args => #(8),
+        #status => #running,
+        #startedAt => now
+      }
+    self.store createExecution: execution
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-snap-exec",
+          #workflowType => "ManyStepWorkflow",
+          #args => #(8)
+        }
+      }
+    self.store appendEvents: "wf-snap-exec" events: #(startEvent)
+    runner go!
+    Erlang timer sleep: 8000
+
+    // Verify workflow completed
+    exec := self.store getExecution: "wf-snap-exec"
+    self assert: exec status equals: #completed
+
+    // Verify a snapshot was created
+    self assert: (self.store hasSnapshot: "wf-snap-exec")
+
+    // Verify all 8 activities were called
+    self assert: self callCount equals: 8
+
+  /// Replay from snapshot skips earlier events and produces correct result.
+  testReplayFromSnapshotMatchesFullReplay =>
+    self resetCallCount
+    // Step 1: Run workflow with small snapshot interval.
+    // 8 activities at interval 10 triggers 1 snapshot.
+    workflow := ManyStepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-snap-replay",
+        #input => 8,
+        #history => #(),
+        #snapshotInterval => 10
+      }
+    now := Erlang os system_time: #second
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-snap-replay",
+        #runId => "wf-snap-replay",
+        #workflowType => "ManyStepWorkflow",
+        #taskQueue => "default",
+        #args => #(8),
+        #status => #running,
+        #startedAt => now
+      }
+    self.store createExecution: execution
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-snap-replay",
+          #workflowType => "ManyStepWorkflow",
+          #args => #(8)
+        }
+      }
+    self.store appendEvents: "wf-snap-replay" events: #(startEvent)
+    runner go!
+    Erlang timer sleep: 8000
+
+    // Verify original completed
+    exec := self.store getExecution: "wf-snap-replay"
+    self assert: exec status equals: #completed
+    originalResult := exec result
+    _originalCallCount := self callCount
+
+    // Step 2: Reset counter and replay from snapshot
+    self resetCallCount
+    self.engine
+      replayWorkflow: ManyStepWorkflow
+      id: "wf-snap-replay"
+      input: 8
+      snapshotInterval: 10
+    Erlang timer sleep: 8000
+
+    // Step 3: Verify activities were NOT re-executed during replay
+    // (all activities are replayed from history, not executed live)
+    replayCallCount := self callCount
+    self assert: replayCallCount equals: 0
+
+    // Step 4: Verify the replayed result matches
+    // The replay records a new WorkflowCompleted event
+    allEvents := self.store readEvents: "wf-snap-replay" fromSeq: 1
+    // Find the last WorkflowCompleted event
+    completedEvents := allEvents select: [:e |
+      e eventType =:= #WorkflowCompleted
+    ]
+    lastCompleted := completedEvents at: completedEvents size
+    replayResult := lastCompleted payload at: #result
+    self assert: replayResult equals: originalResult
+
+  /// Replay without snapshot (full replay) still works correctly.
+  testFullReplayWithoutSnapshot =>
+    self resetCallCount
+    // Run workflow without triggering snapshots (very large interval)
+    workflow := ManyStepWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-no-snap",
+        #input => 5,
+        #history => #(),
+        #snapshotInterval => 9999
+      }
+    now := Erlang os system_time: #second
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-no-snap",
+        #runId => "wf-no-snap",
+        #workflowType => "ManyStepWorkflow",
+        #taskQueue => "default",
+        #args => #(5),
+        #status => #running,
+        #startedAt => now
+      }
+    self.store createExecution: execution
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-no-snap",
+          #workflowType => "ManyStepWorkflow",
+          #args => #(5)
+        }
+      }
+    self.store appendEvents: "wf-no-snap" events: #(startEvent)
+    runner go!
+    Erlang timer sleep: 3000
+
+    // Verify completed
+    exec := self.store getExecution: "wf-no-snap"
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 5
+
+    // No snapshot should exist
+    self assert: (self.store hasSnapshot: "wf-no-snap") equals: false
+
+    // Full replay
+    self resetCallCount
+    self.engine
+      replayWorkflow: ManyStepWorkflow
+      id: "wf-no-snap"
+      input: 5
+    Erlang timer sleep: 3000
+
+    // During full replay, activities should NOT be re-executed
+    self assert: self callCount equals: 0
+
+  /// Snapshot serialization handles permitted types correctly.
+  testSnapshotSerializationHandlesPermittedTypes =>
+    // Save a snapshot with various permitted types
+    state := #{
+      #anInteger => 42,
+      #aString => "hello",
+      #aSymbol => #test,
+      #aList => #(1, 2, 3),
+      #aDict => #{#key => "value"},
+      #replayCursor => 10,
+      #deliveredSignals => #()
+    }
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => "wf-types",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #args => #(),
+        #status => #running,
+        #startedAt => 0
+      }
+    self.store createExecution: execution
+    startEvent := ExduraEvent new: #{
+      #eventType => #WorkflowStarted,
+      #timestamp => 0,
+      #payload => #{}
+    }
+    self.store appendEvents: "wf-types" events: #(startEvent)
+
+    self.store
+      saveSnapshot: "wf-types"
+      state: state
+      eventId: 1
+
+    // Read it back and verify
+    result := self.store readEventsFromSnapshot: "wf-types"
+    self assert: result notNil
+    snapState := (result at: #snapshot) at: #state
+    self assert: (snapState at: #anInteger) equals: 42
+    self assert: (snapState at: #aString) equals: "hello"
+    self assert: (snapState at: #aSymbol) equals: #test
+    self assert: (snapState at: #aList) equals: #(1, 2, 3)
+    self assert: ((snapState at: #aDict) at: #key) equals: "value"
