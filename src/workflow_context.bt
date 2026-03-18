@@ -559,6 +559,10 @@ Actor subclass: WorkflowContext
             self.receivedSignals := self.receivedSignals ++ #(found2 at: #signal)
             ^(found2 at: #signal) at: #payload
           ]
+        // Safe point: check for cancellation
+        (self.engine isCancelled: self.workflowId) ifTrue: [
+          CancellationError new signal: "Workflow cancelled"
+        ]
         // Clear processed signals (handlers already ran)
         self.deliveredSignals := #()
         Timer sleep: 50
@@ -613,6 +617,10 @@ Actor subclass: WorkflowContext
         self.deliveredSignals := #()
         // Check condition — early return (^) exits method, avoiding gotcha
         (block value: self.workflowVars) ifTrue: [^nil]
+        // Safe point: check for cancellation
+        (self.engine isCancelled: self.workflowId) ifTrue: [
+          CancellationError new signal: "Workflow cancelled"
+        ]
         Timer sleep: 50
       ]
 

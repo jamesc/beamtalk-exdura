@@ -782,6 +782,10 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine cancelWorkflow: "wf-1"
   cancelWorkflow: workflowId :: String =>
+    // Guard: only cancel running workflows
+    exec := self.eventStore getExecution: workflowId
+    (exec isNil or: [(exec status =:= #running) == false]) ifTrue: [^nil]
+
     now := Erlang os system_time: #second
 
     // Record WorkflowCancelled event
