@@ -116,6 +116,23 @@ TestCase subclass: EventStoreTest
     self assert: orders size equals: 1
     self assert: (orders at: 1) workflowId equals: "wf-x"
 
+  testListExecutionsFilterByStatusAndType =>
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-1", #runId => "r1", #workflowType => "OrderWorkflow",
+      #taskQueue => "q", #status => #running, #startedAt => 100
+    })
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-2", #runId => "r2", #workflowType => "OrderWorkflow",
+      #taskQueue => "q", #status => #completed, #startedAt => 200
+    })
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-3", #runId => "r3", #workflowType => "PaymentWorkflow",
+      #taskQueue => "q", #status => #running, #startedAt => 300
+    })
+    result := self.store listExecutions: #{#status => #running, #workflowType => "OrderWorkflow"}
+    self assert: result size equals: 1
+    self assert: (result at: 1) workflowId equals: "wf-1"
+
   // === appendEvents / readEvents ===
 
   testAppendAndReadEvents =>
@@ -168,6 +185,12 @@ TestCase subclass: EventStoreTest
     self assert: stamped size equals: 1
     self assert: (stamped at: 1) eventId equals: 1
     self assert: (stamped at: 1) eventType equals: #WorkflowStarted
+
+  testAppendEmptyEventsList =>
+    stamped := self.store appendEvents: "wf-empty" events: #()
+    self assert: stamped size equals: 0
+    events := self.store readEvents: "wf-empty" fromSeq: 1
+    self assert: events size equals: 0
 
   testEventsIsolatedPerWorkflow =>
     evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}

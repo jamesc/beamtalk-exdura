@@ -66,6 +66,7 @@ Actor subclass: EventStore
     self.events at: workflowId put: (existing ++ stampedEvents)
     stampedEvents
 
+  // Note: SPEC says `from:` but `from` is reserved; using `fromSeq:` instead.
   readEvents: workflowId :: String fromSeq: fromSeq :: Integer =>
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
