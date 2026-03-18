@@ -27,7 +27,7 @@ jobs:
           beamtalk --version
 
       - name: Format check
-        run: beamtalk fmt --check
+        run: beamtalk fmt-check
 
       - name: Lint
         run: beamtalk lint
