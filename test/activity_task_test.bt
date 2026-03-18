@@ -1,0 +1,35 @@
+// BT-1490: BUnit tests for ActivityTask Value subclass.
+
+TestCase subclass: ActivityTaskTest
+
+  testDefaultConstruction =>
+    task := ActivityTask new
+    self assert: task taskId equals: ""
+    self assert: task workflowId equals: ""
+    self assert: task activityType equals: ""
+    self assert: task args equals: #()
+    self assert: task taskQueue equals: ""
+    self assert: task retryPolicy equals: #{}
+    self assert: task timeoutConfig equals: #{}
+    self assert: task heartbeatTimeout equals: nil
+    self assert: task attempt equals: 1
+
+  testNewWithMap =>
+    task := ActivityTask new: #{
+      #taskId => "task-1",
+      #workflowId => "wf-1",
+      #activityType => "SendEmail",
+      #args => #(#{#to => "user@example.com"}),
+      #taskQueue => "email-queue",
+      #attempt => 3
+    }
+    self assert: task taskId equals: "task-1"
+    self assert: task workflowId equals: "wf-1"
+    self assert: task activityType equals: "SendEmail"
+    self assert: task taskQueue equals: "email-queue"
+    self assert: task attempt equals: 3
+
+  testEquality =>
+    t1 := ActivityTask new: #{#taskId => "t-1", #workflowId => "wf-1"}
+    t2 := ActivityTask new: #{#taskId => "t-1", #workflowId => "wf-1"}
+    self assert: t1 equals: t2

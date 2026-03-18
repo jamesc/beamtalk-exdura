@@ -1,0 +1,46 @@
+// BT-1490: BUnit tests for WorkflowExecution Value subclass.
+
+TestCase subclass: WorkflowExecutionTest
+
+  testDefaultConstruction =>
+    wf := WorkflowExecution new
+    self assert: wf workflowId equals: ""
+    self assert: wf runId equals: ""
+    self assert: wf workflowType equals: ""
+    self assert: wf taskQueue equals: ""
+    self assert: wf args equals: #()
+    self assert: wf status equals: #running
+    self assert: wf result equals: nil
+    self assert: wf error equals: nil
+    self assert: wf parentWorkflowId equals: nil
+    self assert: wf startedAt equals: 0
+    self assert: wf closedAt equals: nil
+    self assert: wf searchAttributes equals: #{}
+
+  testNewWithMap =>
+    wf := WorkflowExecution new: #{
+      #workflowId => "order-123",
+      #runId => "run-abc",
+      #workflowType => "OrderWorkflow",
+      #taskQueue => "default",
+      #args => #("arg1", "arg2"),
+      #startedAt => 1710000000
+    }
+    self assert: wf workflowId equals: "order-123"
+    self assert: wf runId equals: "run-abc"
+    self assert: wf workflowType equals: "OrderWorkflow"
+    self assert: wf taskQueue equals: "default"
+    self assert: wf args equals: #("arg1", "arg2")
+    self assert: wf status equals: #running
+    self assert: wf startedAt equals: 1710000000
+
+  testEquality =>
+    wf1 := WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"}
+    wf2 := WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"}
+    self assert: wf1 equals: wf2
+
+  testWithSetter =>
+    wf := WorkflowExecution new: #{#workflowId => "wf-1", #status => #running}
+    wf2 := wf withStatus: #completed
+    self assert: wf status equals: #running
+    self assert: wf2 status equals: #completed
