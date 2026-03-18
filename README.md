@@ -89,6 +89,48 @@ If the process crashes after step 3, the engine replays events 1-3 (skipping the
 - **State snapshots** — replay optimization for long event histories
 - **File persistence** — append-only ETF event logs survive node restarts
 
+## Try it in the REPL
+
+```bash
+beamtalk repl
+```
+
+Load the project and a test workflow:
+
+```beamtalk
+Workspace load: "src"               // load all library source
+Workspace load: "test/fixtures"     // load test workflows + activities
+```
+
+Start the engine and run a workflow:
+
+```beamtalk
+client := ExduraClient connect: #{}
+
+handle := client
+  start: TwoActivityWorkflow
+  id: "demo-1"
+  args: #(5)
+  taskQueue: "default"
+  options: #{}
+
+result := handle result: 5000
+// => 20  (5 doubled to 10, then 10+10=20)
+```
+
+Inspect the event history:
+
+```beamtalk
+history := client eventStore readEvents: "demo-1" fromSeq: 1
+history do: [:e | Io println: "{e eventId}: {e eventType}"]
+// 1: WorkflowStarted
+// 2: ActivityScheduled
+// 3: ActivityCompleted
+// 4: ActivityScheduled
+// 5: ActivityCompleted
+// 6: WorkflowCompleted
+```
+
 ## Building
 
 ```bash
