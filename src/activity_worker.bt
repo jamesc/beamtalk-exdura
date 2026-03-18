@@ -2,7 +2,10 @@
 ///
 /// Each ActivityWorker runs as a child of the ActivityWorkerSupervisor
 /// (DynamicSupervisor). It is spawned via startChild, then initialized
-/// with initWith:selector:args: before calling execute or executeWithTimeout:.
+/// with initWith:selector:args: before calling execute.
+///
+/// Timeout enforcement is handled by the ActivityWorkerPool, which kills
+/// the worker process via Erlang exit:reason: #kill when the timeout fires.
 ///
 ///   worker := supervisor startChild
 ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
@@ -28,28 +31,3 @@ Actor subclass: ActivityWorker
   ///   worker execute   // => 10
   execute =>
     self.activityClass perform: self.selector withArguments: #(self.args)
-
-  /// Execute with a timeout (ms). Returns a result dictionary.
-  ///
-  /// Uses Erlang timer:kill_after to ensure the worker process is killed
-  /// if execution exceeds the timeout. Returns:
-  ///   #{#status => #completed, #result => value}
-  ///   #{#status => #failed, #error => message}
-  ///
-  ///   worker executeWithTimeout: 5000
-  executeWithTimeout: timeoutMs :: Integer =>
-    // Schedule process kill after timeout
-    {#ok, timerRef} := Erlang timer kill_after: timeoutMs
-    result := [
-      self.activityClass perform: self.selector withArguments: #(self.args)
-    ]
-      on: Exception
-      do: [:e |
-        Erlang timer cancel: timerRef
-        #{#status => #failed, #error => e message}
-      ]
-    Erlang timer cancel: timerRef
-    // Check if exception handler returned a status dict
-    ((result isKindOf: Dictionary) and: [
-      result includesKey: #status
-    ]) ifTrue: [result] ifFalse: [#{#status => #completed, #result => result}]

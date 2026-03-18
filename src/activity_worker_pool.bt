@@ -85,7 +85,10 @@ Actor subclass: ActivityWorkerPool
       ]
     // Always decrement active count (once) before returning
     self.activeCount := self.activeCount - 1
-    // If exception handler returned a status dict, pass it through
+    // If exception handler returned a status dict, pass it through.
+    // Note: if an activity returns a Dictionary with a #status key, this
+    // would be misinterpreted. A future improvement could use a tagged
+    // wrapper (e.g. Value subclass) instead of bare dictionaries.
     ((outcome isKindOf: Dictionary) and: [outcome includesKey: #status])
       ifTrue: [outcome]
       ifFalse: [
