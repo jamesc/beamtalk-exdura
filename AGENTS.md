@@ -123,7 +123,7 @@ whether code is correct, evaluate it directly rather than inferring from source.
 ## Actor Design Notes
 
 - **Inherited self-sends work** but go through a slower fallback path (hierarchy walk via `beamtalk_dispatch:super/5` instead of direct `__sealed_*` calls). **Caution:** inherited self-sends inside blocks can interact with the `calling_self` deadlock-prevention mechanism.
-- **Actor subclass state field access works** — `self.field` can read/write state declared on a superclass because `parent:init()` populates inherited fields in the state map. However, **non-Actor Object subclasses** (one class per file) have a bug: `collect_inherited_fields` can't find the parent, so inherited state is missing from the map.
+- **Actor subclass state field access works as designed** — `parent:init()` populates inherited fields in the state map. However, **non-Actor Object subclasses** (one class per file) have a bug: `collect_inherited_fields` can't find the parent, so inherited state is missing from the map.
 - **Objects have no state** — `Object` is for stateless behavior only. Use `Value` for immutable data (auto-generates getters, `withX:` setters, equality). Use `Actor` when mutable state is needed.
 - **Prefer composition over deep Actor inheritance** — avoids deadlock risks in block contexts and keeps responsibilities clear. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows.
 
