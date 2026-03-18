@@ -1,0 +1,42 @@
+/// Test fixture: a simple Actor with multiple state fields for snapshot testing.
+///
+/// Used by ActorSnapshotTest to verify that ActorSnapshot captures state
+/// via reflection and that the snapshot is immutable.
+///
+///   actor := SnapshotTestActor spawn
+///   actor setStatus: "running"
+///   actor status   // => "running"
+Actor subclass: SnapshotTestActor
+  state: status :: String = "idle"
+  state: orderId :: String = ""
+  state: count :: Integer = 0
+
+  /// Set the status field.
+  ///
+  ///   actor setStatus: "running"
+  setStatus: value :: String => self.status := value
+
+  /// Set the orderId field.
+  ///
+  ///   actor setOrderId: "order-42"
+  setOrderId: value :: String => self.orderId := value
+
+  /// Increment the count and return the new value.
+  ///
+  ///   actor increment   // => 1
+  increment => self.count := self.count + 1
+
+  /// Return the current status.
+  ///
+  ///   actor status   // => "idle"
+  status -> String => self.status
+
+  /// Return the current orderId.
+  ///
+  ///   actor orderId   // => ""
+  orderId -> String => self.orderId
+
+  /// Return the current count.
+  ///
+  ///   actor count   // => 0
+  count -> Integer => self.count

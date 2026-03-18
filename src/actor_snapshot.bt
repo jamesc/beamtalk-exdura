@@ -1,0 +1,52 @@
+/// Read-only snapshot proxy for capturing Actor state at a point in time.
+///
+/// ActorSnapshot captures an Actor's state fields via the reflection API
+/// (`fieldNames`, `fieldAt:`) and responds to field-name messages through
+/// `doesNotUnderstand:args:`. This enables query handlers to use normal
+/// field access syntax (e.g., `snap.status`, `snap.orderId`) without
+/// touching the live Actor process.
+///
+/// Snapshots are immutable — they reflect the Actor's state at capture time
+/// and are unaffected by subsequent mutations to the source Actor.
+///
+///   actor := MyActor spawn
+///   actor setStatus: "running"
+///   snap := ActorSnapshot of: actor
+///   snap status   // => "running"
+///   actor setStatus: "done"
+///   snap status   // => "running" (unchanged)
+Actor subclass: ActorSnapshot
+  state: fields :: Dictionary = #{}
+
+  /// Capture a read-only snapshot of a live Actor's state fields.
+  ///
+  /// Iterates over the Actor's `fieldNames` and reads each field value
+  /// via `fieldAt:`, storing them in a Dictionary.
+  ///
+  ///   snap := ActorSnapshot of: someActor
+  ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
+  class of: actor :: Actor =>
+    ActorSnapshot
+    data := actor fieldNames inject: #{} into: [:acc :name |
+      acc at: name put: (actor fieldAt: name)
+    ]
+    self spawnWith: #{#fields => data}
+
+  /// Return the captured field names as a list of symbols.
+  ///
+  ///   snap := ActorSnapshot of: actor
+  ///   snap capturedFieldNames   // => #(#status, #orderId)
+  capturedFieldNames -> List => self.fields keys
+
+  /// Respond to any field getter by looking up the captured value.
+  ///
+  /// If the selector matches a captured field name, returns that value.
+  /// Otherwise raises an error indicating the field does not exist.
+  ///
+  ///   snap := ActorSnapshot of: actor
+  ///   snap status       // => "running" (if actor had a #status field)
+  ///   snap bogusField   // => Error: "ActorSnapshot: no field 'bogusField'"
+  doesNotUnderstand: selector args: _arguments =>
+    self.fields at: selector ifAbsent: [
+      self error: "ActorSnapshot: no field '{selector}'"
+    ]
