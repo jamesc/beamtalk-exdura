@@ -120,6 +120,16 @@ whether code is correct, evaluate it directly rather than inferring from source.
   ```
 - **Always run `beamtalk fmt` before committing** — CI enforces `beamtalk fmt-check`
 
+## Known Actor Limitations
+
+These are current Beamtalk compiler/runtime constraints. Use composition instead of inheritance for Actor hierarchies.
+
+1. **Actor dispatch tables exclude inherited methods for self-sends** — if a superclass defines `foo =>`, an Actor subclass can't call `self foo`. Only methods defined directly on the class are in the dispatch table.
+2. **Actor state fields are inaccessible on subclasses** — `self.field` in a subclass can't read/write state declared on the superclass.
+3. **Objects have no state** — `Object` is for stateless behavior only. Use `Value` for immutable data (auto-generates getters, `withX:` setters, equality). Use `Actor` when mutable state is needed.
+
+**Workaround:** Use composition — pass collaborator actors rather than subclassing. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows instead of workflows inheriting from a stateful base.
+
 ## Essential Patterns
 
 ### Class Hierarchy
