@@ -30,10 +30,39 @@ Actor subclass: WorkflowContext
 
   /// Execute an activity or return its cached result during replay.
   ///
+  /// During replay, checks if the current cursor position has a matching
+  /// ActivityScheduled + ActivityCompleted pair. If so, returns the cached
+  /// result without calling the engine. Otherwise transitions to live
+  /// execution and dispatches via the engine.
+  ///
+  /// All replay logic is inlined to avoid self-send state snapshot issues
+  /// (self-sends in Actors run in separate handler contexts whose state
+  /// updates can be overwritten by the caller's snapshot on return).
+  /// Uses early returns (^) instead of block-local mutations to avoid
+  /// the block mutation gotcha.
+  ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
   runActivity: activityClass method: selector with: args =>
-    canReplay := self canReplayHere
-    canReplay ifTrue: [^self consumeReplay]
+    // Try replay: check for Scheduled+Completed pair at current cursor
+    self.isReplaying
+      ifTrue: [
+        scheduledIdx := self.replayCursor + 1
+        completedIdx := scheduledIdx + 1
+        completedIdx <= self.eventHistory size
+          ifTrue: [
+            scheduledEvent := self.eventHistory at: scheduledIdx
+            completedEvent := self.eventHistory at: completedIdx
+            isScheduled := scheduledEvent eventType =:= #ActivityScheduled
+            isCompleted := completedEvent eventType =:= #ActivityCompleted
+            (isScheduled and: [isCompleted])
+              ifTrue: [
+                // Consume replay: advance cursor and return cached result
+                self.replayCursor := completedIdx
+                ^completedEvent payload at: #result
+              ]
+          ]
+      ]
+    // No replay match — transition to live execution
     self.isReplaying := false
     result := self.engine
       scheduleActivity: activityClass
@@ -42,22 +71,3 @@ Actor subclass: WorkflowContext
       workflowId: self.workflowId
     self.replayCursor := self.replayCursor + 2
     result
-
-  /// Check if the current replay position has a valid Scheduled+Completed pair.
-  canReplayHere =>
-    self.isReplaying ifFalse: [^false]
-    scheduledIdx := self.replayCursor + 1
-    completedIdx := scheduledIdx + 1
-    completedIdx > self.eventHistory size ifTrue: [^false]
-    scheduledEvent := self.eventHistory at: scheduledIdx
-    completedEvent := self.eventHistory at: completedIdx
-    isScheduled := scheduledEvent eventType =:= #ActivityScheduled
-    isCompleted := completedEvent eventType =:= #ActivityCompleted
-    isScheduled and: [isCompleted]
-
-  /// Advance cursor and return the cached activity result.
-  consumeReplay =>
-    completedIdx := self.replayCursor + 2
-    self.replayCursor := completedIdx
-    completedEvent := self.eventHistory at: completedIdx
-    completedEvent payload at: #result
