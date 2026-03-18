@@ -27,10 +27,8 @@ Actor subclass: ExduraClient
   ///
   ///   client := ExduraClient connect: #{#host => "localhost"}
   class connect: _options :: Dictionary =>
-    // Use spawnWith: #{}  instead of spawn to work around BT-1539
-    // (spawn fails after load_project redefines class module)
-    store := EventStore spawnWith: #{}
-    pool := ActivityWorkerPool spawnWith: #{}
+    store := EventStore spawn
+    pool := ActivityWorkerPool spawn
     eng := WorkflowEngine withStore: store pool: pool
     self spawnWith: #{#engine => eng, #eventStore => store}
 

@@ -1,16 +1,12 @@
 /// BT-1499: BUnit tests for ExduraSupervisor and ExduraWorker.
 ///
-/// Tests the supervision tree structure, one_for_one strategy, and the
+/// Tests the supervision tree structure, rest_for_one strategy, and the
 /// full ExduraWorker start: flow including running workflows through
-/// the client. Structure and lifecycle are tested together to avoid
-/// ETS named-table conflicts between independent supervisor instances.
+/// the client.
 TestCase subclass: ExduraSupervisorTest
   state: client = nil
 
   setUp =>
-    // Clean up any leftover ETS tables from previous test runs
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
     [File deleteAll: "data"] on: Error do: [:e | nil]
     Erlang timer sleep: 200
     self
@@ -22,8 +18,6 @@ TestCase subclass: ExduraSupervisorTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
     [File deleteAll: "data"] on: Error do: [:e | nil]
 
   // === ExduraSupervisor class-side config ===
@@ -38,9 +32,12 @@ TestCase subclass: ExduraSupervisorTest
     self assert: self.client engine notNil
     self assert: self.client eventStore notNil
 
-    // Verify the supervisor started its children
+    // Verify the supervisor started all 4 children
     sup := self.client supervisor
     self assert: sup notNil
+    self assert: sup count equals: 4
+    self assert: (sup which: EventStore) notNil
+    self assert: (sup which: ActivityWorkerPool) notNil
     self assert: (sup which: WorkflowEngine) notNil
     self assert: (sup which: TimerManager) notNil
 

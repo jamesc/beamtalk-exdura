@@ -7,6 +7,10 @@
 ///   handle := client start: DoubleWorkflow id: "demo-1"
 ///     args: #(5) taskQueue: "default" options: #{}
 ///   handle result: 5000   // => 20
+///
+///   // Inspect event history
+///   history := client eventStore readEvents: "demo-1" fromSeq: 1
+///   history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
 Workflow subclass: DoubleWorkflow
 
   run: value ctx: ctx =>

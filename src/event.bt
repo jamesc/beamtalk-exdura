@@ -15,3 +15,6 @@ Value subclass: ExduraEvent
   state: eventType :: Symbol = #unknown
   state: timestamp :: Integer = 0
   state: payload :: Dictionary = #{}
+
+  /// Display as ExduraEvent(1: WorkflowStarted)
+  printString => "ExduraEvent({self eventId}: {self eventType})"

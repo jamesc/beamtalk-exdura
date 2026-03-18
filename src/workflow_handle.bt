@@ -12,6 +12,9 @@ Value subclass: WorkflowHandle
   state: workflowId :: String = ""
   state: client = nil
 
+  /// Display as WorkflowHandle(wf-1)
+  printString => "WorkflowHandle({self workflowId})"
+
   /// Create a new WorkflowHandle for the given workflow and client.
   ///
   ///   WorkflowHandle for: "wf-1" client: aClient

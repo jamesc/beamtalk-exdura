@@ -14,6 +14,9 @@
 Value subclass: WorkflowExecution
   state: workflowId :: String = ""
   state: runId :: String = ""
+
+  /// Display as WorkflowExecution(order-123 running)
+  printString => "WorkflowExecution({self workflowId} {self status})"
   state: workflowType :: String = ""
   state: taskQueue :: String = ""
   state: args :: List = #()

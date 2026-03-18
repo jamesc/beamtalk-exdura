@@ -15,13 +15,16 @@ Object subclass: ExduraWorker
   class start: config :: Dictionary =>
     sup := ExduraSupervisor supervise
 
+    // Wire engine to its supervised siblings (can't happen in initialize
+    // because calling back into the supervisor from child init deadlocks)
     engine := sup which: WorkflowEngine
-    store := engine eventStore
-    pool := engine activityPool
+    store := sup which: EventStore
+    pool := sup which: ActivityWorkerPool
+    engine initWithStore: store pool: pool
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]
-    pool isNil ifFalse: [pool setMaxConcurrent: maxActivities]
+    pool setMaxConcurrent: maxActivities
 
     // Create client connected to the supervised engine
     client := ExduraClient spawnWith: #{#engine => engine, #eventStore => store}

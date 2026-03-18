@@ -1,29 +1,26 @@
 /// Top-level OTP supervision tree for the Exdura durable workflow engine.
 ///
-/// EventStore and ActivityWorkerPool are created in `children` and passed
-/// to WorkflowEngine via withArgs: so the engine is wired at startup.
-/// Uses rest_for_one: if the engine crashes, TimerManager also restarts.
+/// All four components are supervised children in dependency order:
+///   1. EventStore — durable event persistence
+///   2. ActivityWorkerPool — supervised activity execution
+///   3. WorkflowEngine — workflow orchestration (discovers deps via supervisor)
+///   4. TimerManager — durable timer scheduling
+///
+/// Uses rest_for_one: if EventStore crashes, everything after it restarts.
+/// If WorkflowEngine crashes, TimerManager restarts too.
 ///
 ///   beamtalk run                          // starts via beamtalk.toml
 ///   sup := ExduraSupervisor supervise     // or start manually
 Supervisor subclass: ExduraSupervisor
 
-  class start => self supervise
-
-  /// rest_for_one: if engine crashes, timer restarts too.
+  /// rest_for_one: if a child crashes, all children after it restart.
   class strategy -> Symbol => #restForOne
 
-  /// Build child specs. EventStore and ActivityWorkerPool are created here
-  /// (like Symphony creates LinearClient in children) and passed to the
-  /// engine via withArgs:.
+  /// Child specs in dependency order.
   class children -> List =>
-    store := EventStore spawn
-    pool := ActivityWorkerPool spawn
-
-    engineSpec := (WorkflowEngine supervisionSpec withRestart: #permanent) withArgs: #{
-      #eventStore => store,
-      #activityPool => pool
-    }
+    storeSpec := EventStore supervisionSpec withRestart: #permanent
+    poolSpec := ActivityWorkerPool supervisionSpec withRestart: #permanent
+    engineSpec := WorkflowEngine supervisionSpec withRestart: #permanent
     timerSpec := TimerManager supervisionSpec withRestart: #permanent
 
-    #(engineSpec, timerSpec)
+    #(storeSpec, poolSpec, engineSpec, timerSpec)

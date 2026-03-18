@@ -1,0 +1,21 @@
+/// Example activities for the OrderWorkflow.
+///
+/// Stub implementations that simulate inventory and payment services.
+/// In production these would call external APIs.
+Activity subclass: OrderActivities
+
+  /// Reserve inventory for an order.
+  ///
+  ///   OrderActivities reserveInventory: #(#{#itemId => "SKU-42", #amount => 2999})
+  ///   // => #{#status => "reserved", #itemId => "SKU-42"}
+  class reserveInventory: args :: List =>
+    order := args at: 1
+    #{#status => "reserved", #itemId => (order at: #itemId)}
+
+  /// Charge payment for an order.
+  ///
+  ///   OrderActivities chargePayment: #(#{#itemId => "SKU-42", #amount => 2999})
+  ///   // => #{#status => "charged", #amount => 2999}
+  class chargePayment: args :: List =>
+    order := args at: 1
+    #{#status => "charged", #amount => (order at: #amount)}

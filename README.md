@@ -114,7 +114,7 @@ result := handle result: 5000
 
 // Inspect the event history
 history := client eventStore readEvents: "demo-1" fromSeq: 1
-history do: [:e | Io println: "{e eventId}: {e eventType}"]
+history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
 // 1: WorkflowStarted
 // 2: ActivityScheduled
 // 3: ActivityCompleted

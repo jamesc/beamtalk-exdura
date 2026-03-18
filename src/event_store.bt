@@ -44,8 +44,8 @@ Actor subclass: EventStore
       acc: (acc add: evt)
 
   initialize =>
-    self.executions := Ets new: #exdura_executions type: #set
-    self.events := Ets new: #exdura_events type: #set
+    self.executions := Ets newOrExisting: #exdura_executions type: #set
+    self.events := Ets newOrExisting: #exdura_events type: #set
     self ensureDirectories
     self reloadFromDisk
 
