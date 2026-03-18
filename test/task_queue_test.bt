@@ -12,6 +12,10 @@ TestCase subclass: TaskQueueTest
     self.queue := nil
 
   // === Basic enqueue/dequeue ===
+  testEnqueueReturnsTask =>
+    result := self.queue enqueue: "task-1"
+    self assert: result equals: "task-1"
+
   testEnqueueAndDequeue =>
     self.queue enqueue: "task-1"
     result := self.queue dequeue
