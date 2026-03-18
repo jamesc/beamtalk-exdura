@@ -1,0 +1,76 @@
+/// BT-1502: BUnit tests for ActorSnapshot (DNU-based read-only proxy).
+///
+/// Tests that ActorSnapshot captures Actor state via reflection and responds
+/// to field-name messages through doesNotUnderstand:args:. Verifies immutability
+/// — snapshot state is frozen at capture time, unaffected by later Actor mutations.
+///
+/// Fixture: src/snapshot_test_actor.bt (SnapshotTestActor)
+TestCase subclass: ActorSnapshotTest
+
+  /// ActorSnapshot of: captures all state fields from a live Actor.
+  testCapturesAllFields =>
+    actor := SnapshotTestActor spawn
+    actor setStatus: "running"
+    actor setOrderId: "order-42"
+    actor increment
+    snap := ActorSnapshot of: actor
+    self assert: snap notNil
+
+  /// Snapshot responds to field-name messages via DNU.
+  testFieldAccessViaMessages =>
+    actor := SnapshotTestActor spawn
+    actor setStatus: "running"
+    actor setOrderId: "order-42"
+    actor increment
+    snap := ActorSnapshot of: actor
+    self assert: snap status equals: "running"
+    self assert: snap orderId equals: "order-42"
+    self assert: snap count equals: 1
+
+  /// Unknown field names raise an error.
+  testUnknownFieldRaisesError =>
+    actor := SnapshotTestActor spawn
+    snap := ActorSnapshot of: actor
+    self should: [snap bogusField] raise: #user_error
+
+  /// Snapshot is read-only — field values cannot be mutated.
+  testSnapshotIsReadOnly =>
+    actor := SnapshotTestActor spawn
+    actor setStatus: "running"
+    snap := ActorSnapshot of: actor
+    // ActorSnapshot has no setter methods — calling setStatus: triggers DNU
+    // which raises an error because setStatus: is not a captured field name
+    self should: [snap setStatus: "changed"] raise: #user_error
+
+  /// Snapshot reflects state at capture time and is unaffected by later Actor mutations.
+  testSnapshotIsImmutable =>
+    actor := SnapshotTestActor spawn
+    actor setStatus: "running"
+    actor setOrderId: "order-42"
+    actor increment
+    actor increment
+    // Capture snapshot with status=running, orderId=order-42, count=2
+    snap := ActorSnapshot of: actor
+    // Mutate the Actor further
+    actor setStatus: "completed"
+    actor setOrderId: "order-99"
+    actor increment
+    actor increment
+    actor increment
+    // Verify snapshot still has original values
+    self assert: snap status equals: "running"
+    self assert: snap orderId equals: "order-42"
+    self assert: snap count equals: 2
+    // Verify Actor has new values (to confirm it actually changed)
+    self assert: actor status equals: "completed"
+    self assert: actor orderId equals: "order-99"
+    self assert: actor count equals: 5
+
+  /// capturedFieldNames returns the captured field names.
+  testCapturedFieldNamesReturnsKeys =>
+    actor := SnapshotTestActor spawn
+    snap := ActorSnapshot of: actor
+    names := snap capturedFieldNames
+    self assert: (names includes: #status)
+    self assert: (names includes: #orderId)
+    self assert: (names includes: #count)
