@@ -1,0 +1,314 @@
+/// BT-1501: BUnit tests for signal handler registration, waitForSignal,
+/// and waitForCondition.
+///
+/// Tests that onSignal:do: registers handlers, waitForSignal:timeout: blocks
+/// until the named signal arrives, waitForCondition:timeout: blocks until
+/// the condition becomes true via signal delivery, and that signal handlers
+/// replay from history events.
+TestCase subclass: SignalTest
+  state: client = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{}
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+
+  // === onSignal:do: registers handler ===
+  testOnSignalRegistersHandler =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-handler-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-handler-1"
+      history: #()
+    ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+    ctx setVar: #approved to: false
+    self assert: (ctx getVar: #approved) equals: false
+
+  // === onSignal:do: handler executes and updates vars via waitForCondition ===
+  testOnSignalHandlerUpdatesVars =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-handler-2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-handler-2"
+      history: #()
+    ctx setVar: #approved to: false
+    ctx setVar: #approver to: nil
+    ctx
+      onSignal: "approve"
+      do: [:payload :vars |
+        updated := vars at: #approved put: true
+        updated at: #approver put: (payload at: #name)
+      ]
+
+    // Buffer a signal
+    engine
+      bufferSignal: "wf-handler-2"
+      name: "approve"
+      payload: #{#name => "alice"}
+
+    // waitForCondition drains signals and runs handlers
+    ctx waitForCondition: [:vars | vars at: #approved] timeout: 5000
+    self assert: (ctx getVar: #approved) equals: true
+    self assert: (ctx getVar: #approver) equals: "alice"
+
+  // === waitForSignal:timeout: returns payload when signal arrives ===
+  testWaitForSignalReturnsPayload =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-wait-sig-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-wait-sig-1"
+      history: #()
+
+    // Buffer a signal before waiting
+    engine
+      bufferSignal: "wf-wait-sig-1"
+      name: "approve"
+      payload: #{#user => "alice"}
+
+    // waitForSignal should find it immediately
+    payload := ctx waitForSignal: "approve" timeout: 5000
+    self assert: (payload at: #user) equals: "alice"
+
+  // === waitForSignal:timeout: raises on timeout ===
+  testWaitForSignalTimesOut =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-wait-sig-timeout",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-wait-sig-timeout"
+      history: #()
+
+    // No signals buffered — should time out
+    result := [
+      ctx waitForSignal: "approve" timeout: 200
+    ] on: Error do: [:e | #timedOut]
+    self assert: result equals: #timedOut
+
+  // === waitForCondition:timeout: returns when condition true ===
+  testWaitForConditionReturnsWhenTrue =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-wait-cond-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-wait-cond-1"
+      history: #()
+    ctx setVar: #approved to: false
+    ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+
+    // Buffer the signal before calling waitForCondition
+    engine
+      bufferSignal: "wf-wait-cond-1"
+      name: "approve"
+      payload: #{#user => "bob"}
+
+    // waitForCondition should drain signal, run handler, and see condition true
+    ctx waitForCondition: [:vars | vars at: #approved] timeout: 5000
+    self assert: (ctx getVar: #approved) equals: true
+
+  // === waitForCondition:timeout: times out when condition never true ===
+  testWaitForConditionTimesOut =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-wait-cond-timeout",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-wait-cond-timeout"
+      history: #()
+    ctx setVar: #approved to: false
+    ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+
+    // No signals buffered — condition stays false
+    result := [
+      ctx waitForCondition: [:vars | vars at: #approved] timeout: 200
+    ] on: Error do: [:e | #timedOut]
+    self assert: result equals: #timedOut
+
+  // === Replay: signal handlers replay from history events ===
+  testReplaySignalHandlersFromHistory =>
+    engine := self.client engine
+    store := self.client eventStore
+    now := Erlang os system_time: #second
+
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-replay-handler",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => now
+      }
+    store createExecution: exec
+
+    // Build history: WorkflowStarted, ActivityScheduled, ActivityCompleted,
+    // SignalReceived (approve signal at safe point)
+    events := #((ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => "wf-replay-handler",
+          #workflowType => "TestWorkflow",
+          #args => #(5)
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityScheduled,
+        #timestamp => now,
+        #payload => #{
+          #activityClass => "TestActivities",
+          #selector => "doubleIt:",
+          #args => #(5),
+          #options => #{}
+        }
+      }), (ExduraEvent
+      new: #{
+        #eventType => #ActivityCompleted,
+        #timestamp => now,
+        #payload => #{#result => 10}
+      }), (ExduraEvent
+      new: #{
+        #eventType => #SignalReceived,
+        #timestamp => now,
+        #payload => #{#signalName => "approve", #payload => #{#user => "alice"}}
+      }))
+    store appendEvents: "wf-replay-handler" events: events
+
+    history := store readEvents: "wf-replay-handler" fromSeq: 1
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: engine
+      workflowId: "wf-replay-handler"
+      history: history
+    ctx setVar: #approved to: false
+    ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+
+    // Replay the activity — should return cached result and consume signal
+    result := ctx
+      runActivity: TestActivities
+      method: #doubleIt:
+      with: #(5)
+    self assert: result equals: 10
+
+    // Signal should be in delivered signals from replay
+    delivered := ctx deliveredSignals
+    self assert: delivered size equals: 1
+    self assert: ((delivered at: 1) at: #name) equals: "approve"
+
+    // Now waitForSignal should find the replayed signal
+    payload := ctx waitForSignal: "approve" timeout: 1000
+    self assert: (payload at: #user) equals: "alice"
+
+  // === ApprovalWorkflow pattern from SPEC §5.4 ===
+  testApprovalWorkflowPattern =>
+    // Start an ApprovalWorkflow (defined below)
+    handle := self.client
+      start: ApprovalWorkflow
+      id: "wf-approval-1"
+      args: #("req-123")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for workflow to start and reach waitForCondition
+    Erlang timer sleep: 500
+
+    // Send the approval signal
+    self.client
+      signal: "wf-approval-1"
+      name: "approve"
+      payload: #{#approver => "alice"}
+
+    // Wait for workflow to complete
+    result := handle result: 10000
+    self assert: (result at: #status) equals: "approved"
+    self assert: (result at: #approver) equals: "alice"

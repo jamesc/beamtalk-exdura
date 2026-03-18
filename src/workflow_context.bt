@@ -1,10 +1,15 @@
-/// Provides activity dispatch, replay, and signal delivery for workflow execution.
+/// Provides activity dispatch, replay, signal handling, and workflow variable
+/// storage for workflow execution.
 ///
 /// WorkflowContext is an Actor that manages the replay cursor and event
 /// history. It dispatches activities to the engine during normal execution
 /// and returns cached results during replay. At each safe point (after
 /// runActivity: or sleep: returns), it drains buffered signals from the
 /// engine and makes them available for processing.
+///
+/// Signal handlers are registered via onSignal:do: and fire when matching
+/// signals are drained. Workflow variables (setVar:to: / getVar:) provide
+/// mutable state accessible to signal handlers and condition blocks.
 ///
 ///   ctx := WorkflowContext spawn
 ///   ctx initWith: engine workflowId: "wf-1" history: events
@@ -16,6 +21,9 @@ Actor subclass: WorkflowContext
   state: eventHistory :: List = #()
   state: isReplaying :: Boolean = false
   state: deliveredSignals :: List = #()
+  state: signalHandlers :: Dictionary = #{}
+  state: workflowVars :: Dictionary = #{}
+  state: receivedSignals :: List = #()
   state: snapshotInterval :: Integer = 100
   state: eventsSinceSnapshot :: Integer = 0
   state: queryHandlers :: Dictionary = #{}
@@ -97,6 +105,33 @@ Actor subclass: WorkflowContext
       ]
       ifFalse: [count]
 
+  /// Find a signal by name in a list. Returns a Dictionary with #found, #signal,
+  /// and #remaining keys. Class method to avoid self-send deadlock.
+  ///
+  ///   WorkflowContext findSignal: "approve" in: signals
+  class findSignal: name :: String in: signals :: List =>
+    self
+      findSignal: name
+      in: signals
+      idx: 1
+
+  /// Recursive helper to find a signal by name.
+  class findSignal: name :: String in: signals :: List idx: idx :: Integer =>
+    idx > signals size ifTrue: [^#{#found => false}]
+    sig := signals at: idx
+    (sig at: #name) =:= name
+      ifTrue: [
+        before := idx > 1 ifTrue: [signals from: 1 to: idx - 1] ifFalse: [#()]
+        after := idx < signals size ifTrue: [
+          signals from: idx + 1 to: signals size
+        ] ifFalse: [#()]
+        ^#{#found => true, #signal => sig, #remaining => before ++ after}
+      ]
+    self
+      findSignal: name
+      in: signals
+      idx: idx + 1
+
   /// Initialize with engine, workflow ID, and event history.
   ///
   ///   ctx initWith: engine workflowId: "wf-1" history: events
@@ -135,6 +170,67 @@ Actor subclass: WorkflowContext
 
   /// Get the engine reference (for testing).
   getEngine => self.engine
+
+  /// Set a workflow variable. Provides mutable state for signal handlers.
+  ///
+  /// Workflow variables are stored in the context Actor and can be read
+  /// by condition blocks in waitForCondition:timeout:.
+  ///
+  ///   ctx setVar: #approved to: false
+  setVar: name to: value =>
+    self.workflowVars := self.workflowVars at: name put: value
+
+  /// Get a workflow variable value.
+  ///
+  ///   ctx getVar: #approved
+  ///   // => false
+  getVar: name => self.workflowVars at: name ifAbsent: [nil]
+
+  /// Return all workflow variables (for testing).
+  ///
+  ///   ctx getVars
+  getVars => self.workflowVars
+
+  /// Register a signal handler block for the given signal name.
+  ///
+  /// The handler block receives two arguments: the signal payload and
+  /// the current workflow variables dictionary. It must return an
+  /// updated variables dictionary (or the same one if no changes needed).
+  ///
+  ///   ctx onSignal: "approve" do: [:payload :vars |
+  ///     vars at: #approved put: true
+  ///   ]
+  onSignal: name :: String do: block =>
+    self.signalHandlers := self.signalHandlers at: name put: block
+
+  /// Register a query handler block for the given query name.
+  ///
+  /// The handler block receives an ActorSnapshot proxy as its argument
+  /// and should return the query result. Handlers are stored locally and
+  /// registered with the engine for query evaluation.
+  ///
+  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
+  onQuery: queryName :: String do: handlerBlock =>
+    self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
+
+  /// Return all registered query handlers.
+  ///
+  ///   ctx queryHandlers   // => #{"getStatus" => [:snap | ...]}
+  queryHandlers => self.queryHandlers
+
+  /// Set a workflow state field visible in query snapshots.
+  ///
+  /// Workflow state is captured at each safe point and used to build
+  /// the ActorSnapshot proxy that query handlers receive.
+  ///
+  ///   ctx setState: #status to: "processing"
+  setState: fieldName to: value =>
+    self.workflowState := self.workflowState at: fieldName put: value
+
+  /// Return the current workflow state as a Dictionary.
+  ///
+  ///   ctx workflowState   // => #{#status => "processing"}
+  workflowState => self.workflowState
 
   /// Execute an activity or return its cached result during replay.
   ///
@@ -318,42 +414,160 @@ Actor subclass: WorkflowContext
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     nil
 
-  /// Register a query handler block for the given query name.
+  /// Block until a signal with the given name arrives or timeout expires.
   ///
-  /// The handler block receives an ActorSnapshot proxy as its argument
-  /// and should return the query result. Handlers are stored locally and
-  /// registered with the engine for query evaluation.
+  /// Repeatedly drains signals from the engine, processes registered handlers,
+  /// and checks if the target signal has been received. Returns the signal
+  /// payload when found. Raises an error if the timeout is exceeded.
   ///
-  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
-  onQuery: queryName :: String do: handlerBlock =>
-    self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
+  /// During replay, consumes SignalReceived events from the history.
+  /// This is a safe point per SPEC §6.5.
+  ///
+  ///   payload := ctx waitForSignal: "approve" timeout: 60000
+  waitForSignal: name :: String timeout: ms :: Integer =>
+    deadline := (Erlang os system_time: #millisecond) + ms
+    // Check already-delivered signals first (from previous safe points)
+    found := WorkflowContext findSignal: name in: self.deliveredSignals
+    (found at: #found)
+      ifTrue: [
+        self.deliveredSignals := found at: #remaining
+        self.receivedSignals := self.receivedSignals ++ #(found at: #signal)
+        ^(found at: #signal) at: #payload
+      ]
+    // Poll loop — uses expression-style ifTrue:ifFalse: to avoid the
+    // whileTrue block mutation gotcha (nested self.field := inside
+    // ifTrue:/ifFalse: inside whileTrue: doesn't propagate).
+    [true]
+      whileTrue: [
+        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+          self error: "waitForSignal timed out after {ms}ms"
+        ]
+        // Drain signals: return new signals as expression value
+        newSignals := self.isReplaying
+          ifTrue: [
+            WorkflowContext collectReplaySignalsFrom: self.replayCursor + 1 history: self.eventHistory
+          ]
+          ifFalse: [self.engine drainSignals: self.workflowId]
+        // Update cursor for replay signals (expression-style, no nested mutation)
+        cursorAdvance := self.isReplaying ifTrue: [newSignals size] ifFalse: [0]
+        self.replayCursor := self.replayCursor + cursorAdvance
+        // Append to delivered signals at whileTrue top level
+        self.deliveredSignals := self.deliveredSignals ++ newSignals
+        // Process handlers — use inject:into: to avoid nested mutation.
+        // No local var assignment in inject block (would cause Tuple return).
+        self.workflowVars := self.deliveredSignals
+          inject: self.workflowVars
+          into: [:vars :sig |
+            (self.signalHandlers at: (sig at: #name) ifAbsent: [nil]) isNil
+              ifTrue: [vars]
+              ifFalse: [
+                (self.signalHandlers at: (sig at: #name)) value: (sig at: #payload) value: vars
+              ]
+          ]
+        // Check for target signal — early return (^) exits method, avoiding gotcha
+        found2 := WorkflowContext findSignal: name in: self.deliveredSignals
+        (found2 at: #found)
+          ifTrue: [
+            self.deliveredSignals := found2 at: #remaining
+            self.receivedSignals := self.receivedSignals ++ #(found2 at: #signal)
+            ^(found2 at: #signal) at: #payload
+          ]
+        // Clear processed signals (handlers already ran)
+        self.deliveredSignals := #()
+        Timer sleep: 50
+      ]
 
-  /// Return all registered query handlers.
+  /// Block until the condition block evaluates to true or timeout expires.
   ///
-  ///   ctx queryHandlers   // => #{"getStatus" => [:snap | ...]}
-  queryHandlers => self.queryHandlers
-
-  /// Set a workflow state field visible in query snapshots.
+  /// At each iteration: drains signals (which may change workflow variables
+  /// via registered handlers), evaluates the condition block with current
+  /// workflow variables, and if false waits briefly before retrying.
+  /// This is a safe point per SPEC §6.5.
   ///
-  /// Workflow state is captured at each safe point and used to build
-  /// the ActorSnapshot proxy that query handlers receive.
+  /// The condition block receives the workflow variables Dictionary and
+  /// should return a Boolean.
   ///
-  ///   ctx setState: #status to: "processing"
-  setState: fieldName to: value =>
-    self.workflowState := self.workflowState at: fieldName put: value
-
-  /// Return the current workflow state as a Dictionary.
-  ///
-  ///   ctx workflowState   // => #{#status => "processing"}
-  workflowState => self.workflowState
+  ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+  waitForCondition: block timeout: ms :: Integer =>
+    deadline := (Erlang os system_time: #millisecond) + ms
+    // Check condition immediately
+    (block value: self.workflowVars) ifTrue: [^nil]
+    // Poll loop — uses expression-style ifTrue:ifFalse: to avoid the
+    // whileTrue block mutation gotcha (nested self.field := inside
+    // ifTrue:/ifFalse: inside whileTrue: doesn't propagate).
+    [true]
+      whileTrue: [
+        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+          self error: "waitForCondition timed out after {ms}ms"
+        ]
+        // Drain signals: return new signals as expression value
+        newSignals := self.isReplaying
+          ifTrue: [
+            WorkflowContext collectReplaySignalsFrom: self.replayCursor + 1 history: self.eventHistory
+          ]
+          ifFalse: [self.engine drainSignals: self.workflowId]
+        // Update cursor for replay signals (expression-style, no nested mutation)
+        cursorAdvance := self.isReplaying ifTrue: [newSignals size] ifFalse: [0]
+        self.replayCursor := self.replayCursor + cursorAdvance
+        // Append to delivered signals at whileTrue top level
+        self.deliveredSignals := self.deliveredSignals ++ newSignals
+        // Process handlers — use inject:into: to avoid nested mutation.
+        // No local var assignment in inject block (would cause Tuple return).
+        self.workflowVars := self.deliveredSignals
+          inject: self.workflowVars
+          into: [:vars :sig |
+            (self.signalHandlers at: (sig at: #name) ifAbsent: [nil]) isNil
+              ifTrue: [vars]
+              ifFalse: [
+                (self.signalHandlers at: (sig at: #name)) value: (sig at: #payload) value: vars
+              ]
+          ]
+        self.receivedSignals := self.receivedSignals ++ self.deliveredSignals
+        self.deliveredSignals := #()
+        // Check condition — early return (^) exits method, avoiding gotcha
+        (block value: self.workflowVars) ifTrue: [^nil]
+        Timer sleep: 50
+      ]
 
   /// Return the list of signals delivered at safe points.
   ///
   /// Each signal is a Dictionary with #name and #payload keys.
-  /// Useful for testing and for future signal handler dispatch (BT-1501).
+  /// Useful for testing and for signal handler dispatch.
   ///
   ///   ctx deliveredSignals
   deliveredSignals => self.deliveredSignals
+
+  /// Return all signals that have been received and processed.
+  ///
+  ///   ctx receivedSignals
+  receivedSignals => self.receivedSignals
+
+  /// Drain and return all delivered signals, clearing the internal list.
+  ///
+  /// Used by Workflow signal processing to consume signals that have been
+  /// collected at safe points. Returns the signals and resets the list.
+  ///
+  ///   signals := ctx drainAndClearSignals
+  drainAndClearSignals =>
+    signals := self.deliveredSignals
+    self.deliveredSignals := #()
+    signals
+
+  /// Actively drain signals from the engine (live execution) and return them.
+  ///
+  /// This is used by waitForSignal/waitForCondition to poll for new signals
+  /// outside of the normal safe-point flow. During replay, returns any
+  /// unconsumed signals from the history.
+  ///
+  ///   signals := ctx pollSignals
+  pollSignals =>
+    self.isReplaying ifTrue: [^self drainAndClearSignals]
+    // Live execution: drain from engine
+    signals := self.engine drainSignals: self.workflowId
+    signals size > 0 ifTrue: [
+      self.deliveredSignals := self.deliveredSignals ++ signals
+    ]
+    self drainAndClearSignals
 
   /// Return the current replay cursor position (for testing/inspection).
   ///

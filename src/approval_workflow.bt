@@ -1,0 +1,23 @@
+/// Test workflow implementing the ApprovalWorkflow pattern from SPEC §5.4.
+///
+/// Registers an "approve" signal handler, then waits for the #approved
+/// condition to become true. Returns the approval status and approver name.
+///
+///   engine startWorkflow: ApprovalWorkflow id: "wf-1" args: #("req-123")
+Workflow subclass: ApprovalWorkflow
+
+  /// Run the approval workflow: register handler, wait for approval.
+  run: _requestId ctx: ctx -> Dictionary =>
+    ctx setVar: #approved to: false
+    ctx setVar: #approver to: nil
+    ctx
+      onSignal: "approve"
+      do: [:payload :vars |
+        updated := vars at: #approved put: true
+        updated at: #approver put: (payload at: #approver)
+      ]
+    // Block until approved or timeout (10 seconds for testing)
+    [
+      ctx waitForCondition: [:vars | vars at: #approved] timeout: 10000
+    ] on: Error do: [:e | ^#{#status => "timed_out", #approver => nil}]
+    #{#status => "approved", #approver => (ctx getVar: #approver)}
