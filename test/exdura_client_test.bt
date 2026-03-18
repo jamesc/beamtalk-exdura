@@ -134,9 +134,11 @@ TestCase subclass: ExduraClientTest
       payload: #{}
     self assert: result equals: nil
 
-  testQueryStubReturnsNil =>
-    result := self.client query: "wf-1" name: "getStatus"
-    self assert: result equals: nil
+  testQueryWithNoHandlersRaisesError =>
+    result := [
+      self.client query: "wf-1" name: "getStatus"
+    ] on: Error do: [:e | #error]
+    self assert: result equals: #error
 
   testCancelStubReturnsNil =>
     result := self.client cancel: "wf-1"

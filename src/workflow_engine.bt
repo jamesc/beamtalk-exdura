@@ -17,6 +17,8 @@ Actor subclass: WorkflowEngine
   state: eventStore = nil
   state: activityPool = nil
   state: signalBuffers :: Dictionary = #{}
+  state: workflowSnapshots :: Dictionary = #{}
+  state: workflowQueryHandlers :: Dictionary = #{}
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
@@ -321,6 +323,58 @@ Actor subclass: WorkflowEngine
       updateExecution: workflowId
       status: #failed
       result: reason
+
+  /// Register a workflow's query handlers with the engine.
+  ///
+  /// Called by WorkflowRunner after creating the workflow object so the
+  /// engine can evaluate query handler blocks when queries arrive.
+  ///
+  ///   engine registerQueryHandlers: handlers forWorkflow: "wf-1"
+  registerQueryHandlers: handlers :: Dictionary forWorkflow: workflowId :: String =>
+    self.workflowQueryHandlers := self.workflowQueryHandlers at: workflowId put: handlers
+
+  /// Capture a snapshot of the workflow's state at a safe point.
+  ///
+  /// Creates an ActorSnapshot from the given state Dictionary and stores
+  /// it for the workflow. Query handlers will be evaluated against this
+  /// snapshot until the next safe point updates it.
+  ///
+  ///   engine captureSnapshot: #{#status => "processing"} forWorkflow: "wf-1"
+  captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String =>
+    // Stop the previous snapshot Actor to avoid process leaks
+    oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
+    oldSnap isNil ifFalse: [[oldSnap stop] on: Error do: [:e | nil]]
+    snap := ActorSnapshot spawnWith: #{#fields => stateDict}
+    self.workflowSnapshots := self.workflowSnapshots at: workflowId put: snap
+
+  /// Handle a query for a workflow by evaluating the registered handler
+  /// block against the cached snapshot.
+  ///
+  /// Returns the result of evaluating the handler block with the snapshot.
+  /// Raises an error if no handler is registered for the query name or
+  /// if no snapshot exists for the workflow.
+  ///
+  ///   result := engine handleQuery: "wf-1" name: "getStatus"
+  handleQuery: workflowId :: String name: queryName :: String =>
+    handlers := self.workflowQueryHandlers at: workflowId ifAbsent: [nil]
+    handlers isNil ifTrue: [
+      self error: "No query handlers registered for workflow '{workflowId}'"
+    ]
+    handler := handlers at: queryName ifAbsent: [nil]
+    handler isNil ifTrue: [
+      self error: "No query handler '{queryName}' for workflow '{workflowId}'"
+    ]
+    snap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
+    snap isNil ifTrue: [
+      self error: "No snapshot available for workflow '{workflowId}'"
+    ]
+    handler value: snap
+
+  /// Return the cached snapshot for a workflow (for testing/inspection).
+  ///
+  ///   engine getSnapshot: "wf-1"
+  getSnapshot: workflowId :: String =>
+    self.workflowSnapshots at: workflowId ifAbsent: [nil]
 
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
