@@ -1,0 +1,34 @@
+// BT-1490: BUnit tests for TimeoutConfig Value subclass.
+
+TestCase subclass: TimeoutConfigTest
+
+  testDefaultConstruction =>
+    tc := TimeoutConfig new
+    self assert: tc workflowExecutionTimeout equals: nil
+    self assert: tc workflowRunTimeout equals: nil
+    self assert: tc scheduleToCloseTimeout equals: nil
+    self assert: tc startToCloseTimeout equals: nil
+    self assert: tc scheduleToStartTimeout equals: nil
+    self assert: tc heartbeatTimeout equals: nil
+
+  testNewWithMap =>
+    tc := TimeoutConfig new: #{
+      #workflowExecutionTimeout => 86400000,
+      #startToCloseTimeout => 30000,
+      #heartbeatTimeout => 10000
+    }
+    self assert: tc workflowExecutionTimeout equals: 86400000
+    self assert: tc workflowRunTimeout equals: nil
+    self assert: tc startToCloseTimeout equals: 30000
+    self assert: tc heartbeatTimeout equals: 10000
+
+  testEquality =>
+    tc1 := TimeoutConfig new: #{#startToCloseTimeout => 30000}
+    tc2 := TimeoutConfig new: #{#startToCloseTimeout => 30000}
+    self assert: tc1 equals: tc2
+
+  testWithSetter =>
+    tc := TimeoutConfig new
+    tc2 := tc withStartToCloseTimeout: 60000
+    self assert: tc startToCloseTimeout equals: nil
+    self assert: tc2 startToCloseTimeout equals: 60000

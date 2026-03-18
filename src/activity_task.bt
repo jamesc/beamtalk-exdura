@@ -1,0 +1,13 @@
+// BT-1490: ActivityTask — a unit of work dispatched to an Activity Worker.
+// See SPEC.md section 4.1.3.
+
+Value subclass: ActivityTask
+  state: taskId :: String = ""
+  state: workflowId :: String = ""
+  state: activityType :: String = ""
+  state: args :: List = #()
+  state: taskQueue :: String = ""
+  state: retryPolicy :: Dictionary = #{}
+  state: timeoutConfig :: Dictionary = #{}
+  state: heartbeatTimeout = nil
+  state: attempt :: Integer = 1

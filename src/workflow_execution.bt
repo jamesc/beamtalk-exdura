@@ -1,0 +1,16 @@
+// BT-1490: WorkflowExecution — a single execution of a workflow.
+// See SPEC.md section 4.1.1.
+
+Value subclass: WorkflowExecution
+  state: workflowId :: String = ""
+  state: runId :: String = ""
+  state: workflowType :: String = ""
+  state: taskQueue :: String = ""
+  state: args :: List = #()
+  state: status :: Symbol = #running
+  state: result = nil
+  state: error = nil
+  state: parentWorkflowId = nil
+  state: startedAt :: Integer = 0
+  state: closedAt = nil
+  state: searchAttributes :: Dictionary = #{}

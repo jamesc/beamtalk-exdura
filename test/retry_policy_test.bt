@@ -1,0 +1,30 @@
+// BT-1490: BUnit tests for RetryPolicy Value subclass.
+
+TestCase subclass: RetryPolicyTest
+
+  testDefaultConstruction =>
+    rp := RetryPolicy new
+    self assert: rp initialInterval equals: 1000
+    self assert: rp backoffCoefficient equals: 2.0
+    self assert: rp maximumInterval equals: nil
+    self assert: rp maximumAttempts equals: nil
+    self assert: rp nonRetryableErrors equals: #()
+
+  testNewWithMap =>
+    rp := RetryPolicy new: #{
+      #initialInterval => 500,
+      #backoffCoefficient => 1.5,
+      #maximumInterval => 30000,
+      #maximumAttempts => 5,
+      #nonRetryableErrors => #("InvalidInput", "NotFound")
+    }
+    self assert: rp initialInterval equals: 500
+    self assert: rp backoffCoefficient equals: 1.5
+    self assert: rp maximumInterval equals: 30000
+    self assert: rp maximumAttempts equals: 5
+    self assert: rp nonRetryableErrors equals: #("InvalidInput", "NotFound")
+
+  testEquality =>
+    rp1 := RetryPolicy new: #{#initialInterval => 1000, #backoffCoefficient => 2.0}
+    rp2 := RetryPolicy new: #{#initialInterval => 1000, #backoffCoefficient => 2.0}
+    self assert: rp1 equals: rp2

@@ -1,0 +1,10 @@
+// BT-1490: TimeoutConfig — timeout configuration for workflows and activities.
+// See SPEC.md section 4.1.5.
+
+Value subclass: TimeoutConfig
+  state: workflowExecutionTimeout = nil
+  state: workflowRunTimeout = nil
+  state: scheduleToCloseTimeout = nil
+  state: startToCloseTimeout = nil
+  state: scheduleToStartTimeout = nil
+  state: heartbeatTimeout = nil
