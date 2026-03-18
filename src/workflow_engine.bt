@@ -212,24 +212,52 @@ Actor subclass: WorkflowEngine
 
   /// Record a TimerStarted event and sleep for the given duration (ms).
   ///
+  /// Stores the original fire time in the TimerStarted payload so that
+  /// durable timer reconstruction can calculate the remainder on replay.
+  ///
   ///   engine scheduleTimer: 5000 workflowId: "wf-1"
   scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
-    now := Erlang os system_time: #second
+    nowMs := Erlang os system_time: #millisecond
+    fireAt := nowMs + duration
 
-    // Record TimerStarted event
+    // Record TimerStarted event with fireAt for durable reconstruction
     startedEvent := ExduraEvent
       new: #{
         #eventType => #TimerStarted,
-        #timestamp => now,
-        #payload => #{#duration => duration}
+        #timestamp => nowMs,
+        #payload => #{#duration => duration, #fireAt => fireAt}
       }
     self.eventStore appendEvents: workflowId events: #(startedEvent)
 
-    // Phase 1: use Timer sleep: for the actual delay
+    // Sleep for the requested duration
     Timer sleep: duration
 
     // Record TimerFired event
-    firedNow := Erlang os system_time: #second
+    firedNow := Erlang os system_time: #millisecond
+    firedEvent := ExduraEvent
+      new: #{
+        #eventType => #TimerFired,
+        #timestamp => firedNow,
+        #payload => #{#duration => duration}
+      }
+    self.eventStore appendEvents: workflowId events: #(firedEvent)
+    nil
+
+  /// Reconstruct a pending timer on replay: calculate remaining duration and wait.
+  ///
+  /// If the original fire time has already passed, fires immediately and records
+  /// the TimerFired event. Otherwise sleeps for the remainder.
+  ///
+  ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
+  reconstructTimer: duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
+    nowMs := Erlang os system_time: #millisecond
+    remaining := fireAt - nowMs
+
+    // If fire time has passed, fire immediately; otherwise wait for remainder
+    remaining > 0 ifTrue: [Timer sleep: remaining]
+
+    // Record TimerFired event
+    firedNow := Erlang os system_time: #millisecond
     firedEvent := ExduraEvent
       new: #{
         #eventType => #TimerFired,

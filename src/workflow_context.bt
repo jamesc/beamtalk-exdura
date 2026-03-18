@@ -136,30 +136,59 @@ Actor subclass: WorkflowContext
   ///
   /// During replay, if a TimerStarted + TimerFired pair exists at the
   /// current cursor position, returns immediately without sleeping.
+  /// If TimerStarted exists but TimerFired does not, the engine
+  /// reconstructs the timer by calculating the remaining wall-clock
+  /// duration from the stored fireAt timestamp and waiting for the
+  /// remainder (or firing immediately if the time has passed).
   /// During normal execution, delegates to the engine to record events
   /// and perform the actual sleep.
   ///
   ///   ctx sleep: 5000   // sleep for 5 seconds
   sleep: duration :: Integer =>
-    // Try replay: check for TimerStarted+TimerFired pair at current cursor
+    // Try replay: check for TimerStarted at current cursor
     self.isReplaying
       ifTrue: [
         startedIdx := self.replayCursor + 1
-        firedIdx := startedIdx + 1
-        firedIdx <= self.eventHistory size
+        startedIdx <= self.eventHistory size
           ifTrue: [
             startedEvent := self.eventHistory at: startedIdx
-            firedEvent := self.eventHistory at: firedIdx
-            isStarted := startedEvent eventType =:= #TimerStarted
-            isFired := firedEvent eventType =:= #TimerFired
-            (isStarted and: [isFired])
+            startedEvent eventType =:= #TimerStarted
               ifTrue: [
-                // Consume replay: advance cursor and return immediately
-                self.replayCursor := firedIdx
-                // Safe point: collect consecutive SignalReceived events from history
-                replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
-                self.replayCursor := firedIdx + replaySignals size
-                self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Check if TimerFired follows
+                firedIdx := startedIdx + 1
+                firedIdx <= self.eventHistory size
+                  ifTrue: [
+                    firedEvent := self.eventHistory at: firedIdx
+                    firedEvent eventType =:= #TimerFired
+                      ifTrue: [
+                        // Both events present — skip immediately
+                        self.replayCursor := firedIdx
+                        // Safe point: collect consecutive SignalReceived events from history
+                        replaySignals := WorkflowContext collectReplaySignalsFrom: firedIdx + 1 history: self.eventHistory
+                        self.replayCursor := firedIdx + replaySignals size
+                        self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                        ^nil
+                      ]
+                  ]
+                // TimerStarted exists but no TimerFired — reconstruct the timer.
+                // Extract fireAt from the stored payload; fall back to duration-based
+                // calculation if fireAt is missing (backward compatibility).
+                payload := startedEvent payload
+                fireAt := payload at: #fireAt ifAbsent: [
+                  startedEvent timestamp + duration
+                ]
+                storedDuration := payload at: #duration ifAbsent: [duration]
+                self.isReplaying := false
+                self.engine
+                  reconstructTimer: storedDuration
+                  fireAt: fireAt
+                  workflowId: self.workflowId
+                self.replayCursor := startedIdx + 1
+                // Safe point: drain buffered signals from the engine
+                signals := self.engine drainSignals: self.workflowId
+                signals size > 0 ifTrue: [
+                  self.deliveredSignals := self.deliveredSignals ++ signals
+                ]
                 ^nil
               ]
           ]
