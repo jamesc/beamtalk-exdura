@@ -1,0 +1,102 @@
+/// Supervised worker pool for activity execution (BT-1495).
+///
+/// ActivityWorkerPool manages ActivityWorker child processes under a
+/// DynamicSupervisor (ActivityWorkerSupervisor). It enforces a
+/// maxConcurrentActivities limit, provides timeout enforcement via Timer,
+/// and catches worker crashes.
+///
+/// The pool exposes a synchronous executeActivity: interface that spawns
+/// a supervised worker, executes the activity, and returns a result
+/// dictionary describing the outcome.
+///
+///   pool := ActivityWorkerPool spawn
+///   pool setMaxConcurrent: 5
+///   result := pool executeActivity: TestActivities selector: #doubleIt:
+///     args: #(5) timeout: nil
+///   // => #{#status => #completed, #result => 10}
+Actor subclass: ActivityWorkerPool
+  state: maxConcurrent :: Integer = 10
+  state: activeCount :: Integer = 0
+  state: supervisor = nil
+
+  /// Initialize the pool by starting the underlying DynamicSupervisor.
+  initialize => self.supervisor := ActivityWorkerSupervisor supervise
+
+  /// Set the maximum number of concurrent activity workers.
+  ///
+  ///   pool setMaxConcurrent: 20
+  setMaxConcurrent: max :: Integer => self.maxConcurrent := max
+
+  /// Return the maximum concurrent activities allowed.
+  ///
+  ///   pool maxConcurrent   // => 10
+  maxConcurrent -> Integer => self.maxConcurrent
+
+  /// Return the current number of active workers.
+  ///
+  ///   pool activeCount   // => 3
+  activeCount -> Integer => self.activeCount
+
+  /// Execute an activity through the supervised worker pool.
+  ///
+  /// Spawns an ActivityWorker under the DynamicSupervisor, executes the
+  /// activity class method, and enforces startToCloseTimeout if set.
+  /// All logic is inlined to avoid self-send deadlocks (Actor methods
+  /// are gen_server handlers — calling self blocks).
+  ///
+  /// Returns a Dictionary with outcome:
+  ///   #{#status => #completed, #result => 42}
+  ///   #{#status => #failed, #error => "division by zero"}
+  ///   #{#status => #timedOut}
+  ///   #{#status => #rejected} (when pool is at capacity)
+  ///
+  ///   pool executeActivity: TestActivities selector: #doubleIt:
+  ///     args: #(5) timeout: nil
+  executeActivity: activityClass selector: selector args: args timeout: timeout =>
+    // Enforce concurrency limit
+    self.activeCount >= self.maxConcurrent ifTrue: [^#{#status => #rejected}]
+    self.activeCount := self.activeCount + 1
+    // Spawn supervised worker and initialize it
+    worker := self.supervisor startChild
+    worker
+      initWith: activityClass
+      selector: selector
+      args: args
+    // Set up timeout: kill worker process after timeout ms.
+    // Uses Erlang exit:reason: #kill to force immediate process termination,
+    // which causes the pending gen_server call to fail instantly.
+    timer := timeout isNil ifTrue: [
+      nil
+    ] ifFalse: [
+      Timer after: timeout do: [Erlang erlang exit: worker reason: #kill]
+    ]
+    // Execute the activity in the worker's process
+    outcome := [worker execute]
+      on: Exception
+      do: [:e |
+        timer isNil ifFalse: [timer cancel]
+        // Distinguish timeout from crash: if timer was set and has fired,
+        // the worker was killed by timeout
+        (timer isNil not and: [
+          timer isActive not
+        ]) ifTrue: [
+          #{#status => #timedOut}
+        ] ifFalse: [#{#status => #failed, #error => e message}]
+      ]
+    // Always decrement active count (once) before returning
+    self.activeCount := self.activeCount - 1
+    // If exception handler returned a status dict, pass it through
+    ((outcome isKindOf: Dictionary) and: [outcome includesKey: #status])
+      ifTrue: [outcome]
+      ifFalse: [
+        timer isNil ifFalse: [timer cancel]
+        #{#status => #completed, #result => outcome}
+      ]
+
+  /// Stop the pool and its supervisor.
+  ///
+  ///   pool destroy
+  destroy =>
+    self.supervisor isNil ifFalse: [
+      [self.supervisor stop] on: Error do: [:e | nil]
+    ]
