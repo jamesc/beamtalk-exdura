@@ -1,0 +1,86 @@
+// BT-1497: BUnit tests for TaskQueue Actor (ETS-backed FIFO queue).
+
+TestCase subclass: TaskQueueTest
+  state: queue = nil
+
+  setUp =>
+    self.queue := TaskQueue spawn
+    self
+
+  tearDown =>
+    self.queue isNil ifFalse: [[self.queue destroy] on: Error do: [:e | nil]]
+    self.queue := nil
+
+  // === Basic enqueue/dequeue ===
+  testEnqueueAndDequeue =>
+    self.queue enqueue: "task-1"
+    result := self.queue dequeue
+    self assert: result equals: "task-1"
+
+  testFifoOrder =>
+    self.queue enqueue: "first"
+    self.queue enqueue: "second"
+    self.queue enqueue: "third"
+    self assert: (self.queue dequeue) equals: "first"
+    self assert: (self.queue dequeue) equals: "second"
+    self assert: (self.queue dequeue) equals: "third"
+
+  testDequeueEmptyReturnsNil => self assert: (self.queue dequeue) equals: nil
+
+  testDequeueAfterDrainReturnsNil =>
+    self.queue enqueue: "only"
+    self.queue dequeue
+    self assert: (self.queue dequeue) equals: nil
+
+  // === depth ===
+  testDepthEmptyQueue => self assert: (self.queue depth) equals: 0
+
+  testDepthAfterEnqueue =>
+    self.queue enqueue: "a"
+    self assert: (self.queue depth) equals: 1
+    self.queue enqueue: "b"
+    self assert: (self.queue depth) equals: 2
+
+  testDepthAfterDequeue =>
+    self.queue enqueue: "a"
+    self.queue enqueue: "b"
+    self.queue dequeue
+    self assert: (self.queue depth) equals: 1
+
+  // === peek ===
+  testPeekReturnsNextTask =>
+    self.queue enqueue: "front"
+    self.queue enqueue: "back"
+    self assert: (self.queue peek) equals: "front"
+
+  testPeekDoesNotRemove =>
+    self.queue enqueue: "task"
+    self.queue peek
+    self assert: (self.queue depth) equals: 1
+
+  testPeekEmptyReturnsNil => self assert: (self.queue peek) equals: nil
+
+  testPeekMatchesDequeue =>
+    self.queue enqueue: "hello"
+    peeked := self.queue peek
+    dequeued := self.queue dequeue
+    self assert: peeked equals: dequeued
+
+  // === Dictionary tasks (realistic usage) ===
+  testEnqueueDictionaryTasks =>
+    self.queue enqueue: #{#taskId => "t-1", #type => "activity"}
+    self.queue enqueue: #{#taskId => "t-2", #type => "workflow"}
+    first := self.queue dequeue
+    self assert: (first at: #taskId) equals: "t-1"
+    second := self.queue dequeue
+    self assert: (second at: #taskId) equals: "t-2"
+
+  // === Multiple enqueue/dequeue cycles ===
+  testInterleavedEnqueueDequeue =>
+    self.queue enqueue: "a"
+    self.queue enqueue: "b"
+    self assert: (self.queue dequeue) equals: "a"
+    self.queue enqueue: "c"
+    self assert: (self.queue dequeue) equals: "b"
+    self assert: (self.queue dequeue) equals: "c"
+    self assert: (self.queue depth) equals: 0

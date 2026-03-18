@@ -1,0 +1,54 @@
+// BT-1497: BUnit tests for TaskQueueRegistry (named queue management).
+
+TestCase subclass: TaskQueueRegistryTest
+  state: registry = nil
+
+  setUp =>
+    self.registry := TaskQueueRegistry spawn
+    self
+
+  tearDown =>
+    self.registry isNil ifFalse: [
+      [self.registry destroy] on: Error do: [:e | nil]
+    ]
+    self.registry := nil
+
+  // === Named queue lookup ===
+  testQueueNamedCreatesQueue =>
+    q := self.registry queueNamed: "orders"
+    self assert: q isNil not
+
+  testQueueNamedReturnsSameInstance =>
+    q1 := self.registry queueNamed: "orders"
+    q2 := self.registry queueNamed: "orders"
+    // Enqueue via q1, dequeue via q2 — same actor
+    q1 enqueue: "task-1"
+    self assert: (q2 dequeue) equals: "task-1"
+
+  testMultipleNamedQueuesCoexist =>
+    orders := self.registry queueNamed: "orders"
+    emails := self.registry queueNamed: "emails"
+    orders enqueue: "order-task"
+    emails enqueue: "email-task"
+    self assert: (orders dequeue) equals: "order-task"
+    self assert: (emails dequeue) equals: "email-task"
+
+  testMultipleNamedQueuesIndependent =>
+    orders := self.registry queueNamed: "orders"
+    emails := self.registry queueNamed: "emails"
+    orders enqueue: "a"
+    orders enqueue: "b"
+    emails enqueue: "x"
+    self assert: (orders depth) equals: 2
+    self assert: (emails depth) equals: 1
+
+  testHasQueue =>
+    self deny: (self.registry hasQueue: "orders")
+    self.registry queueNamed: "orders"
+    self assert: (self.registry hasQueue: "orders")
+
+  testQueueNames =>
+    self.registry queueNamed: "orders"
+    self.registry queueNamed: "emails"
+    names := self.registry queueNames
+    self assert: names size equals: 2
