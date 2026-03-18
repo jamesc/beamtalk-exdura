@@ -1,0 +1,63 @@
+/// Provides activity dispatch and replay capabilities for workflow execution.
+///
+/// WorkflowContext is an Actor that manages the replay cursor and event
+/// history. It dispatches activities to the engine during normal execution
+/// and returns cached results during replay.
+///
+///   ctx := WorkflowContext spawn
+///   ctx initWith: engine workflowId: "wf-1" history: events
+///   result := ctx runActivity: MyActivities method: #doWork: with: #(args)
+Actor subclass: WorkflowContext
+  state: engine = nil
+  state: workflowId :: String = ""
+  state: replayCursor :: Integer = 0
+  state: eventHistory :: List = #()
+  state: isReplaying :: Boolean = false
+
+  /// Initialize with engine, workflow ID, and event history.
+  ///
+  ///   ctx initWith: engine workflowId: "wf-1" history: events
+  initWith: anEngine workflowId: anId history: aHistory =>
+    self.engine := anEngine
+    self.workflowId := anId
+    self.eventHistory := aHistory
+    // Start cursor at 1 to skip past the WorkflowStarted event
+    self.replayCursor := 1
+    self.isReplaying := aHistory size > 1
+
+  /// Get the engine reference (for testing).
+  getEngine => self.engine
+
+  /// Execute an activity or return its cached result during replay.
+  ///
+  ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
+  runActivity: activityClass method: selector with: args =>
+    canReplay := self canReplayHere
+    canReplay ifTrue: [^(self consumeReplay)]
+    self.isReplaying := false
+    result := self.engine
+      scheduleActivity: activityClass
+      selector: selector
+      args: args
+      workflowId: self.workflowId
+    self.replayCursor := self.replayCursor + 2
+    result
+
+  /// Check if the current replay position has a valid Scheduled+Completed pair.
+  canReplayHere =>
+    self.isReplaying ifFalse: [^false]
+    scheduledIdx := self.replayCursor + 1
+    completedIdx := scheduledIdx + 1
+    completedIdx > self.eventHistory size ifTrue: [^false]
+    scheduledEvent := self.eventHistory at: scheduledIdx
+    completedEvent := self.eventHistory at: completedIdx
+    isScheduled := scheduledEvent eventType =:= #ActivityScheduled
+    isCompleted := completedEvent eventType =:= #ActivityCompleted
+    isScheduled and: [isCompleted]
+
+  /// Advance cursor and return the cached activity result.
+  consumeReplay =>
+    completedIdx := self.replayCursor + 2
+    self.replayCursor := completedIdx
+    completedEvent := self.eventHistory at: completedIdx
+    completedEvent payload at: #result

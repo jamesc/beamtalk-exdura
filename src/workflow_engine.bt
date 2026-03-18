@@ -1,0 +1,163 @@
+/// Coordinates workflow and activity execution.
+///
+/// The WorkflowEngine is the central orchestrator for the Exdura workflow
+/// runtime. It manages workflow lifecycle (start, complete, fail), dispatches
+/// activity execution, and maintains the event history via EventStore.
+///
+/// In Phase 0, activities execute directly (no worker pool). The engine
+/// records events for every state transition to enable deterministic replay.
+///
+///   store := EventStore spawn
+///   engine := WorkflowEngine withStore: store
+///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
+Actor subclass: WorkflowEngine
+  state: eventStore = nil
+
+  /// Create a new WorkflowEngine with the given EventStore.
+  ///
+  ///   engine := WorkflowEngine withStore: (EventStore spawn)
+  class withStore: anEventStore =>
+    eng := self spawn
+    eng initWithStore: anEventStore
+    eng
+
+  /// Initialize engine with an EventStore reference (called by withStore:).
+  initWithStore: aStore => self.eventStore := aStore
+
+  /// Start a new workflow execution.
+  ///
+  /// Creates a WorkflowExecution record, records a WorkflowStarted event,
+  /// spawns the Workflow Actor, and kicks off its run: method.
+  ///
+  ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
+  startWorkflow: workflowClass id: workflowId args: args =>
+    now := Erlang os system_time: #second
+    wfType := workflowClass name asString
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => workflowId,
+        #runId => workflowId,
+        #workflowType => wfType,
+        #taskQueue => "default",
+        #args => args,
+        #status => #running,
+        #startedAt => now
+      }
+    self.eventStore createExecution: execution
+
+    // Record WorkflowStarted event
+    startEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => workflowId,
+          #workflowType => wfType,
+          #args => args
+        }
+      }
+    self.eventStore appendEvents: workflowId events: #(startEvent)
+
+    // Load event history
+    history := self.eventStore readEvents: workflowId fromSeq: 1
+
+    // Get the input argument for run:
+    input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
+
+    // Create workflow object and run via WorkflowRunner.
+    // The runner runs asynchronously (go!) so the engine doesn't deadlock.
+    workflow := workflowClass new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self,
+        #workflowId => workflowId,
+        #input => input,
+        #history => history
+      }
+    runner go!
+    workflow
+
+  /// Execute an activity class method and record events.
+  ///
+  /// Called by Workflow actors during normal (non-replay) execution.
+  /// Receives the activity class and selector separately for dispatch.
+  ///
+  ///   engine scheduleActivity: TestActivities selector: #doubleIt:
+  ///     args: #(5) workflowId: "wf-1"
+  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId =>
+    now := Erlang os system_time: #second
+
+    // Record ActivityScheduled event
+    scheduledEvent := ExduraEvent
+      new: #{
+        #eventType => #ActivityScheduled,
+        #timestamp => now,
+        #payload => #{
+          #activityClass => activityClass name asString,
+          #selector => selector asString,
+          #args => args
+        }
+      }
+    self.eventStore appendEvents: workflowId events: #(scheduledEvent)
+
+    // Execute activity directly (Phase 0 — no worker pool)
+    // Wrap args in a list for perform:withArguments: which spreads arguments
+    result := activityClass perform: selector withArguments: #(args)
+    completedNow := Erlang os system_time: #second
+    completedEvent := ExduraEvent
+      new: #{
+        #eventType => #ActivityCompleted,
+        #timestamp => completedNow,
+        #payload => #{#result => result}
+      }
+    self.eventStore appendEvents: workflowId events: #(completedEvent)
+    result
+
+  /// Return the event history for a workflow.
+  ///
+  ///   engine getEventHistory: "wf-1"
+  getEventHistory: workflowId =>
+    self.eventStore readEvents: workflowId fromSeq: 1
+
+  /// Return buffered signals for a workflow (Phase 2 stub).
+  ///
+  ///   engine getBufferedSignals: "wf-1"
+  getBufferedSignals: _workflowId => #()
+
+  /// Record a WorkflowCompleted event and update execution status.
+  ///
+  ///   engine completeWorkflow: "wf-1" result: 42
+  completeWorkflow: workflowId result: result =>
+    now := Erlang os system_time: #second
+    completedEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowCompleted,
+        #timestamp => now,
+        #payload => #{#result => result}
+      }
+    self.eventStore appendEvents: workflowId events: #(completedEvent)
+    self.eventStore
+      updateExecution: workflowId
+      status: #completed
+      result: result
+
+  /// Record a WorkflowFailed event and update execution status.
+  ///
+  ///   engine failWorkflow: "wf-1" reason: "something went wrong"
+  failWorkflow: workflowId reason: reason =>
+    now := Erlang os system_time: #second
+    failedEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowFailed,
+        #timestamp => now,
+        #payload => #{#error => reason}
+      }
+    self.eventStore appendEvents: workflowId events: #(failedEvent)
+    self.eventStore
+      updateExecution: workflowId
+      status: #failed
+      result: reason
+
+  /// Return the underlying EventStore (for testing/inspection).
+  eventStore => self.eventStore

@@ -1,0 +1,14 @@
+/// Base class for user workflow definitions.
+///
+/// Workflows are simple Objects that define a `run:ctx:` method. The `ctx`
+/// parameter is a WorkflowContext that provides activity dispatch and replay.
+/// No Actor — no inherited state issues.
+///
+///   Workflow subclass: GreetingWorkflow
+///     run: name ctx: ctx -> String =>
+///       ctx runActivity: GreetingActivities method: #greet: with: #(name)
+Object subclass: Workflow
+
+  /// Subclass hook — override this with workflow logic.
+  /// ctx is a WorkflowContext that provides runActivity:method:with:.
+  run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"

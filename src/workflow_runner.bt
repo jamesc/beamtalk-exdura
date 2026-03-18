@@ -1,0 +1,29 @@
+/// Drives workflow execution in a separate Actor process.
+///
+/// The runner creates a WorkflowContext, calls the workflow's run:ctx: method,
+/// and records completion via the engine.
+///
+///   runner := WorkflowRunner spawnWith: #{
+///     #workflow => TwoActivityWorkflow new,
+///     #engine => engine,
+///     #workflowId => "wf-1",
+///     #input => "hello",
+///     #history => #()
+///   }
+///   runner go!
+Actor subclass: WorkflowRunner
+  state: workflow = nil
+  state: engine = nil
+  state: workflowId :: String = ""
+  state: input = nil
+  state: history :: List = #()
+
+  /// Execute the workflow. Called as an async cast (go!).
+  go =>
+    ctx := WorkflowContext spawn
+    ctx
+      initWith: self.engine
+      workflowId: self.workflowId
+      history: self.history
+    result := self.workflow run: self.input ctx: ctx
+    self.engine completeWorkflow: self.workflowId result: result

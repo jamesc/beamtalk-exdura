@@ -1,0 +1,191 @@
+/// BT-1492: BUnit tests for Workflow, Activity, and WorkflowEngine core.
+///
+/// Tests activity dispatch, event recording, workflow lifecycle, and replay.
+/// Fixtures: src/test_activities.bt, src/two_activity_workflow.bt,
+///           src/passthrough_workflow.bt
+TestCase subclass: WorkflowEngineTest
+  state: store = nil
+  state: engine = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.store := EventStore spawn
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
+    self.store := nil
+    self.engine := nil
+
+  // === Activity base class ===
+  testActivityIsObjectSubclass => self assert: (Activity inheritsFrom: Object)
+
+  testActivityClassMethodDispatch =>
+    result := TestActivities doubleIt: #(7)
+    self assert: result equals: 14
+
+  // === WorkflowEngine: startWorkflow ===
+  testStartWorkflowCreatesExecution =>
+    self.engine
+      startWorkflow: PassthroughWorkflow
+      id: "wf-start-1"
+      args: #("hello")
+    Erlang timer sleep: 500
+    exec := self.store getExecution: "wf-start-1"
+    self assert: exec notNil
+    self assert: exec workflowId equals: "wf-start-1"
+    self assert: exec workflowType equals: "PassthroughWorkflow"
+
+  testStartWorkflowRecordsEvents =>
+    self.engine
+      startWorkflow: PassthroughWorkflow
+      id: "wf-start-2"
+      args: #("test")
+    Erlang timer sleep: 500
+    events := self.store readEvents: "wf-start-2" fromSeq: 1
+    self assert: events size >= 2
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+
+  // === WorkflowEngine: scheduleActivity ===
+  testScheduleActivityRecordsEvents =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-sched-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    result := self.engine
+      scheduleActivity: TestActivities
+      selector: #doubleIt:
+      args: #(5)
+      workflowId: "wf-sched-1"
+    self assert: result equals: 10
+
+    events := self.store readEvents: "wf-sched-1" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+    self assert: (events at: 2) eventType equals: #ActivityCompleted
+    self assert: ((events at: 2) payload at: #result) equals: 10
+
+  // === WorkflowEngine: getEventHistory ===
+  testGetEventHistory =>
+    evt := ExduraEvent new: #{
+      #eventType => #WorkflowStarted,
+      #timestamp => 100,
+      #payload => #{}
+    }
+    self.store appendEvents: "wf-hist-1" events: #(evt)
+    history := self.engine getEventHistory: "wf-hist-1"
+    self assert: history size equals: 1
+    self assert: (history at: 1) eventType equals: #WorkflowStarted
+
+  // === WorkflowEngine: getBufferedSignals ===
+  testGetBufferedSignalsReturnsEmptyList =>
+    signals := self.engine getBufferedSignals: "wf-signals-1"
+    self assert: signals size equals: 0
+
+  // === Full workflow run with 2 activities ===
+  testTwoActivityWorkflowRunsAndRecordsEvents =>
+    self.engine
+      startWorkflow: TwoActivityWorkflow
+      id: "wf-two-1"
+      args: #(5)
+    Erlang timer sleep: 1000
+    events := self.store readEvents: "wf-two-1" fromSeq: 1
+    // Expected: WorkflowStarted, ActivityScheduled, ActivityCompleted,
+    //           ActivityScheduled, ActivityCompleted, WorkflowCompleted
+    self assert: events size equals: 6
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+    self assert: (events at: 2) eventType equals: #ActivityScheduled
+    self assert: (events at: 3) eventType equals: #ActivityCompleted
+    self assert: (events at: 4) eventType equals: #ActivityScheduled
+    self assert: (events at: 5) eventType equals: #ActivityCompleted
+    self assert: (events at: 6) eventType equals: #WorkflowCompleted
+
+    // Verify activity results
+    self assert: ((events at: 3) payload at: #result) equals: 10
+    self assert: ((events at: 5) payload at: #result) equals: 20
+
+    // Verify execution completed
+    exec := self.store getExecution: "wf-two-1"
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 20
+
+  // === Replay: activities NOT re-executed ===
+  testReplayReturnsResultsFromHistory =>
+    // Step 1: Run the workflow normally to build event history
+    self.engine
+      startWorkflow: TwoActivityWorkflow
+      id: "wf-replay-1"
+      args: #(5)
+    Erlang timer sleep: 1000
+
+    // Verify normal run completed
+    events := self.store readEvents: "wf-replay-1" fromSeq: 1
+    self assert: events size equals: 6
+
+    // Step 2: Count events before replay
+    countBefore := events size
+
+    // Step 3: Run the workflow again in replay mode with existing history
+    replayHistory := self.store readEvents: "wf-replay-1" fromSeq: 1
+    workflow := TwoActivityWorkflow new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-replay-1",
+        #input => 5,
+        #history => replayHistory
+      }
+    runner go!
+    Erlang timer sleep: 1000
+
+    // Step 4: Check that replay did NOT add new ActivityScheduled events
+    eventsAfter := self.store readEvents: "wf-replay-1" fromSeq: 1
+    newEvents := eventsAfter size - countBefore
+    // Should be at most 1 new event (WorkflowCompleted from the replay run)
+    self assert: newEvents <= 1
+
+  // === WorkflowEngine: completeWorkflow ===
+  testCompleteWorkflowRecordsEvent =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-complete-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    self.engine completeWorkflow: "wf-complete-1" result: "done"
+    events := self.store readEvents: "wf-complete-1" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventType equals: #WorkflowCompleted
+    self assert: ((events at: 1) payload at: #result) equals: "done"
+    updated := self.store getExecution: "wf-complete-1"
+    self assert: updated status equals: #completed
+
+  // === WorkflowEngine: failWorkflow ===
+  testFailWorkflowRecordsEvent =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-fail-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    self.engine failWorkflow: "wf-fail-1" reason: "boom"
+    events := self.store readEvents: "wf-fail-1" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventType equals: #WorkflowFailed
+    updated := self.store getExecution: "wf-fail-1"
+    self assert: updated status equals: #failed
