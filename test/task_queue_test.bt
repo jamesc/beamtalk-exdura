@@ -25,44 +25,59 @@ TestCase subclass: TaskQueueTest
     self.queue enqueue: "first"
     self.queue enqueue: "second"
     self.queue enqueue: "third"
-    self assert: (self.queue dequeue) equals: "first"
-    self assert: (self.queue dequeue) equals: "second"
-    self assert: (self.queue dequeue) equals: "third"
+    first := self.queue dequeue
+    second := self.queue dequeue
+    third := self.queue dequeue
+    self assert: first equals: "first"
+    self assert: second equals: "second"
+    self assert: third equals: "third"
 
-  testDequeueEmptyReturnsNil => self assert: (self.queue dequeue) equals: nil
+  testDequeueEmptyReturnsNil =>
+    result := self.queue dequeue
+    self assert: result equals: nil
 
   testDequeueAfterDrainReturnsNil =>
     self.queue enqueue: "only"
     self.queue dequeue
-    self assert: (self.queue dequeue) equals: nil
+    result := self.queue dequeue
+    self assert: result equals: nil
 
   // === depth ===
-  testDepthEmptyQueue => self assert: (self.queue depth) equals: 0
+  testDepthEmptyQueue =>
+    d := self.queue depth
+    self assert: d equals: 0
 
   testDepthAfterEnqueue =>
     self.queue enqueue: "a"
-    self assert: (self.queue depth) equals: 1
+    d1 := self.queue depth
+    self assert: d1 equals: 1
     self.queue enqueue: "b"
-    self assert: (self.queue depth) equals: 2
+    d2 := self.queue depth
+    self assert: d2 equals: 2
 
   testDepthAfterDequeue =>
     self.queue enqueue: "a"
     self.queue enqueue: "b"
     self.queue dequeue
-    self assert: (self.queue depth) equals: 1
+    d := self.queue depth
+    self assert: d equals: 1
 
   // === peek ===
   testPeekReturnsNextTask =>
     self.queue enqueue: "front"
     self.queue enqueue: "back"
-    self assert: (self.queue peek) equals: "front"
+    p := self.queue peek
+    self assert: p equals: "front"
 
   testPeekDoesNotRemove =>
     self.queue enqueue: "task"
     self.queue peek
-    self assert: (self.queue depth) equals: 1
+    d := self.queue depth
+    self assert: d equals: 1
 
-  testPeekEmptyReturnsNil => self assert: (self.queue peek) equals: nil
+  testPeekEmptyReturnsNil =>
+    p := self.queue peek
+    self assert: p equals: nil
 
   testPeekMatchesDequeue =>
     self.queue enqueue: "hello"
@@ -83,8 +98,12 @@ TestCase subclass: TaskQueueTest
   testInterleavedEnqueueDequeue =>
     self.queue enqueue: "a"
     self.queue enqueue: "b"
-    self assert: (self.queue dequeue) equals: "a"
+    r1 := self.queue dequeue
+    self assert: r1 equals: "a"
     self.queue enqueue: "c"
-    self assert: (self.queue dequeue) equals: "b"
-    self assert: (self.queue dequeue) equals: "c"
-    self assert: (self.queue depth) equals: 0
+    r2 := self.queue dequeue
+    self assert: r2 equals: "b"
+    r3 := self.queue dequeue
+    self assert: r3 equals: "c"
+    d := self.queue depth
+    self assert: d equals: 0

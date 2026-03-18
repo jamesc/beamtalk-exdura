@@ -23,15 +23,18 @@ TestCase subclass: TaskQueueRegistryTest
     q2 := self.registry queueNamed: "orders"
     // Enqueue via q1, dequeue via q2 — same actor
     q1 enqueue: "task-1"
-    self assert: (q2 dequeue) equals: "task-1"
+    result := q2 dequeue
+    self assert: result equals: "task-1"
 
   testMultipleNamedQueuesCoexist =>
     orders := self.registry queueNamed: "orders"
     emails := self.registry queueNamed: "emails"
     orders enqueue: "order-task"
     emails enqueue: "email-task"
-    self assert: (orders dequeue) equals: "order-task"
-    self assert: (emails dequeue) equals: "email-task"
+    r1 := orders dequeue
+    r2 := emails dequeue
+    self assert: r1 equals: "order-task"
+    self assert: r2 equals: "email-task"
 
   testMultipleNamedQueuesIndependent =>
     orders := self.registry queueNamed: "orders"
@@ -39,8 +42,10 @@ TestCase subclass: TaskQueueRegistryTest
     orders enqueue: "a"
     orders enqueue: "b"
     emails enqueue: "x"
-    self assert: (orders depth) equals: 2
-    self assert: (emails depth) equals: 1
+    od := orders depth
+    ed := emails depth
+    self assert: od equals: 2
+    self assert: ed equals: 1
 
   testHasQueue =>
     self deny: (self.registry hasQueue: "orders")
