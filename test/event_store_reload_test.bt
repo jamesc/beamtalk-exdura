@@ -1,0 +1,161 @@
+/// BT-1496: Tests that verify EventStore reloads events from pre-existing ETF files.
+TestCase subclass: EventStoreReloadTest
+  state: store = nil
+  state: dataDir = "target/bt-test-tmp/es-reload"
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.dataDir) ifTrue: [
+      [File deleteAll: self.dataDir] on: Error do: [:e | nil]
+    ]
+    File mkdirAll: self.dataDir ++ "/events"
+    File mkdirAll: self.dataDir ++ "/snapshots"
+    self
+
+  tearDown =>
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
+    self.store := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.dataDir) ifTrue: [
+      [File deleteAll: self.dataDir] on: Error do: [:e | nil]
+    ]
+
+  /// Write an event as ETF to disk.
+  writeEtfEvent: workflowId :: String event: evtDict :: Dictionary =>
+    path := self.dataDir ++ "/events/{workflowId}.etf"
+    bin := Erlang erlang term_to_binary: evtDict
+    {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
+    Erlang file write: fd with: bin
+    Erlang file close: fd
+
+  testSpawnWithEmptyDirectory =>
+    // Simplest test: spawn with empty events dir
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    self assert: self.store isAlive
+
+  testReloadsEventsFromDisk =>
+    self
+      writeEtfEvent: "wf-1"
+      event: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{#key => "value"}
+      }
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    events := self.store readEvents: "wf-1" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventId equals: 1
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+
+  testReloadsMultipleWorkflows =>
+    self
+      writeEtfEvent: "wf-a"
+      event: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
+    self
+      writeEtfEvent: "wf-b"
+      event: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 200,
+        #payload => #{}
+      }
+    self
+      writeEtfEvent: "wf-b"
+      event: #{
+        #eventId => 2,
+        #eventType => #ActivityScheduled,
+        #timestamp => 300,
+        #payload => #{}
+      }
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    eventsA := self.store readEvents: "wf-a" fromSeq: 1
+    eventsB := self.store readEvents: "wf-b" fromSeq: 1
+    self assert: eventsA size equals: 1
+    self assert: eventsB size equals: 2
+
+  testAppendAfterReloadContinuesIds =>
+    self
+      writeEtfEvent: "wf-c"
+      event: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    self.store
+      appendEvents: "wf-c"
+      events: #(ExduraEvent new: #{
+        #eventType => #ActivityScheduled,
+        #timestamp => 200,
+        #payload => #{}
+      })
+    events := self.store readEvents: "wf-c" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 2) eventId equals: 2
+
+  testEtfRoundTripAllTypes =>
+    self
+      writeEtfEvent: "wf-types"
+      event: #{
+        #eventId => 1,
+        #eventType => #ActivityCompleted,
+        #timestamp => 999999999,
+        #payload => #{
+          #dict => #{#nested => "value"},
+          #list => #(1, "two", #three),
+          #zero => 0,
+          #negative => -42,
+          #large => 999999999999,
+          #empty => ""
+        }
+      }
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    events := self.store readEvents: "wf-types" fromSeq: 1
+    self assert: events size equals: 1
+    payload := (events at: 1) payload
+    self assert: ((payload at: #dict) at: #nested) equals: "value"
+    self assert: (payload at: #list) equals: #(1, "two", #three)
+    self assert: (payload at: #zero) equals: 0
+    self assert: (payload at: #negative) equals: -42
+    self assert: (payload at: #large) equals: 999999999999
+
+  testCorruptFileHandledGracefully =>
+    File writeAll: self.dataDir ++ "/events/wf-corrupt.etf" contents: "not ETF"
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    events := self.store readEvents: "wf-corrupt" fromSeq: 1
+    self assert: events size equals: 0
+
+  testEmptyFileHandledGracefully =>
+    File writeAll: self.dataDir ++ "/events/wf-empty.etf" contents: ""
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    events := self.store readEvents: "wf-empty" fromSeq: 1
+    self assert: events size equals: 0
+
+  testPartiallyCorruptRecoversParsableEvents =>
+    validBin := Erlang erlang
+      term_to_binary: #{
+        #eventId => 1,
+        #eventType => #WorkflowStarted,
+        #timestamp => 100,
+        #payload => #{}
+      }
+    garbageBin := Erlang erlang list_to_binary: #(255, 255, 0, 1, 2, 3)
+    combined := Erlang erlang iolist_to_binary: #(validBin, garbageBin)
+    Erlang file write_file: (self.dataDir ++ "/events/wf-partial.etf") with: combined
+    self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
+    events := self.store readEvents: "wf-partial" fromSeq: 1
+    self assert: events size equals: 1
+    self assert: (events at: 1) eventId equals: 1

@@ -3,6 +3,12 @@
 *.beam
 *.core
 
+# Runtime data (EventStore persistence)
+/data/
+
+# Test scratch files
+/target/
+
 # IDE
 .vscode/
 .idea/

@@ -6,18 +6,31 @@
 TestCase subclass: WorkflowEngineTest
   state: store = nil
   state: engine = nil
+  state: testDir = "target/bt-test-tmp/wf-engine"
 
   setUp =>
     [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
     [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    self.store := EventStore spawn
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
     self.engine := WorkflowEngine withStore: self.store
     self
 
   tearDown =>
-    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
     self.store := nil
     self.engine := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
 
   // === Activity base class ===
   testActivityIsObjectSubclass => self assert: (Activity inheritsFrom: Object)

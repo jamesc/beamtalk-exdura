@@ -1,22 +1,50 @@
-/// In-memory (ETS-backed) persistence for workflow executions and events.
+/// Durable event store with ETS (in-memory) + append-only ETF file persistence.
 ///
-/// Maintains two ETS tables:
+/// Maintains two ETS tables for fast in-memory access:
 ///   exdura_executions — WorkflowExecution metadata, keyed by workflowId
 ///   exdura_events     — Event history lists, keyed by workflowId
 ///
-/// Events are stored as a list per workflow. Each append auto-increments eventId.
+/// Events are also persisted to disk as ETF-encoded append-only files:
+///   {dataDir}/events/{workflow_id}.etf — one file per workflow
+///   {dataDir}/snapshots/ — reserved for Phase 2 state snapshots
 ///
-///   store := EventStore new
+/// On startup, existing event files are scanned and reloaded into ETS,
+/// so workflows survive node restarts.
+///
+///   store := EventStore spawn
 ///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", ...})
 ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
 ///   store readEvents: "wf-1" fromSeq: 1
 Actor subclass: EventStore
   state: executions = nil
   state: events = nil
+  state: dataDir :: String = "data"
+
+  /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
+  /// Class method to avoid self-capture issues when called from blocks.
+  class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List =>
+    offset >= totalSize ifTrue: [^acc]
+    // Extract remaining bytes
+    remaining := Erlang binary part: binary arg: (Erlang erlang list_to_tuple: #(offset, totalSize - offset))
+    // Parse next term with 'used' option to know how many bytes were consumed
+    parseResult := [
+      Erlang erlang binary_to_term: remaining with: #(#used)
+    ] on: Error do: [:e | ^acc]
+    {dict, used} := parseResult
+    evt := ExduraEvent new: dict
+    self
+      parseEtfBinary: binary
+      offset: offset + used
+      size: totalSize
+      acc: (acc add: evt)
 
   initialize =>
     self.executions := Ets new: #exdura_executions type: #set
     self.events := Ets new: #exdura_events type: #set
+    self ensureDirectories
+    self reloadFromDisk
+
+  // --- Execution CRUD ---
 
   /// Store a new workflow execution. Raises if workflowId already exists.
   ///
@@ -61,7 +89,10 @@ Actor subclass: EventStore
         statusOk and: [typeOk]
       ]
 
+  // --- Event persistence ---
+
   /// Append events to a workflow's history, auto-assigning monotonic eventIds.
+  /// Events are written to both ETS (in-memory) and disk (ETF file).
   /// Returns the stamped events with their assigned IDs.
   ///
   ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
@@ -78,6 +109,8 @@ Actor subclass: EventStore
       ]
     stampedEvents := stamped at: #list
     self.events at: workflowId put: (existing ++ stampedEvents)
+    // Persist to disk
+    self persistEvents: workflowId events: stampedEvents
     stampedEvents
 
   /// Read events for a workflow starting from a sequence number.
@@ -90,8 +123,91 @@ Actor subclass: EventStore
     existing select: [:evt | evt eventId >= fromSeq]
 
   /// Delete ETS tables and clean up resources.
+  /// Does NOT delete on-disk files (use destroyWithFiles for that).
   destroy =>
     self.executions isNil ifFalse: [
       [self.executions delete] on: Error do: [:e | nil]
     ]
     self.events isNil ifFalse: [[self.events delete] on: Error do: [:e | nil]]
+
+  /// Delete ETS tables and on-disk data directory.
+  destroyWithFiles =>
+    self destroy
+    dataDir := self.dataDir
+    (File isDirectory: dataDir) ifTrue: [
+      [File deleteAll: dataDir] on: Error do: [:e | nil]
+    ]
+
+  // --- Private: Directory management ---
+
+  /// Ensure data/events/ and data/snapshots/ directories exist.
+  ensureDirectories =>
+    File mkdirAll: self.dataDir ++ "/events"
+    File mkdirAll: self.dataDir ++ "/snapshots"
+
+  /// Path to the ETF event file for a given workflow.
+  eventFilePath: workflowId :: String =>
+    self.dataDir ++ "/events/{workflowId}.etf"
+
+  // --- Private: File I/O ---
+
+  /// Append ETF-encoded events to the workflow's event file.
+  /// Each event is written as a consecutive ETF term in the file.
+  persistEvents: workflowId :: String events: evts :: List =>
+    evts isEmpty ifTrue: [^nil]
+    path := self eventFilePath: workflowId
+    // Serialize all events — inline to avoid self-capture in block
+    bins := evts
+      collect: [:evt |
+        Erlang erlang
+          term_to_binary: #{
+            #eventId => evt eventId,
+            #eventType => evt eventType,
+            #timestamp => evt timestamp,
+            #payload => evt payload
+          }
+      ]
+    combined := Erlang erlang iolist_to_binary: bins
+    // Append to file (create if missing); ensure fd is closed even on write error
+    {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
+    [Erlang file write: fd with: combined]
+      on: Error
+      do: [:e |
+        Erlang file close: fd
+        self error: "Failed to write events for {workflowId}: " ++ e printString
+      ]
+    Erlang file close: fd
+
+  /// Scan the events directory and reload all event histories into ETS.
+  reloadFromDisk =>
+    evDir := self.dataDir ++ "/events"
+    eventsTable := self.events
+    (File isDirectory: evDir) ifFalse: [^nil]
+    result := File listDirectory: evDir
+    result isError ifTrue: [^nil]
+    files := result unwrap
+    // Collect workflow IDs from .etf filenames
+    @expect type
+    etfFiles := files select: [:f | f endsWith: ".etf"]
+    wfIds := etfFiles collect: [:f | f take: f size - 4]
+    // Load each workflow's events from disk into ETS
+    // Bind evDir and eventsTable locally to avoid self-capture in do: block
+    wfIds
+      do: [:wfId |
+        path := evDir ++ "/{wfId}.etf"
+        readResult := Erlang file read_file: path
+        (readResult =:= #error)
+          ifFalse: [
+            {#ok, content} := readResult
+            contentSize := Erlang erlang byte_size: content
+            contentSize > 0
+              ifTrue: [
+                events := EventStore
+                  parseEtfBinary: content
+                  offset: 0
+                  size: contentSize
+                  acc: #()
+                events isEmpty ifFalse: [eventsTable at: wfId put: events]
+              ]
+          ]
+      ]
