@@ -120,13 +120,12 @@ whether code is correct, evaluate it directly rather than inferring from source.
   ```
 - **Always run `beamtalk fmt` before committing** — CI enforces `beamtalk fmt-check`
 
-## Known Actor Constraints
+## Actor Design Notes
 
-1. **Inherited self-sends work but are slower** — Actor dispatch tables only contain locally-defined methods. Inherited method self-sends fall through to a hierarchy walk (`beamtalk_dispatch:super/5`) which is functional but less optimized than direct `__sealed_*` calls. **Caution:** inherited self-sends inside blocks can interact badly with the `calling_self` deadlock-prevention mechanism, potentially causing deadlocks.
-2. **Actor state fields are inaccessible on subclasses** — `self.field` in a subclass can't directly access state declared on the superclass. Use the superclass's public getter/setter methods instead (subject to constraint #1).
-3. **Objects have no state** — `Object` is for stateless behavior only. Use `Value` for immutable data (auto-generates getters, `withX:` setters, equality). Use `Actor` when mutable state is needed.
-
-**Preferred pattern:** Use composition — pass collaborator actors rather than deep Actor inheritance. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows instead of workflows inheriting from a stateful base.
+- **Inherited self-sends work** but go through a slower fallback path (hierarchy walk via `beamtalk_dispatch:super/5` instead of direct `__sealed_*` calls). **Caution:** inherited self-sends inside blocks can interact with the `calling_self` deadlock-prevention mechanism.
+- **Actor subclass state field access works** — `self.field` can read/write state declared on a superclass because `parent:init()` populates inherited fields in the state map. However, **non-Actor Object subclasses** (one class per file) have a bug: `collect_inherited_fields` can't find the parent, so inherited state is missing from the map.
+- **Objects have no state** — `Object` is for stateless behavior only. Use `Value` for immutable data (auto-generates getters, `withX:` setters, equality). Use `Actor` when mutable state is needed.
+- **Prefer composition over deep Actor inheritance** — avoids deadlock risks in block contexts and keeps responsibilities clear. E.g. the `run:ctx:` pattern where a WorkflowContext actor is passed to workflows.
 
 ## Essential Patterns
 
