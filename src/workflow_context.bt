@@ -319,6 +319,10 @@ Actor subclass: WorkflowContext
       ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     result
 
   /// Sleep for the given duration (milliseconds), recording timer events.
@@ -412,6 +416,10 @@ Actor subclass: WorkflowContext
       ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     nil
 
   /// Start a child workflow and return a ChildWorkflowHandle.
@@ -487,6 +495,10 @@ Actor subclass: WorkflowContext
     ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     handle
 
   /// Block until a signal with the given name arrives or timeout expires.
@@ -547,6 +559,10 @@ Actor subclass: WorkflowContext
             self.receivedSignals := self.receivedSignals ++ #(found2 at: #signal)
             ^(found2 at: #signal) at: #payload
           ]
+        // Safe point: check for cancellation
+        (self.engine isCancelled: self.workflowId) ifTrue: [
+          CancellationError new signal: "Workflow cancelled"
+        ]
         // Clear processed signals (handlers already ran)
         self.deliveredSignals := #()
         Timer sleep: 50
@@ -601,6 +617,10 @@ Actor subclass: WorkflowContext
         self.deliveredSignals := #()
         // Check condition — early return (^) exits method, avoiding gotcha
         (block value: self.workflowVars) ifTrue: [^nil]
+        // Safe point: check for cancellation
+        (self.engine isCancelled: self.workflowId) ifTrue: [
+          CancellationError new signal: "Workflow cancelled"
+        ]
         Timer sleep: 50
       ]
 

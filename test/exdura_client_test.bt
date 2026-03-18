@@ -140,6 +140,14 @@ TestCase subclass: ExduraClientTest
     ] on: Error do: [:e | #error]
     self assert: result equals: #error
 
-  testCancelStubReturnsNil =>
-    result := self.client cancel: "wf-1"
+  testCancelReturnsNil =>
+    // Start a workflow so cancel: has a valid target
+    self.client
+      start: SlowWorkflow
+      id: "cancel-wf-1"
+      args: #(10000)
+      taskQueue: "default"
+      options: #{}
+    Erlang timer sleep: 500
+    result := self.client cancel: "cancel-wf-1"
     self assert: result equals: nil

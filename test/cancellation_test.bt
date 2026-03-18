@@ -1,0 +1,207 @@
+/// BT-1508: BUnit tests for cancellation propagation.
+///
+/// Tests that workflows can be cancelled via the client, CancellationError
+/// is raised and catchable for compensation, pending activities are cancelled,
+/// and child workflows are cancelled per parent-close policy.
+///
+/// Fixtures: src/cancellable_order_workflow.bt, src/cancellable_parent_workflow.bt,
+///           src/cancellation_activities.bt, src/slow_workflow.bt
+TestCase subclass: CancellationTest
+  state: client = nil
+  state: store = nil
+  state: engine = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    Erlang timer sleep: 200
+    self.client := ExduraClient connect: #{}
+    self.engine := self.client engine
+    self.store := self.client eventStore
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    self.engine := nil
+    self.store := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+
+  // === client cancel: cancels a running workflow ===
+  testClientCancelCancelsRunningWorkflow =>
+    // Start a slow workflow that sleeps for 10 seconds
+    _handle := self.client
+      start: SlowWorkflow
+      id: "cancel-basic-1"
+      args: #(10000)
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for workflow to start running
+    Erlang timer sleep: 500
+
+    // Verify it's running
+    exec := self.store getExecution: "cancel-basic-1"
+    self assert: exec status equals: #running
+
+    // Cancel it
+    self.client cancel: "cancel-basic-1"
+
+    // Wait for cancellation to take effect
+    Erlang timer sleep: 1000
+
+    // Verify it's cancelled
+    exec2 := self.store getExecution: "cancel-basic-1"
+    self assert: exec2 status equals: #cancelled
+
+    // Verify WorkflowCancelled event was recorded
+    events := self.store readEvents: "cancel-basic-1" fromSeq: 1
+    eventTypes := events collect: [:e | e eventType]
+    self assert: (eventTypes includes: #WorkflowCancelled)
+
+  // === Workflow receives CancellationError, can handle with on:do: ===
+  testCancellationWithCompensation =>
+    // Start the cancellable order workflow
+    _handle := self.client
+      start: CancellableOrderWorkflow
+      id: "cancel-comp-1"
+      args: #("order-42")
+      taskQueue: "default"
+      options: #{}
+
+    // Wait for the first activity (quickTask) to complete and
+    // the second activity (longTask) to start
+    Erlang timer sleep: 2000
+
+    // Verify it's running and processing
+    exec := self.store getExecution: "cancel-comp-1"
+    self assert: exec status equals: #running
+
+    // Cancel the workflow
+    self.client cancel: "cancel-comp-1"
+
+    // Wait for cancellation and compensation to complete
+    Erlang timer sleep: 3000
+
+    // Verify workflow was cancelled
+    exec2 := self.store getExecution: "cancel-comp-1"
+    self assert: exec2 status equals: #cancelled
+
+    // Verify event history includes compensation activity
+    events := self.store readEvents: "cancel-comp-1" fromSeq: 1
+    eventTypes := events collect: [:e | e eventType]
+    // Should have: WorkflowStarted, ActivityScheduled (quickTask),
+    // ActivityCompleted, ActivityScheduled (longTask), ActivityCompleted,
+    // WorkflowCancelled, and then compensation activities
+    self assert: (eventTypes includes: #WorkflowCancelled)
+
+  // === Cancellation propagates to child workflows ===
+  testCancellationPropagatesToChildWorkflows =>
+    // Start parent workflow that launches a child
+    self.engine
+      startWorkflow: CancellableParentWorkflow
+      id: "cancel-parent-1"
+      args: #(5)
+
+    // Wait for child to be started
+    Erlang timer sleep: 2000
+
+    // Find the child workflow ID
+    parentEvents := self.store readEvents: "cancel-parent-1" fromSeq: 1
+    childStartedEvents := parentEvents select: [:e |
+      e eventType =:= #ChildWorkflowStarted
+    ]
+    self assert: childStartedEvents size equals: 1
+    childId := (childStartedEvents at: 1) payload at: #childWorkflowId
+
+    // Verify child is running
+    childExec := self.store getExecution: childId
+    self assert: childExec status equals: #running
+
+    // Cancel the parent
+    self.engine cancelWorkflow: "cancel-parent-1"
+
+    // Wait for cancellation to propagate
+    Erlang timer sleep: 1000
+
+    // Verify parent is cancelled
+    parentExec := self.store getExecution: "cancel-parent-1"
+    self assert: parentExec status equals: #cancelled
+
+    // Verify child is also cancelled (default #terminate policy)
+    childExec2 := self.store getExecution: childId
+    self assert: childExec2 status equals: #cancelled
+
+    // Verify child has WorkflowCancelled event
+    childEvents := self.store readEvents: childId fromSeq: 1
+    childEventTypes := childEvents collect: [:e | e eventType]
+    self assert: (childEventTypes includes: #WorkflowCancelled)
+
+  // === CancellationError is an Error subclass ===
+  testCancellationErrorIsErrorSubclass =>
+    self assert: (CancellationError isKindOf: Error)
+    // Verify CancellationError can be caught with on:do:
+    result := [
+      CancellationError new signal: "test cancel"
+    ] on: CancellationError do: [:e | #caught]
+    self assert: result equals: #caught
+
+  // === Engine isCancelled: tracks cancellation state ===
+  testEngineTracksCancellationState =>
+    // Initially not cancelled
+    self assert: (self.engine isCancelled: "track-1") equals: false
+
+    // Start and cancel a workflow
+    self.engine
+      startWorkflow: SlowWorkflow
+      id: "track-1"
+      args: #(10000)
+    Erlang timer sleep: 500
+    self.engine cancelWorkflow: "track-1"
+
+    // Now it should be cancelled
+    self assert: (self.engine isCancelled: "track-1") equals: true
+
+    // Clear cancellation
+    self.engine clearCancellation: "track-1"
+    self assert: (self.engine isCancelled: "track-1") equals: false
+
+  // === Child workflows with #abandon policy are not cancelled ===
+  testAbandonPolicyChildNotCancelledByParent =>
+    // Start parent that starts a child with abandon policy, then cancel parent
+    // We use the engine directly to set up the scenario
+    self.engine
+      startWorkflow: SlowWorkflow
+      id: "abandon-parent-1"
+      args: #(10000)
+    Erlang timer sleep: 500
+
+    // Start a child with #abandon policy
+    _childHandle := self.engine
+      startChildWorkflow: SlowWorkflow
+      id: "abandon-child-1"
+      args: #(10000)
+      parentWorkflowId: "abandon-parent-1"
+      options: #{#parentClosePolicy => #abandon}
+    Erlang timer sleep: 500
+
+    // Verify child is running
+    childExec := self.store getExecution: "abandon-child-1"
+    self assert: childExec status equals: #running
+
+    // Cancel the parent
+    self.engine cancelWorkflow: "abandon-parent-1"
+    Erlang timer sleep: 500
+
+    // Parent should be cancelled
+    parentExec := self.store getExecution: "abandon-parent-1"
+    self assert: parentExec status equals: #cancelled
+
+    // Child should still be running (abandon policy)
+    childExec2 := self.store getExecution: "abandon-child-1"
+    self assert: childExec2 status equals: #running

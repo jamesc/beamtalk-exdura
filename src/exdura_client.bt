@@ -70,15 +70,17 @@ Actor subclass: ExduraClient
   query: workflowId :: String name: queryName :: String =>
     self.engine handleQuery: workflowId name: queryName
 
-  /// Cancel a running workflow (Phase 3 stub).
+  /// Cancel a running workflow.
   ///
-  /// Returns nil in Phase 1. Full cancellation with compensation
-  /// will be implemented in Phase 3.
+  /// Records a WorkflowCancelled event in the workflow's history,
+  /// sets a cancellation flag that causes the WorkflowContext to raise
+  /// CancellationError at the next safe point, and cancels child workflows
+  /// per their parent-close policy.
+  ///
+  /// Workflows can catch CancellationError with `on:do:` for cleanup.
   ///
   ///   client cancel: "wf-1"
-  cancel: _workflowId :: String =>
-    // Phase 3: will send cancellation to workflow and trigger compensation
-    nil
+  cancel: workflowId :: String => self.engine cancelWorkflow: workflowId
 
   /// List workflow executions matching a filter.
   ///

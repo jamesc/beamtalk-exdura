@@ -1,0 +1,48 @@
+/// Test workflow demonstrating cancellation with compensation (BT-1508).
+///
+/// Follows the SPEC.md section 5.8 pattern: performs a reservation activity,
+/// then enters a cancellable section. If cancelled, runs compensation to
+/// release the reservation before re-raising CancellationError.
+///
+///   engine startWorkflow: CancellableOrderWorkflow id: "wf-1" args: #("order-42")
+Workflow subclass: CancellableOrderWorkflow
+
+  /// Register query handlers to observe workflow state during tests.
+  registerQueries: ctx =>
+    ctx setState: #status to: "pending"
+    ctx setState: #compensated to: false
+    ctx onQuery: "getStatus" do: [:snap | snap status]
+
+  /// Process an order with cancellation-aware compensation.
+  ///
+  /// 1. Reserve inventory (quick activity)
+  /// 2. Enter cancellable section with long-running activity
+  /// 3. On cancellation: compensate by releasing reservation, then re-raise
+  run: orderId ctx: ctx =>
+    ctx setState: #status to: "reserving"
+    _reservation := ctx
+      runActivity: CancellationActivities
+      method: #quickTask:
+      with: #(orderId)
+    ctx setState: #status to: "processing"
+    [
+      // This long activity creates a safe point where cancellation is checked
+      _result := ctx
+        runActivity: CancellationActivities
+        method: #longTask:
+        with: #(orderId)
+      ctx setState: #status to: "completed"
+      #{#orderId => orderId, #status => "completed"}
+    ]
+      on: CancellationError
+      do: [:e |
+        // Compensation: release the reservation
+        ctx setState: #status to: "compensating"
+        ctx
+          runActivity: CancellationActivities
+          method: #compensate:
+          with: #(orderId)
+        ctx setState: #compensated to: true
+        ctx setState: #status to: "cancelled"
+        e signal  // Re-raise cancellation
+      ]
