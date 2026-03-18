@@ -1,0 +1,74 @@
+/// ETS-backed FIFO task queue for routing workflow and activity tasks.
+///
+/// Each TaskQueue Actor wraps an ETS ordered_set table that maintains
+/// FIFO ordering via monotonic sequence keys. Tasks are enqueued with
+/// auto-incrementing IDs and dequeued from the lowest key.
+///
+/// Named queues are managed by TaskQueueRegistry (see task_queue_registry.bt).
+///
+///   q := TaskQueue spawn
+///   q enqueue: #{#taskId => "t-1", #type => "activity"}
+///   q depth       // => 1
+///   q peek        // => #{#taskId => "t-1", #type => "activity"}
+///   q dequeue     // => #{#taskId => "t-1", #type => "activity"}
+///   q depth       // => 0
+Actor subclass: TaskQueue
+  state: table = nil
+  state: nextSeq :: Integer = 1
+
+  /// Initialize the ETS ordered_set table for FIFO ordering.
+  initialize =>
+    id := Erlang erlang unique_integer: #(#positive)
+    tableName := Erlang erlang binary_to_atom: "exdura_tq_{id}"
+    self.table := Ets new: tableName type: #orderedSet
+    self.nextSeq := 1
+
+  /// Add a task to the end of the queue.
+  ///
+  ///   q enqueue: #{#taskId => "t-1"}
+  ///   q depth   // => 1
+  enqueue: task =>
+    self.table at: self.nextSeq put: task
+    self.nextSeq := self.nextSeq + 1
+    task
+
+  /// Remove and return the next task from the queue (FIFO order).
+  /// Returns nil if the queue is empty.
+  ///
+  ///   q enqueue: #{#taskId => "t-1"}
+  ///   q dequeue   // => #{#taskId => "t-1"}
+  ///   q dequeue   // => nil
+  dequeue =>
+    self.table size == 0
+      ifTrue: [nil]
+      ifFalse: [
+        allKeys := self.table keys
+        firstKey := allKeys at: 1
+        task := self.table at: firstKey
+        self.table removeKey: firstKey
+        task
+      ]
+
+  /// Return the number of pending tasks in the queue.
+  ///
+  ///   q depth   // => 0
+  depth => self.table size
+
+  /// View the next task without removing it. Returns nil if empty.
+  ///
+  ///   q enqueue: "task-1"
+  ///   q peek      // => "task-1"
+  ///   q depth     // => 1 (unchanged)
+  peek =>
+    self.table size == 0
+      ifTrue: [nil]
+      ifFalse: [
+        allKeys := self.table keys
+        firstKey := allKeys at: 1
+        self.table at: firstKey
+      ]
+
+  /// Delete the ETS table and clean up resources.
+  destroy =>
+    self.table isNil ifFalse: [[self.table delete] on: Error do: [:e | nil]]
+    self.table := nil

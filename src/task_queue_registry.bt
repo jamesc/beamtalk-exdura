@@ -1,0 +1,46 @@
+/// Registry that maps queue names to TaskQueue Actor instances.
+///
+/// Provides named queue lookup. If a queue with the given name does not
+/// exist, it is created on first access.
+///
+///   registry := TaskQueueRegistry spawn
+///   q := registry queueNamed: "orders"
+///   q enqueue: #{#taskId => "t-1"}
+///   registry queueNamed: "orders"   // => same TaskQueue actor
+Actor subclass: TaskQueueRegistry
+  state: queues = nil
+
+  /// Initialize the internal name-to-queue mapping.
+  initialize => self.queues := #{}
+
+  /// Return the TaskQueue for the given name, creating it if needed.
+  ///
+  ///   registry queueNamed: "orders"   // => TaskQueue actor
+  queueNamed: name :: String =>
+    existing := self.queues at: name ifAbsent: [nil]
+    existing isNil
+      ifTrue: [
+        q := TaskQueue spawn
+        self.queues := self.queues at: name put: q
+        q
+      ]
+      ifFalse: [existing]
+
+  /// Return all registered queue names.
+  ///
+  ///   registry queueNames   // => #("orders", "emails")
+  queueNames => self.queues keys
+
+  /// Return whether a queue with the given name exists.
+  ///
+  ///   registry hasQueue: "orders"   // => true
+  hasQueue: name :: String => (self.queues at: name ifAbsent: [nil]) isNil not
+
+  /// Destroy all managed queues and clean up.
+  destroy =>
+    self.queues keys
+      do: [:name |
+        q := self.queues at: name
+        [q destroy] on: Error do: [:e | nil]
+      ]
+    self.queues := #{}

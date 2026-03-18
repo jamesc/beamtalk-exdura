@@ -1,0 +1,109 @@
+// BT-1497: BUnit tests for TaskQueue Actor (ETS-backed FIFO queue).
+
+TestCase subclass: TaskQueueTest
+  state: queue = nil
+
+  setUp =>
+    self.queue := TaskQueue spawn
+    self
+
+  tearDown =>
+    self.queue isNil ifFalse: [[self.queue destroy] on: Error do: [:e | nil]]
+    self.queue := nil
+
+  // === Basic enqueue/dequeue ===
+  testEnqueueReturnsTask =>
+    result := self.queue enqueue: "task-1"
+    self assert: result equals: "task-1"
+
+  testEnqueueAndDequeue =>
+    self.queue enqueue: "task-1"
+    result := self.queue dequeue
+    self assert: result equals: "task-1"
+
+  testFifoOrder =>
+    self.queue enqueue: "first"
+    self.queue enqueue: "second"
+    self.queue enqueue: "third"
+    first := self.queue dequeue
+    second := self.queue dequeue
+    third := self.queue dequeue
+    self assert: first equals: "first"
+    self assert: second equals: "second"
+    self assert: third equals: "third"
+
+  testDequeueEmptyReturnsNil =>
+    result := self.queue dequeue
+    self assert: result equals: nil
+
+  testDequeueAfterDrainReturnsNil =>
+    self.queue enqueue: "only"
+    self.queue dequeue
+    result := self.queue dequeue
+    self assert: result equals: nil
+
+  // === depth ===
+  testDepthEmptyQueue =>
+    d := self.queue depth
+    self assert: d equals: 0
+
+  testDepthAfterEnqueue =>
+    self.queue enqueue: "a"
+    d1 := self.queue depth
+    self assert: d1 equals: 1
+    self.queue enqueue: "b"
+    d2 := self.queue depth
+    self assert: d2 equals: 2
+
+  testDepthAfterDequeue =>
+    self.queue enqueue: "a"
+    self.queue enqueue: "b"
+    self.queue dequeue
+    d := self.queue depth
+    self assert: d equals: 1
+
+  // === peek ===
+  testPeekReturnsNextTask =>
+    self.queue enqueue: "front"
+    self.queue enqueue: "back"
+    p := self.queue peek
+    self assert: p equals: "front"
+
+  testPeekDoesNotRemove =>
+    self.queue enqueue: "task"
+    self.queue peek
+    d := self.queue depth
+    self assert: d equals: 1
+
+  testPeekEmptyReturnsNil =>
+    p := self.queue peek
+    self assert: p equals: nil
+
+  testPeekMatchesDequeue =>
+    self.queue enqueue: "hello"
+    peeked := self.queue peek
+    dequeued := self.queue dequeue
+    self assert: peeked equals: dequeued
+
+  // === Dictionary tasks (realistic usage) ===
+  testEnqueueDictionaryTasks =>
+    self.queue enqueue: #{#taskId => "t-1", #type => "activity"}
+    self.queue enqueue: #{#taskId => "t-2", #type => "workflow"}
+    first := self.queue dequeue
+    self assert: (first at: #taskId) equals: "t-1"
+    second := self.queue dequeue
+    self assert: (second at: #taskId) equals: "t-2"
+
+  // === Multiple enqueue/dequeue cycles ===
+  testInterleavedEnqueueDequeue =>
+    self.queue enqueue: "a"
+    self.queue enqueue: "b"
+    r1 := self.queue dequeue
+    self assert: r1 equals: "a"
+    self.queue enqueue: "c"
+    r2 := self.queue dequeue
+    self assert: r2 equals: "b"
+    r3 := self.queue dequeue
+    self assert: r3 equals: "c"
+    d := self.queue depth
+    self assert: d equals: 0
