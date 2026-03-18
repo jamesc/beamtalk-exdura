@@ -1,0 +1,66 @@
+// BT-1507: BUnit tests for Saga helper class.
+
+TestCase subclass: SagaTest
+
+  /// addCompensation: stores blocks in registration order.
+  testAddCompensationStoresInOrder =>
+    saga := Saga spawn
+    saga addCompensation: ["first"]
+    saga addCompensation: ["second"]
+    saga addCompensation: ["third"]
+    self assert: saga compensations size equals: 3
+
+  /// compensate runs blocks in reverse (LIFO) order.
+  testCompensateRunsInReverseOrder =>
+    log := CompensationLog spawn
+    saga := Saga spawn
+    saga addCompensation: [log add: "first"]
+    saga addCompensation: [log add: "second"]
+    saga addCompensation: [log add: "third"]
+    saga compensate
+    self assert: log entries equals: #("third", "second", "first")
+
+  /// Compensation blocks that fail do not prevent remaining compensations.
+  testFailingCompensationDoesNotStopOthers =>
+    log := CompensationLog spawn
+    saga := Saga spawn
+    saga addCompensation: [log add: "first"]
+    saga addCompensation: [Error new signal: "boom"]
+    saga addCompensation: [log add: "third"]
+    saga compensate
+    // "third" runs first (reverse), then the error block, then "first"
+    self assert: log entries equals: #("third", "first")
+
+  /// Empty saga compensate is a no-op.
+  testEmptyCompensateIsNoop =>
+    saga := Saga spawn
+    saga compensate
+    self assert: saga compensations size equals: 0
+
+  /// TransferWorkflow pattern from SPEC.md §5.9:
+  /// register compensations as steps succeed, roll back on failure.
+  testTransferWorkflowPattern =>
+    log := CompensationLog spawn
+    saga := Saga spawn
+
+    // Step 1: Debit succeeds
+    log add: "debit"
+    saga addCompensation: [log add: "undo-debit"]
+
+    // Step 2: Credit fails
+    [Error new signal: "credit failed"] on: Error do: [:e | saga compensate]
+
+    // Only debit happened, then its compensation ran
+    self assert: log entries equals: #("debit", "undo-debit")
+
+  /// Multiple compensations with one failure in the middle.
+  testMultipleCompensationsWithMiddleFailure =>
+    log := CompensationLog spawn
+    saga := Saga spawn
+    saga addCompensation: [log add: "comp-1"]
+    saga addCompensation: [log add: "comp-2"]
+    saga addCompensation: [Error new signal: "comp-3 failed"]
+    saga addCompensation: [log add: "comp-4"]
+    saga compensate
+    // Reverse order: comp-4, comp-3 (fails), comp-2, comp-1
+    self assert: log entries equals: #("comp-4", "comp-2", "comp-1")
