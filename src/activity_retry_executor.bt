@@ -1,0 +1,100 @@
+/// Executes an activity with exponential backoff retry logic (BT-1494).
+///
+/// A plain Object (not Actor) that handles retry loops for activity execution.
+/// Uses recursive calls to avoid the block mutation gotcha with local variables.
+///
+///   result := ActivityRetryExecutor
+///     execute: TestActivities selector: #doWork: args: #(data)
+///     eventStore: store workflowId: "wf-1"
+///     retryPolicy: (RetryPolicy new: #{#maximumAttempts => 3})
+Object subclass: ActivityRetryExecutor
+
+  /// Execute an activity with retry policy, recording events.
+  class execute: activityClass selector: selector args: args eventStore: eventStore workflowId: workflowId retryPolicy: rp =>
+    config := #{
+      #activity => activityClass,
+      #selector => selector,
+      #args => args,
+      #eventStore => eventStore,
+      #workflowId => workflowId,
+      #maxAttempts => rp maximumAttempts,
+      #initialInterval => rp initialInterval,
+      #backoffCoefficient => rp backoffCoefficient,
+      #maximumInterval => rp maximumInterval,
+      #nonRetryableErrors => rp nonRetryableErrors
+    }
+    self tryAttempt: 1 config: config
+
+  /// Recursive retry: attempt one execution and handle result.
+  ///
+  /// On success, records ActivityCompleted and returns the result.
+  /// On non-retryable error or exhausted retries, records ActivityFailed
+  /// and raises. Otherwise, sleeps with backoff and recurses.
+  class tryAttempt: attempt config: config =>
+    activityClass := config at: #activity
+    selector := config at: #selector
+    args := config at: #args
+    eventStore := config at: #eventStore
+    workflowId := config at: #workflowId
+    resultOrError := [
+      result := activityClass perform: selector withArguments: #(args)
+      #{#ok => result}
+    ] on: Exception do: [:e |
+      #{#error => e message, #errorClass => e class name asString}
+    ]
+    // Success — record ActivityCompleted and return
+    (resultOrError includesKey: #ok)
+      ifTrue: [
+        completedNow := Erlang os system_time: #second
+        completedEvent := ExduraEvent
+          new: #{
+            #eventType => #ActivityCompleted,
+            #timestamp => completedNow,
+            #payload => #{#result => (resultOrError at: #ok)}
+          }
+        eventStore appendEvents: workflowId events: #(completedEvent)
+        ^resultOrError at: #ok
+      ]
+    // Failure — check non-retryable and exhaustion, then backoff and recurse
+    errMsg := resultOrError at: #error
+    errClass := resultOrError at: #errorClass
+    nonRetryableErrors := config at: #nonRetryableErrors
+    isNonRetryable := nonRetryableErrors anySatisfy: [:nr | nr == errClass]
+    isNonRetryable
+      ifTrue: [
+        ^ActivityRetryHelper
+          recordFailedAndRaise: eventStore
+          workflowId: workflowId
+          payload: #{
+            #error => errMsg,
+            #errorClass => errClass,
+            #attempt => attempt,
+            #nonRetryable => true
+          }
+      ]
+    maxAttempts := config at: #maxAttempts
+    exhausted := maxAttempts notNil and: [attempt >= maxAttempts]
+    exhausted
+      ifTrue: [
+        ^ActivityRetryHelper
+          recordFailedAndRaise: eventStore
+          workflowId: workflowId
+          payload: #{
+            #error => errMsg,
+            #errorClass => errClass,
+            #attempt => attempt,
+            #retriesExhausted => true
+          }
+      ]
+    // Calculate backoff delay
+    initialInterval := config at: #initialInterval
+    backoffCoefficient := config at: #backoffCoefficient
+    maximumInterval := config at: #maximumInterval
+    rawDelay := initialInterval * (backoffCoefficient raisedTo: attempt - 1)
+    delay := rawDelay asFloat ceiling
+    cappedDelay := maximumInterval notNil ifTrue: [
+      delay min: maximumInterval
+    ] ifFalse: [delay]
+    Timer sleep: cappedDelay
+    // Recurse with next attempt
+    self tryAttempt: attempt + 1 config: config

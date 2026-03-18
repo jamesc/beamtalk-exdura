@@ -1,0 +1,7 @@
+/// Error class for non-retryable activity failures (BT-1494).
+///
+/// Activities throw NonRetryableError to skip the retry policy and
+/// propagate the error immediately to the workflow.
+///
+///   NonRetryableError new signal: "Invalid input"
+Error subclass: NonRetryableError
