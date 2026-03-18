@@ -1,32 +1,12 @@
-/// Example: a workflow that doubles a number twice using two activities.
+/// Example workflow: doubles the input, then doubles it again.
+/// Input 5 → doubleIt(5)=10 → addNumbers(10,10)=20
 ///
-/// Load in the REPL:
-///   Workspace load: "src"
-///   Workspace load: "examples/double_workflow.bt"
-///
-/// Run:
+/// Try it in the REPL:
+///   :load "examples/"
 ///   client := ExduraClient connect: #{}
 ///   handle := client start: DoubleWorkflow id: "demo-1"
 ///     args: #(5) taskQueue: "default" options: #{}
 ///   handle result: 5000   // => 20
-
-/// Activities: pure functions that do the work.
-Activity subclass: MathActivities
-
-  /// Double a number.
-  ///
-  ///   MathActivities doubleIt: #(5)   // => 10
-  class doubleIt: args => args at: 1 * 2
-
-  /// Add two numbers from a dictionary.
-  ///
-  ///   MathActivities addNumbers: #(#{#a => 3, #b => 4})   // => 7
-  class addNumbers: args =>
-    dict := args at: 1
-    (dict at: #a) + (dict at: #b)
-
-/// Workflow: doubles the input, then doubles it again.
-/// Input 5 → doubleIt(5)=10 → addNumbers(10,10)=20
 Workflow subclass: DoubleWorkflow
 
   run: value ctx: ctx =>

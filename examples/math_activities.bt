@@ -1,0 +1,16 @@
+/// Example activities: pure functions that do math.
+Activity subclass: MathActivities
+
+  /// Double a number.
+  ///
+  ///   MathActivities doubleIt: #(5)   // => 10
+  class doubleIt: args =>
+    val := args at: 1
+    val * 2
+
+  /// Add two numbers from a dictionary.
+  ///
+  ///   MathActivities addNumbers: #(#{#a => 3, #b => 4})   // => 7
+  class addNumbers: args =>
+    dict := args at: 1
+    (dict at: #a) + (dict at: #b)

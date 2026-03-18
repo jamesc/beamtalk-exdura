@@ -95,16 +95,11 @@ If the process crashes after step 3, the engine replays events 1-3 (skipping the
 beamtalk repl
 ```
 
-Load the project and example workflows:
-
 ```beamtalk
-:load "src/"
+// Load the example workflows (src/ is auto-loaded)
 :load "examples/"
-```
 
-Start the engine and run a workflow:
-
-```beamtalk
+// Boot the engine and run a workflow
 client := ExduraClient connect: #{}
 
 handle := client
@@ -116,11 +111,8 @@ handle := client
 
 result := handle result: 5000
 // => 20  (5 doubled to 10, then 10+10=20)
-```
 
-Inspect the event history:
-
-```beamtalk
+// Inspect the event history
 history := client eventStore readEvents: "demo-1" fromSeq: 1
 history do: [:e | Io println: "{e eventId}: {e eventType}"]
 // 1: WorkflowStarted
