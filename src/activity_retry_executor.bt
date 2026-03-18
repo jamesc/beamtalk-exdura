@@ -72,8 +72,10 @@ Object subclass: ActivityRetryExecutor
             #nonRetryable => true
           }
       ]
+    // 0 or nil means unlimited retries (per SPEC §4.1.4)
     maxAttempts := config at: #maxAttempts
-    exhausted := maxAttempts notNil and: [attempt >= maxAttempts]
+    hasLimit := maxAttempts notNil and: [maxAttempts > 0]
+    exhausted := hasLimit and: [attempt >= maxAttempts]
     exhausted
       ifTrue: [
         ^ActivityRetryHelper

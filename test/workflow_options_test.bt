@@ -183,6 +183,37 @@ TestCase subclass: WorkflowOptionsTest
     self assert: (events at: 1) eventType equals: #ActivityScheduled
     self assert: (events at: 2) eventType equals: #ActivityCompleted
 
+  /// maximumAttempts: 0 means unlimited retries (per SPEC §4.1.4).
+  testMaxAttemptsZeroMeansUnlimited =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-unlimited-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+
+    // maximumAttempts: 0 should retry until success (activity fails 3 times)
+    options := #{
+      #retryPolicy => #{
+        #initialInterval => 10,
+        #backoffCoefficient => 1.0,
+        #maximumAttempts => 0
+      }
+    }
+
+    result := self.engine
+      scheduleActivity: FlakyActivity
+      selector: #doWork:
+      args: #(#{#key => "unlimited1", #failCount => 3})
+      workflowId: "wf-unlimited-1"
+      options: options
+
+    self assert: (result at: #result) equals: "success"
+    self assert: (result at: #attempts) equals: 4
+
   // ── Sleep Tests ──
 
   /// Sleep records TimerStarted and TimerFired events.
