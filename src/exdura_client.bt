@@ -104,6 +104,7 @@ Actor subclass: ExduraClient
       ifFalse: [
         pool := self.engine activityPool
         pool isNil ifFalse: [[pool destroy] on: Error do: [:e | nil]]
+        [self.engine stop] on: Error do: [:e | nil]
       ]
     self.eventStore isNil
       ifFalse: [

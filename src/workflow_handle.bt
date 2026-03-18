@@ -20,8 +20,8 @@ Value subclass: WorkflowHandle
 
   /// Block until the workflow completes and return the result.
   ///
-  /// Polls the execution status every 100ms. If the workflow fails,
-  /// raises an error with the failure reason.
+  /// Polls the execution status every 100ms. If the workflow fails
+  /// or is cancelled, raises an error with the reason.
   ///
   ///   result := handle result   // blocks until done
   result =>
@@ -34,6 +34,9 @@ Value subclass: WorkflowHandle
             exec status =:= #failed ifTrue: [
               self error: "Workflow failed: {exec result}"
             ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Workflow cancelled: {self workflowId}"
+            ]
           ]
         Timer sleep: 100
       ]
@@ -41,7 +44,7 @@ Value subclass: WorkflowHandle
   /// Block until the workflow completes or the timeout (ms) expires.
   ///
   /// Returns the workflow result on success. Raises an error if the
-  /// workflow fails or if the timeout is exceeded.
+  /// workflow fails, is cancelled, or if the timeout is exceeded.
   ///
   ///   result := handle result: 5000   // 5 second timeout
   result: timeout :: Integer =>
@@ -54,6 +57,9 @@ Value subclass: WorkflowHandle
             exec status =:= #completed ifTrue: [^exec result]
             exec status =:= #failed ifTrue: [
               self error: "Workflow failed: {exec result}"
+            ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Workflow cancelled: {self workflowId}"
             ]
           ]
         (Erlang os system_time: #millisecond) >= deadline ifTrue: [
