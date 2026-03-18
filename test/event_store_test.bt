@@ -1,0 +1,183 @@
+// BT-1491: BUnit tests for EventStore Actor (ETS-backed in-memory persistence).
+
+TestCase subclass: EventStoreTest
+  state: store = nil
+
+  setUp =>
+    // Defensively clean up leftover ETS tables from crashed previous run
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.store := EventStore spawn
+    self
+
+  tearDown =>
+    self.store isNil ifFalse: [
+      [self.store destroy] on: Error do: [:e | nil]
+    ]
+    self.store := nil
+
+  // === createExecution / getExecution round-trip ===
+
+  testCreateAndGetExecution =>
+    exec := WorkflowExecution new: #{
+      #workflowId => "wf-1",
+      #runId => "run-1",
+      #workflowType => "OrderWorkflow",
+      #taskQueue => "default",
+      #status => #running,
+      #startedAt => 1710000000
+    }
+    self.store createExecution: exec
+    retrieved := self.store getExecution: "wf-1"
+    self assert: retrieved workflowId equals: "wf-1"
+    self assert: retrieved runId equals: "run-1"
+    self assert: retrieved workflowType equals: "OrderWorkflow"
+    self assert: retrieved status equals: #running
+
+  testGetExecutionNonExistent =>
+    self assert: (self.store getExecution: "no-such-wf") equals: nil
+
+  testCreateDuplicateExecutionRaises =>
+    exec := WorkflowExecution new: #{
+      #workflowId => "wf-dup",
+      #runId => "run-1",
+      #workflowType => "TestWorkflow",
+      #taskQueue => "default",
+      #startedAt => 1710000000
+    }
+    self.store createExecution: exec
+    self should: [self.store createExecution: exec] raise: #user_error
+
+  // === updateExecution ===
+
+  testUpdateExecutionStatus =>
+    exec := WorkflowExecution new: #{
+      #workflowId => "wf-upd",
+      #runId => "run-1",
+      #workflowType => "TestWorkflow",
+      #taskQueue => "default",
+      #startedAt => 1710000000
+    }
+    self.store createExecution: exec
+    updated := self.store updateExecution: "wf-upd" status: #completed result: "done"
+    self assert: updated status equals: #completed
+    self assert: updated result equals: "done"
+    // Verify it persisted
+    retrieved := self.store getExecution: "wf-upd"
+    self assert: retrieved status equals: #completed
+    self assert: retrieved result equals: "done"
+
+  testUpdateExecutionNonExistentRaises =>
+    self should: [
+      self.store updateExecution: "no-such" status: #completed result: nil
+    ] raise: #user_error
+
+  // === listExecutions ===
+
+  testListExecutionsEmpty =>
+    result := self.store listExecutions: #{}
+    self assert: result size equals: 0
+
+  testListExecutionsAll =>
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-a", #runId => "r1", #workflowType => "TypeA",
+      #taskQueue => "q", #startedAt => 100
+    })
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-b", #runId => "r2", #workflowType => "TypeB",
+      #taskQueue => "q", #startedAt => 200
+    })
+    result := self.store listExecutions: #{}
+    self assert: result size equals: 2
+
+  testListExecutionsFilterByStatus =>
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-run", #runId => "r1", #workflowType => "TypeA",
+      #taskQueue => "q", #status => #running, #startedAt => 100
+    })
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-done", #runId => "r2", #workflowType => "TypeA",
+      #taskQueue => "q", #status => #completed, #startedAt => 200
+    })
+    running := self.store listExecutions: #{#status => #running}
+    self assert: running size equals: 1
+    self assert: (running at: 1) workflowId equals: "wf-run"
+
+  testListExecutionsFilterByWorkflowType =>
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-x", #runId => "r1", #workflowType => "OrderWorkflow",
+      #taskQueue => "q", #startedAt => 100
+    })
+    self.store createExecution: (WorkflowExecution new: #{
+      #workflowId => "wf-y", #runId => "r2", #workflowType => "PaymentWorkflow",
+      #taskQueue => "q", #startedAt => 200
+    })
+    orders := self.store listExecutions: #{#workflowType => "OrderWorkflow"}
+    self assert: orders size equals: 1
+    self assert: (orders at: 1) workflowId equals: "wf-x"
+
+  // === appendEvents / readEvents ===
+
+  testAppendAndReadEvents =>
+    evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    evt2 := ExduraEvent new: #{#eventType => #ActivityScheduled, #timestamp => 200, #payload => #{}}
+    self.store appendEvents: "wf-ev" events: #(evt1, evt2)
+    events := self.store readEvents: "wf-ev" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventId equals: 1
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+    self assert: (events at: 2) eventId equals: 2
+    self assert: (events at: 2) eventType equals: #ActivityScheduled
+
+  testAppendEventsAutoIncrementsIds =>
+    evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    self.store appendEvents: "wf-inc" events: #(evt1)
+    evt2 := ExduraEvent new: #{#eventType => #ActivityScheduled, #timestamp => 200, #payload => #{}}
+    evt3 := ExduraEvent new: #{#eventType => #ActivityCompleted, #timestamp => 300, #payload => #{}}
+    self.store appendEvents: "wf-inc" events: #(evt2, evt3)
+    events := self.store readEvents: "wf-inc" fromSeq: 1
+    self assert: events size equals: 3
+    self assert: (events at: 1) eventId equals: 1
+    self assert: (events at: 2) eventId equals: 2
+    self assert: (events at: 3) eventId equals: 3
+
+  testReadEventsFromSequence =>
+    evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    evt2 := ExduraEvent new: #{#eventType => #ActivityScheduled, #timestamp => 200, #payload => #{}}
+    evt3 := ExduraEvent new: #{#eventType => #ActivityCompleted, #timestamp => 300, #payload => #{}}
+    self.store appendEvents: "wf-seq" events: #(evt1, evt2, evt3)
+    // Read from sequence 2 onward
+    events := self.store readEvents: "wf-seq" fromSeq: 2
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventId equals: 2
+    self assert: (events at: 2) eventId equals: 3
+
+  testReadEventsEmptyHistory =>
+    events := self.store readEvents: "no-such-wf" fromSeq: 1
+    self assert: events size equals: 0
+
+  testReadEventsFromBeyondEnd =>
+    evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    self.store appendEvents: "wf-end" events: #(evt1)
+    events := self.store readEvents: "wf-end" fromSeq: 999
+    self assert: events size equals: 0
+
+  testAppendEventsReturnsStampedEvents =>
+    evt := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    stamped := self.store appendEvents: "wf-ret" events: #(evt)
+    self assert: stamped size equals: 1
+    self assert: (stamped at: 1) eventId equals: 1
+    self assert: (stamped at: 1) eventType equals: #WorkflowStarted
+
+  testEventsIsolatedPerWorkflow =>
+    evt1 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 100, #payload => #{}}
+    evt2 := ExduraEvent new: #{#eventType => #WorkflowStarted, #timestamp => 200, #payload => #{}}
+    self.store appendEvents: "wf-iso-a" events: #(evt1)
+    self.store appendEvents: "wf-iso-b" events: #(evt2)
+    eventsA := self.store readEvents: "wf-iso-a" fromSeq: 1
+    eventsB := self.store readEvents: "wf-iso-b" fromSeq: 1
+    self assert: eventsA size equals: 1
+    self assert: eventsB size equals: 1
+    // Both start with eventId 1 — independent counters
+    self assert: (eventsA at: 1) eventId equals: 1
+    self assert: (eventsB at: 1) eventId equals: 1
