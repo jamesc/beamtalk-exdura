@@ -1,0 +1,9 @@
+/// Sentinel value returned by WorkflowContext continueAsNew: to signal
+/// that the workflow should restart with fresh history and new args.
+///
+/// The WorkflowRunner checks the result of run:ctx: for this type and
+/// delegates to the engine to create a new execution.
+///
+///   ContinueAsNewRequest new: #{#args => #("nextCursor")}
+Value subclass: ContinueAsNewRequest
+  state: args :: List = #()

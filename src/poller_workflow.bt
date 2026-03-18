@@ -1,0 +1,18 @@
+/// Test fixture: a workflow that processes batches and continues-as-new
+/// until no more data remains. Follows the PollerWorkflow pattern from
+/// SPEC.md section 5.10.
+///
+///   // First call: cursor "batch-1" → activity returns nextCursor "batch-2"
+///   // Second call: cursor "batch-2" → activity returns nextCursor nil
+///   // Workflow completes with "done"
+Workflow subclass: PollerWorkflow
+
+  run: cursor ctx: ctx -> String =>
+    result := ctx
+      runActivity: BatchActivities
+      method: #fetchBatch:
+      with: #(cursor)
+    nextCursor := result at: #nextCursor
+    nextCursor isNil ifTrue: [
+      "done"
+    ] ifFalse: [ctx continueAsNew: #(nextCursor)]

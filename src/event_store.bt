@@ -127,6 +127,14 @@ Actor subclass: EventStore
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
 
+  /// Clear the event history for a workflow (ETS only, preserves disk files).
+  ///
+  /// Used by continue-as-new to reset the in-memory event history before
+  /// starting a fresh execution. The old events remain on disk for auditing.
+  ///
+  ///   store clearEvents: "wf-1"
+  clearEvents: workflowId :: String => self.events at: workflowId put: #()
+
   // --- Snapshot persistence ---
 
   /// Save a state snapshot for a workflow at the given eventId.

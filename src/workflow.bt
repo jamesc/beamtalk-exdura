@@ -33,6 +33,12 @@
 ///   payload := ctx waitForSignal: "approve" timeout: 60000
 ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
 ///
+/// Continue-as-new resets the event history for long-running workflows:
+///
+///   nextCursor isNil
+///     ifTrue: ["done"]
+///     ifFalse: [ctx continueAsNew: #(nextCursor)]
+///
 /// Query handlers are registered in `registerQueries:` and receive an
 /// ActorSnapshot proxy as their argument. Workflow state visible to
 /// queries is managed through the context's setState:to: method:

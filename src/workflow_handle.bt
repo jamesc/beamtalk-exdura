@@ -37,6 +37,7 @@ Value subclass: WorkflowHandle
             exec status =:= #cancelled ifTrue: [
               self error: "Workflow cancelled: {self workflowId}"
             ]
+            exec status =:= #continued_as_new ifTrue: []
           ]
         Timer sleep: 100
       ]
@@ -61,6 +62,7 @@ Value subclass: WorkflowHandle
             exec status =:= #cancelled ifTrue: [
               self error: "Workflow cancelled: {self workflowId}"
             ]
+            exec status =:= #continued_as_new ifTrue: []
           ]
         (Erlang os system_time: #millisecond) >= deadline ifTrue: [
           self error: "Workflow result timed out after {timeout}ms"
