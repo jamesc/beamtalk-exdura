@@ -1,12 +1,15 @@
-// BT-1491: EventStore — in-memory (ETS-backed) persistence for workflow events.
-// See SPEC.md section 9.1, 9.2.
-//
-// Two ETS tables:
-//   exdura_executions — WorkflowExecution metadata, keyed by workflowId
-//   exdura_events     — Event history lists, keyed by workflowId
-//
-// Events are stored as a list per workflow. Each append auto-increments eventId.
-
+/// In-memory (ETS-backed) persistence for workflow executions and events.
+///
+/// Maintains two ETS tables:
+///   exdura_executions — WorkflowExecution metadata, keyed by workflowId
+///   exdura_events     — Event history lists, keyed by workflowId
+///
+/// Events are stored as a list per workflow. Each append auto-increments eventId.
+///
+///   store := EventStore new
+///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", ...})
+///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
+///   store readEvents: "wf-1" fromSeq: 1
 Actor subclass: EventStore
   state: executions = nil
   state: events = nil
@@ -15,7 +18,9 @@ Actor subclass: EventStore
     self.executions := Ets new: #exdura_executions type: #set
     self.events := Ets new: #exdura_events type: #set
 
-  // --- Execution CRUD ---
+  /// Store a new workflow execution. Raises if workflowId already exists.
+  ///
+  ///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"})
   createExecution: execution :: WorkflowExecution =>
     wfId := execution workflowId
     (self.executions includesKey: wfId) ifTrue: [
@@ -24,8 +29,14 @@ Actor subclass: EventStore
     self.executions at: wfId put: execution
     execution
 
+  /// Retrieve a workflow execution by ID. Returns nil if not found.
+  ///
+  ///   store getExecution: "wf-1"   // => WorkflowExecution(...)
   getExecution: workflowId :: String => self.executions at: workflowId
 
+  /// Update an execution's status and result. Raises if not found.
+  ///
+  ///   store updateExecution: "wf-1" status: #completed result: 42
   updateExecution: workflowId :: String status: status :: Symbol result: result =>
     existing := self.executions at: workflowId
     existing isNil ifTrue: [self error: "Execution not found: {workflowId}"]
@@ -33,13 +44,16 @@ Actor subclass: EventStore
     self.executions at: workflowId put: updated
     updated
 
+  /// List executions matching a filter dictionary.
+  /// Supported filter keys: #status (Symbol), #workflowType (String).
+  ///
+  ///   store listExecutions: #{#status => #running}
+  ///   store listExecutions: #{}   // all executions
   listExecutions: filter :: Dictionary =>
-    // Collect all executions by iterating over keys
     allKeys := self.executions keys
     allExecs := allKeys collect: [:k | self.executions at: k]
     filterStatus := filter at: #status ifAbsent: [nil]
     filterType := filter at: #workflowType ifAbsent: [nil]
-    // Apply both filters using select: — check each condition inline
     allExecs
       select: [:e |
         statusOk := filterStatus isNil or: [e status =:= filterStatus]
@@ -47,12 +61,14 @@ Actor subclass: EventStore
         statusOk and: [typeOk]
       ]
 
-  // --- Event history ---
+  /// Append events to a workflow's history, auto-assigning monotonic eventIds.
+  /// Returns the stamped events with their assigned IDs.
+  ///
+  ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
+  ///   // => #(ExduraEvent(eventId: 1, ...))
   appendEvents: workflowId :: String events: newEvents :: List =>
     existing := self.events at: workflowId ifAbsent: [#()]
-    // Determine the next eventId from the last event in the existing list
     startId := existing size + 1
-    // Build stamped list with monotonically increasing eventIds
     stamped := newEvents
       inject: #{#id => startId, #list => #()}
       into: [:acc :evt |
@@ -64,12 +80,16 @@ Actor subclass: EventStore
     self.events at: workflowId put: (existing ++ stampedEvents)
     stampedEvents
 
-  // Note: SPEC says `from:` but `from` is reserved; using `fromSeq:` instead.
+  /// Read events for a workflow starting from a sequence number.
+  /// Note: SPEC says `from:` but `from` is reserved; using `fromSeq:` instead.
+  ///
+  ///   store readEvents: "wf-1" fromSeq: 1   // all events
+  ///   store readEvents: "wf-1" fromSeq: 5   // events with eventId >= 5
   readEvents: workflowId :: String fromSeq: fromSeq :: Integer =>
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
 
-  // --- Cleanup ---
+  /// Delete ETS tables and clean up resources.
   destroy =>
     self.executions isNil ifFalse: [
       [self.executions delete] on: Error do: [:e | nil]

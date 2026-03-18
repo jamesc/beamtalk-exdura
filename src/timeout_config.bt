@@ -1,6 +1,14 @@
-// BT-1490: TimeoutConfig — timeout configuration for workflows and activities.
-// See SPEC.md section 4.1.5.
-
+/// Timeout configuration for workflows and activities.
+///
+/// All values are in milliseconds. nil means no timeout (unlimited).
+/// Follows Temporal's timeout hierarchy: execution > run > schedule-to-close
+/// > start-to-close.
+///
+///   TimeoutConfig new: #{
+///     #workflowExecutionTimeout => 86400000,
+///     #startToCloseTimeout => 30000,
+///     #heartbeatTimeout => 10000
+///   }
 Value subclass: TimeoutConfig
   state: workflowExecutionTimeout = nil
   state: workflowRunTimeout = nil

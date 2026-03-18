@@ -1,6 +1,16 @@
-// BT-1490: WorkflowExecution — a single execution of a workflow.
-// See SPEC.md section 4.1.1.
-
+/// Metadata for a single execution of a workflow.
+///
+/// Tracks identity, status, and lifecycle timestamps. Stored in the
+/// EventStore and updated as the workflow progresses through its states:
+/// #running → #completed | #failed | #cancelled.
+///
+///   WorkflowExecution new: #{
+///     #workflowId => "order-123",
+///     #runId => "run-abc",
+///     #workflowType => "OrderWorkflow",
+///     #taskQueue => "default",
+///     #startedAt => 1710000000
+///   }
 Value subclass: WorkflowExecution
   state: workflowId :: String = ""
   state: runId :: String = ""

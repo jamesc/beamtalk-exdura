@@ -1,6 +1,15 @@
-// BT-1490: ExduraEvent — a single entry in a workflow's event history.
-// See SPEC.md section 4.1.2.
-
+/// A single entry in a workflow's event history.
+///
+/// Events form an append-only log that records every state transition
+/// in a workflow execution. The engine replays this log to reconstruct
+/// workflow state after a crash or restart.
+///
+///   ExduraEvent new: #{
+///     #eventId => 1,
+///     #eventType => #WorkflowStarted,
+///     #timestamp => 1710000000,
+///     #payload => #{#workflowId => "wf-1"}
+///   }
 Value subclass: ExduraEvent
   state: eventId :: Integer = 0
   state: eventType :: Symbol = #unknown

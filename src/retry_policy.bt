@@ -1,6 +1,15 @@
-// BT-1490: RetryPolicy — retry configuration for activities.
-// See SPEC.md section 4.1.4.
-
+/// Retry configuration for activities.
+///
+/// Controls exponential backoff behavior when an activity fails.
+/// Uses Temporal-compatible defaults: 1s initial interval, 2x backoff,
+/// unlimited attempts unless maximumAttempts is set.
+///
+///   RetryPolicy new: #{
+///     #initialInterval => 500,
+///     #backoffCoefficient => 1.5,
+///     #maximumAttempts => 5,
+///     #nonRetryableErrors => #("InvalidInput")
+///   }
 Value subclass: RetryPolicy
   state: initialInterval :: Integer = 1000
   state: backoffCoefficient :: Float = 2.0
