@@ -131,6 +131,31 @@ TestCase subclass: ActivityWorkerPoolTest
     self assert: (outcome at: #status) equals: #completed
     self assert: (outcome at: #result) equals: 10
 
+  // === ActivityWorkerPool: activeCount stability ===
+  testPoolActiveCountReturnsToZeroAfterSuccess =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: nil
+    self assert: self.pool activeCount equals: 0
+
+  testPoolActiveCountReturnsToZeroAfterCrash =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("count test")
+      timeout: nil
+    self assert: self.pool activeCount equals: 0
+
+  testPoolActiveCountReturnsToZeroAfterTimeout =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #slowIt:
+      args: #(5000)
+      timeout: 100
+    self assert: self.pool activeCount equals: 0
+
   // === WorkflowEngine integration: dispatch through pool ===
   testEngineDispatchesThroughPool =>
     exec := WorkflowExecution
