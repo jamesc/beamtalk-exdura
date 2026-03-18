@@ -17,6 +17,7 @@
 Actor subclass: ExduraClient
   state: engine = nil
   state: eventStore = nil
+  state: supervisor = nil
 
   /// Create a client connected to an in-process workflow engine.
   ///
@@ -96,10 +97,38 @@ Actor subclass: ExduraClient
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
 
-  /// Clean up resources (EventStore ETS tables, worker pool).
+  /// Return the underlying Supervisor (for testing/lifecycle management).
+  supervisor => self.supervisor
+
+  /// Set the supervisor that manages this client's components.
+  ///
+  /// Called by ExduraWorker to attach the supervision tree reference,
+  /// enabling proper cleanup via destroy.
+  ///
+  ///   client setSupervisor: sup
+  setSupervisor: sup => self.supervisor := sup
+
+  /// Clean up resources (EventStore ETS tables, worker pool, supervisor).
+  ///
+  /// If a supervisor is attached (ExduraWorker-managed), stops it which
+  /// terminates all supervised children. Otherwise cleans up components
+  /// individually (ExduraClient connect:-managed).
   ///
   ///   client destroy
   destroy =>
+    self.supervisor isNil
+      ifFalse: [
+        // Supervisor-managed: stop supervisor first (terminates all children),
+        // then clean up files. Order matters: destroyWithFiles would crash the
+        // EventStore, triggering a supervisor restart before we stop it.
+        [self.supervisor stop] on: Error do: [:e | nil]
+        dataDir := "data"
+        (File isDirectory: dataDir) ifTrue: [
+          [File deleteAll: dataDir] on: Error do: [:e | nil]
+        ]
+        ^nil
+      ]
+    // Non-supervised: clean up components individually
     self.engine isNil
       ifFalse: [
         pool := self.engine activityPool

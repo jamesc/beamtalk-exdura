@@ -1,0 +1,26 @@
+// / Exdura application entry point.
+// /
+// / Boots a sample ExduraWorker with default configuration, starts a
+// / PassthroughWorkflow, and prints the result. This demonstrates the
+// / full supervision tree and client API.
+// /
+// /   beamtalk run
+client := ExduraWorker
+  start: #{
+    #taskQueue => "default",
+    #workflows => #(PassthroughWorkflow),
+    #activities => #(TestActivities),
+    #maxConcurrentActivities => 10
+  }
+
+IO puts: "Exdura worker started."
+
+handle := client
+  start: PassthroughWorkflow
+  id: "demo-1"
+  args: #("hello from exdura")
+  taskQueue: "default"
+  options: #{}
+
+result := handle result: 5000
+IO puts: "Workflow result: {result}"
