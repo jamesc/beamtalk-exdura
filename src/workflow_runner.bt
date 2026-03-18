@@ -65,6 +65,7 @@ Actor subclass: WorkflowRunner
         // Workflow was cancelled — the engine already recorded the
         // WorkflowCancelled event and updated execution status in cancelWorkflow:.
         self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+        self.engine clearCancellation: self.workflowId
         ^nil
       ]
     result := resultOrError at: #ok
