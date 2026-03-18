@@ -1,7 +1,8 @@
 /// Base class for user workflow definitions.
 ///
 /// Workflows are simple Objects that define a `run:ctx:` method. The `ctx`
-/// parameter is a WorkflowContext that provides activity dispatch and replay.
+/// parameter is a WorkflowContext that provides activity dispatch, replay,
+/// and signal handling.
 /// No Actor — no inherited state issues.
 ///
 /// Activity dispatch supports options for retry and timeouts:
@@ -17,9 +18,24 @@
 /// Durable sleep records timer events and skips during replay:
 ///
 ///   ctx sleep: 5000   // sleep for 5 seconds
+///
+/// Signal handlers register named handlers that fire when signals are drained
+/// at safe points. Handlers receive the signal payload and current workflow
+/// variables, and return updated variables:
+///
+///   ctx setVar: #approved to: false
+///   ctx onSignal: "approve" do: [:payload :vars |
+///     vars at: #approved put: true
+///   ]
+///
+/// Blocking waits for signals or conditions:
+///
+///   payload := ctx waitForSignal: "approve" timeout: 60000
+///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
 Object subclass: Workflow
 
   /// Subclass hook — override this with workflow logic.
   /// ctx is a WorkflowContext that provides runActivity:method:with:,
-  /// runActivity:method:with:options:, and sleep:.
+  /// runActivity:method:with:options:, sleep:, onSignal:do:,
+  /// waitForSignal:timeout:, and waitForCondition:timeout:.
   run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"
