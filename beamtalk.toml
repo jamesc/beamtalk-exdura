@@ -5,4 +5,7 @@
 name = "exdura"
 version = "0.1.0"
 
+[application]
+supervisor = "ExduraSupervisor"
+
 [dependencies]
