@@ -1,0 +1,12 @@
+/// Test workflow that sleeps for a configurable duration (BT-1498).
+///
+/// Takes a sleep duration (ms) as input and sleeps for that long.
+/// Used to test WorkflowHandle timeout behavior.
+///
+///   engine startWorkflow: SlowWorkflow id: "wf-1" args: #(5000)
+Workflow subclass: SlowWorkflow
+
+  /// Sleep for the given duration (ms) and return #done.
+  run: durationMs ctx: ctx =>
+    ctx sleep: durationMs
+    #done

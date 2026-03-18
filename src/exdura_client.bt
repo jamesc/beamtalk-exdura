@@ -1,0 +1,112 @@
+/// Public API facade for interacting with Exdura workflows.
+///
+/// ExduraClient wraps a WorkflowEngine and provides a clean interface for
+/// starting workflows, waiting for results, and listing executions. Phase 1
+/// operates in-process only; connection options are accepted but ignored.
+///
+/// ExduraClient is an Actor to hold mutable references to the engine and
+/// event store. All method calls are synchronous gen_server calls.
+///
+///   client := ExduraClient connect: #{}
+///   handle := client start: OrderWorkflow id: "order-1"
+///     args: #("data") taskQueue: "orders" options: #{}
+///   result := handle result
+///
+///   // List running workflows
+///   running := client list: #{#status => #running}
+Actor subclass: ExduraClient
+  state: engine = nil
+  state: eventStore = nil
+
+  /// Create a client connected to an in-process workflow engine.
+  ///
+  /// In Phase 1, options are accepted but ignored — the client creates
+  /// a local EventStore and WorkflowEngine. Future phases will support
+  /// remote connections.
+  ///
+  ///   client := ExduraClient connect: #{#host => "localhost"}
+  class connect: _options :: Dictionary =>
+    store := EventStore spawn
+    pool := ActivityWorkerPool spawn
+    eng := WorkflowEngine withStore: store pool: pool
+    self spawnWith: #{#engine => eng, #eventStore => store}
+
+  /// Start a workflow and return a WorkflowHandle.
+  ///
+  /// The workflow begins executing asynchronously. Use the returned
+  /// handle to wait for the result.
+  ///
+  ///   handle := client start: OrderWorkflow id: "order-1"
+  ///     args: #("data") taskQueue: "orders" options: #{}
+  ///   result := handle result
+  start: workflowClass id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary =>
+    self.engine
+      startWorkflow: workflowClass
+      id: workflowId
+      args: args
+    WorkflowHandle for: workflowId client: self
+
+  /// Send a signal to a running workflow (Phase 2 stub).
+  ///
+  /// Records the intent but does not yet deliver signals. Full signal
+  /// support will be implemented in Phase 2.
+  ///
+  ///   client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  signal: _workflowId :: String name: _signalName :: String payload: _data =>
+    // Phase 2: will buffer signal and deliver to workflow
+    nil
+
+  /// Query a running workflow's state (Phase 2 stub).
+  ///
+  /// Returns nil in Phase 1. Full query support will be implemented
+  /// in Phase 2 with ActorSnapshot-based query handlers.
+  ///
+  ///   status := client query: "wf-1" name: "getStatus"
+  query: _workflowId :: String name: _queryName :: String =>
+    // Phase 2: will evaluate query handler against workflow snapshot
+    nil
+
+  /// Cancel a running workflow (Phase 3 stub).
+  ///
+  /// Returns nil in Phase 1. Full cancellation with compensation
+  /// will be implemented in Phase 3.
+  ///
+  ///   client cancel: "wf-1"
+  cancel: _workflowId :: String =>
+    // Phase 3: will send cancellation to workflow and trigger compensation
+    nil
+
+  /// List workflow executions matching a filter.
+  ///
+  /// Supported filter keys: #status (Symbol), #workflowType (String).
+  /// Pass an empty dictionary to list all executions.
+  ///
+  ///   client list: #{#status => #running}
+  ///   client list: #{}   // all executions
+  list: filter :: Dictionary => self.eventStore listExecutions: filter
+
+  /// Retrieve a workflow execution by ID (used by WorkflowHandle).
+  ///
+  ///   client getExecution: "wf-1"
+  getExecution: workflowId :: String => self.eventStore getExecution: workflowId
+
+  /// Return the underlying WorkflowEngine (for testing/inspection).
+  engine => self.engine
+
+  /// Return the underlying EventStore (for testing/inspection).
+  eventStore => self.eventStore
+
+  /// Clean up resources (EventStore ETS tables, worker pool).
+  ///
+  ///   client destroy
+  destroy =>
+    self.engine isNil
+      ifFalse: [
+        pool := self.engine activityPool
+        pool isNil ifFalse: [[pool destroy] on: Error do: [:e | nil]]
+      ]
+    self.eventStore isNil
+      ifFalse: [
+        [self.eventStore destroyWithFiles] on: Error do: [:e | nil]
+        [self.eventStore stop] on: Error do: [:e | nil]
+      ]
