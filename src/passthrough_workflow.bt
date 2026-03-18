@@ -1,0 +1,9 @@
+/// Test workflow that returns its input unchanged (BT-1492).
+///
+/// Used by WorkflowEngineTest for simple start/complete lifecycle tests.
+///
+///   engine startWorkflow: PassthroughWorkflow id: "wf-1" args: #("hello")
+Workflow subclass: PassthroughWorkflow
+
+  /// Return input unchanged.
+  run: input ctx: _ctx => input

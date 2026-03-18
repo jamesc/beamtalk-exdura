@@ -1,0 +1,23 @@
+/// Base class for activity definitions.
+///
+/// Activities represent side-effecting operations (HTTP calls, DB writes, etc.)
+/// that execute outside the deterministic workflow context. Subclasses define
+/// class methods that the WorkflowEngine dispatches.
+///
+/// Activities are stateless — all methods are class methods. The engine calls
+/// them directly (no instance is created).
+///
+///   Activity subclass: OrderActivities
+///
+///     class reserveInventory: args :: Dictionary -> Dictionary =>
+///       // Call external inventory service...
+///       #{#status => "reserved"}
+///
+///     class chargePayment: args :: Dictionary -> Dictionary =>
+///       // Call payment gateway...
+///       #{#status => "charged"}
+///
+/// Workflows invoke activities via the WorkflowContext:
+///
+///   ctx runActivity: OrderActivities method: #reserveInventory: with: args
+Object subclass: Activity

@@ -1,0 +1,20 @@
+/// Test activity used by WorkflowEngineTest (BT-1492).
+///
+/// Provides simple class methods for testing activity dispatch and replay.
+///
+///   TestActivities doubleIt: #(5)   // => 10
+Activity subclass: TestActivities
+
+  /// Double the given number.
+  ///
+  ///   TestActivities doubleIt: #(5)   // => 10
+  class doubleIt: args :: List -> Integer =>
+    n := args at: 1
+    n * 2
+
+  /// Add two numbers from a dictionary.
+  ///
+  ///   TestActivities addNumbers: #(#{#a => 3, #b => 4})   // => 7
+  class addNumbers: args :: List -> Integer =>
+    dict := args at: 1
+    (dict at: #a) + (dict at: #b)
