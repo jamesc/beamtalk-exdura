@@ -33,6 +33,12 @@
 ///   payload := ctx waitForSignal: "approve" timeout: 60000
 ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
 ///
+/// Continue-as-new resets the event history for long-running workflows:
+///
+///   nextCursor isNil
+///     ifTrue: ["done"]
+///     ifFalse: [ctx continueAsNew: #(nextCursor)]
+///
 /// Versioning enables safe code changes for in-flight workflows:
 ///
 ///   v := ctx version: "payment-flow" defaultVersion: 2 maxVersion: 2

@@ -569,6 +569,17 @@ Actor subclass: WorkflowContext
     ]
     self drainAndClearSignals
 
+  /// Request continue-as-new: record the event and return a ContinueAsNewRequest.
+  ///
+  /// Records a WorkflowContinuedAsNew event in the history and returns a
+  /// ContinueAsNewRequest sentinel. The WorkflowRunner detects this return
+  /// value and delegates to the engine to create a fresh execution.
+  ///
+  ///   ctx continueAsNew: #("nextCursor")
+  continueAsNew: args :: List =>
+    self.engine recordContinueAsNew: self.workflowId args: args
+    ContinueAsNewRequest new: #{#args => args}
+
   /// Return the version to use for a named code change.
   ///
   /// During first execution, records a VersionMarker event with

@@ -1,0 +1,92 @@
+/// BT-1509: BUnit tests for continue-as-new workflow lifecycle.
+///
+/// Tests that continueAsNew: stops the current execution, marks it as
+/// continued_as_new, starts a fresh execution with the provided args,
+/// and that the new execution has a fresh event history.
+/// Fixture: src/poller_workflow.bt, src/batch_activities.bt
+TestCase subclass: ContinueAsNewTest
+  state: client = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{}
+    self
+
+  tearDown =>
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+
+  // === ContinueAsNewRequest sentinel ===
+  testContinueAsNewRequestIsAValue =>
+    self assert: (ContinueAsNewRequest inheritsFrom: Value)
+
+  testContinueAsNewRequestCarriesArgs =>
+    req := ContinueAsNewRequest new: #{#args => #("next")}
+    self assert: req args equals: #("next")
+
+  // === PollerWorkflow: continue-as-new lifecycle ===
+  testPollerWorkflowCompletesAfterContinueAsNew =>
+    handle := self.client
+      start: PollerWorkflow
+      id: "wf-can-1"
+      args: #("batch-1")
+      taskQueue: "default"
+      options: #{}
+    // batch-1 -> continues as new with "last"
+    // "last" -> activity returns nil nextCursor -> completes with "done"
+    result := handle result: 10000
+    self assert: result equals: "done"
+
+  testContinueAsNewFreshHistory =>
+    handle := self.client
+      start: PollerWorkflow
+      id: "wf-can-3"
+      args: #("batch-1")
+      taskQueue: "default"
+      options: #{}
+    handle result: 10000
+    // After continue-as-new, the history should be from the fresh execution only.
+    // It should contain: WorkflowStarted, ActivityScheduled, ActivityCompleted,
+    // WorkflowCompleted — NOT events from the first execution.
+    events := self.client engine getEventHistory: "wf-can-3"
+    types := events collect: [:e | e eventType]
+    self assert: (types includes: #WorkflowStarted)
+    self assert: (types includes: #ActivityScheduled)
+    self assert: (types includes: #ActivityCompleted)
+    self assert: (types includes: #WorkflowCompleted)
+    // Should NOT contain WorkflowContinuedAsNew (that was in the old history)
+    self deny: (types includes: #WorkflowContinuedAsNew)
+
+  testNewExecutionReceivesArgs =>
+    handle := self.client
+      start: PollerWorkflow
+      id: "wf-can-4"
+      args: #("batch-1")
+      taskQueue: "default"
+      options: #{}
+    handle result: 10000
+    // The new execution's WorkflowStarted event should have the continued args
+    events := self.client engine getEventHistory: "wf-can-4"
+    startEvent := events at: 1
+    payload := startEvent payload
+    // The last execution was started with args: #("last")
+    self assert: (payload at: #args) equals: #("last")
+
+  testFinalExecutionStatusIsCompleted =>
+    handle := self.client
+      start: PollerWorkflow
+      id: "wf-can-5"
+      args: #("batch-1")
+      taskQueue: "default"
+      options: #{}
+    handle result: 10000
+    // After everything completes, the execution status should be #completed
+    exec := self.client getExecution: "wf-can-5"
+    self assert: exec status equals: #completed

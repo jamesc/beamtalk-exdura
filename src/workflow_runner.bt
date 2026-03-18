@@ -53,7 +53,20 @@ Actor subclass: WorkflowRunner
     ]
     // Capture initial snapshot before execution starts
     self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+    // Run the workflow and check for continue-as-new sentinel.
+    // ContinueAsNewRequest is a Value returned by ctx continueAsNew: — it signals
+    // the runner to restart the workflow with fresh history and new args.
     result := self.workflow run: self.input ctx: ctx
-    // Capture final snapshot after workflow completes
-    self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-    self.engine completeWorkflow: self.workflowId result: result
+    (result isKindOf: ContinueAsNewRequest)
+      ifTrue: [
+        // Continue-as-new: delegate to engine to start fresh execution
+        self.engine
+          continueAsNewWorkflow: self.workflowId
+          workflowClass: self.workflow class
+          args: result args
+      ]
+      ifFalse: [
+        // Normal completion
+        self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+        self.engine completeWorkflow: self.workflowId result: result
+      ]
