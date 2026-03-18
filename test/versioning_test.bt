@@ -1,0 +1,202 @@
+/// BT-1510: Workflow versioning API tests.
+///
+/// Validates that version: records a VersionMarker event on first execution
+/// and returns the recorded version on replay — even if the defaultVersion
+/// has changed in new code. This enables safe code changes for in-flight
+/// workflows per SPEC §6.4.
+///
+/// Fixtures: VersionedWorkflowV1, VersionedWorkflowV2, MultiVersionWorkflow.
+TestCase subclass: VersioningTest
+  state: store = nil
+  state: engine = nil
+  state: counterTable = nil
+  state: testDir = "target/bt-test-tmp/versioning"
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.counterTable := [
+      Ets named: #counting_activity_calls
+    ] on: Error do: [:e | Ets new: #counting_activity_calls type: #set]
+    self.counterTable at: #callCount put: 0
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
+    self.counterTable isNil ifFalse: [
+      [self.counterTable delete] on: Error do: [:e | nil]
+    ]
+    self.store := nil
+    self.engine := nil
+    self.counterTable := nil
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+
+  // ── Helpers ──
+
+  /// Read the current call count from the ETS counter table.
+  callCount => (Ets named: #counting_activity_calls) at: #callCount
+
+  /// Reset the call count to zero.
+  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+
+  // ── Tests ──
+
+  /// First execution records a VersionMarker event and returns defaultVersion.
+  testFirstExecutionRecordsVersionMarkerAndReturnsDefault =>
+    self.engine
+      startWorkflow: VersionedWorkflowV1
+      id: "wf-ver-1"
+      args: #("test")
+    Erlang timer sleep: 1000
+
+    // Verify workflow completed
+    exec := self.store getExecution: "wf-ver-1"
+    self assert: exec status equals: #completed
+
+    // Check that a VersionMarker event was recorded
+    events := self.store readEvents: "wf-ver-1" fromSeq: 1
+    markerEvents := events select: [:e | e eventType =:= #VersionMarker]
+    self assert: markerEvents size equals: 1
+
+    // Verify marker payload
+    marker := markerEvents at: 1
+    self assert: (marker payload at: #name) equals: "payment-flow"
+    self assert: (marker payload at: #version) equals: 1
+
+    // Verify workflow result used version 1 path
+    self assert: exec result equals: "v1-result"
+
+  /// Replay returns the recorded version, not the current defaultVersion.
+  testReplayReturnsRecordedVersionNotCurrentDefault =>
+    // Step 1: Run workflow with defaultVersion 1
+    self.engine
+      startWorkflow: VersionedWorkflowV1
+      id: "wf-ver-2"
+      args: #("test")
+    Erlang timer sleep: 1000
+
+    exec := self.store getExecution: "wf-ver-2"
+    self assert: exec status equals: #completed
+    self assert: exec result equals: "v1-result"
+
+    // Step 2: Replay with VersionedWorkflowV2 (defaultVersion changed to 2)
+    // The replay should still use version 1 from the recorded history
+    self resetCallCount
+    replayHistory := self.store readEvents: "wf-ver-2" fromSeq: 1
+    workflow := VersionedWorkflowV2 new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-ver-2",
+        #input => "test",
+        #history => replayHistory
+      }
+    runner go!
+    Erlang timer sleep: 1000
+
+    // The replayed workflow should produce v1-result (original version)
+    // because the VersionMarker in history recorded version 1
+    eventsAfter := self.store readEvents: "wf-ver-2" fromSeq: 1
+    lastEvent := eventsAfter at: eventsAfter size
+    replayResult := lastEvent payload at: #result
+    self assert: replayResult equals: "v1-result"
+
+  /// Multiple version markers with different names coexist.
+  testMultipleVersionMarkersCoexist =>
+    self.engine
+      startWorkflow: MultiVersionWorkflow
+      id: "wf-ver-3"
+      args: #("test")
+    Erlang timer sleep: 1000
+
+    exec := self.store getExecution: "wf-ver-3"
+    self assert: exec status equals: #completed
+
+    // Check that two VersionMarker events were recorded
+    events := self.store readEvents: "wf-ver-3" fromSeq: 1
+    markerEvents := events select: [:e | e eventType =:= #VersionMarker]
+    self assert: markerEvents size equals: 2
+
+    // Verify each marker has a different name
+    names := markerEvents collect: [:e | e payload at: #name]
+    self assert: (names includes: "payment-flow")
+    self assert: (names includes: "notification-flow")
+
+    // Verify result reflects both version paths
+    self assert: exec result equals: "pay-v1:notify-v2"
+
+  /// Version branching pattern from SPEC section 6.4.
+  testVersionBranchingPattern =>
+    // Run with V1 workflow (defaultVersion: 1)
+    self.engine
+      startWorkflow: VersionedWorkflowV1
+      id: "wf-branch-1"
+      args: #("order-1")
+    Erlang timer sleep: 1000
+
+    exec1 := self.store getExecution: "wf-branch-1"
+    self assert: exec1 result equals: "v1-result"
+
+    // Run a NEW workflow with V2 workflow (defaultVersion: 2)
+    self.engine
+      startWorkflow: VersionedWorkflowV2
+      id: "wf-branch-2"
+      args: #("order-2")
+    Erlang timer sleep: 1000
+
+    exec2 := self.store getExecution: "wf-branch-2"
+    self assert: exec2 result equals: "v2-result"
+
+  /// Replay with changed defaultVersion returns original version.
+  testReplayWithChangedDefaultReturnsOriginal =>
+    // Step 1: Original execution with defaultVersion 1
+    self.engine
+      startWorkflow: VersionedWorkflowV1
+      id: "wf-ver-replay"
+      args: #("data")
+    Erlang timer sleep: 1000
+
+    originalExec := self.store getExecution: "wf-ver-replay"
+    self assert: originalExec result equals: "v1-result"
+
+    // Step 2: Get the history (contains VersionMarker with version=1)
+    replayHistory := self.store readEvents: "wf-ver-replay" fromSeq: 1
+
+    // Verify the VersionMarker is in the history
+    markers := replayHistory select: [:e | e eventType =:= #VersionMarker]
+    self assert: markers size equals: 1
+    self assert: ((markers at: 1) payload at: #version) equals: 1
+
+    // Step 3: Replay with V2 workflow (defaultVersion changed to 2)
+    self resetCallCount
+    workflow := VersionedWorkflowV2 new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self.engine,
+        #workflowId => "wf-ver-replay",
+        #input => "data",
+        #history => replayHistory
+      }
+    runner go!
+    Erlang timer sleep: 1000
+
+    // The replay should return v1-result because version 1 was recorded
+    eventsAfter := self.store readEvents: "wf-ver-replay" fromSeq: 1
+    lastEvent := eventsAfter at: eventsAfter size
+    replayResult := lastEvent payload at: #result
+    self assert: replayResult equals: "v1-result"

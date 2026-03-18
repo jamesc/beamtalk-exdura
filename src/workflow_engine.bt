@@ -484,6 +484,23 @@ Actor subclass: WorkflowEngine
   getSnapshot: workflowId :: String =>
     self.workflowSnapshots at: workflowId ifAbsent: [nil]
 
+  /// Record a VersionMarker event for a workflow.
+  ///
+  /// Stores the version name and selected version in the event history.
+  /// Called by WorkflowContext during first execution of a version: call.
+  ///
+  ///   engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
+  recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String =>
+    now := Erlang os system_time: #second
+    markerEvent := ExduraEvent
+      new: #{
+        #eventType => #VersionMarker,
+        #timestamp => now,
+        #payload => #{#name => name, #version => selectedVersion}
+      }
+    self.eventStore appendEvents: workflowId events: #(markerEvent)
+    nil
+
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
 

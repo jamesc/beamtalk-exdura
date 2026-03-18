@@ -33,6 +33,13 @@
 ///   payload := ctx waitForSignal: "approve" timeout: 60000
 ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
 ///
+/// Versioning enables safe code changes for in-flight workflows:
+///
+///   v := ctx version: "payment-flow" defaultVersion: 2 maxVersion: 2
+///   v == 1
+///     ifTrue: [ctx runActivity: PaymentActivities method: #chargeV1: with: #(orderId)]
+///     ifFalse: [ctx runActivity: PaymentActivities method: #chargeV2: with: #(orderId)]
+///
 /// Query handlers are registered in `registerQueries:` and receive an
 /// ActorSnapshot proxy as their argument. Workflow state visible to
 /// queries is managed through the context's setState:to: method:
