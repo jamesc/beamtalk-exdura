@@ -149,21 +149,6 @@ Actor subclass: EventStore
   eventFilePath: workflowId :: String =>
     self.dataDir ++ "/events/{workflowId}.etf"
 
-  // --- Private: ETF serialization ---
-
-  /// Serialize an ExduraEvent to an ETF-encoded binary (dictionary form).
-  serializeEvent: event :: ExduraEvent =>
-    dict := #{
-      #eventId => event eventId,
-      #eventType => event eventType,
-      #timestamp => event timestamp,
-      #payload => event payload
-    }
-    Erlang erlang term_to_binary: dict
-
-  /// Deserialize an ETF-encoded dictionary back to an ExduraEvent.
-  deserializeEvent: dict :: Dictionary => ExduraEvent new: dict
-
   // --- Private: File I/O ---
 
   /// Append ETF-encoded events to the workflow's event file.
@@ -183,9 +168,14 @@ Actor subclass: EventStore
           }
       ]
     combined := Erlang erlang iolist_to_binary: bins
-    // Append to file (create if missing)
+    // Append to file (create if missing); ensure fd is closed even on write error
     {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
-    Erlang file write: fd with: combined
+    [Erlang file write: fd with: combined]
+      on: Error
+      do: [:e |
+        Erlang file close: fd
+        self error: "Failed to write events for {workflowId}: " ++ e printString
+      ]
     Erlang file close: fd
 
   /// Scan the events directory and reload all event histories into ETS.
@@ -198,7 +188,7 @@ Actor subclass: EventStore
     files := result unwrap
     // Collect workflow IDs from .etf filenames
     @expect type
-    etfFiles := files select: [:f | f includesSubstring: ".etf"]
+    etfFiles := files select: [:f | f endsWith: ".etf"]
     wfIds := etfFiles collect: [:f | f take: f size - 4]
     // Load each workflow's events from disk into ETS
     // Bind evDir and eventsTable locally to avoid self-capture in do: block
