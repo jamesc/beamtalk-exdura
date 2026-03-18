@@ -107,6 +107,18 @@ whether code is correct, evaluate it directly rather than inferring from source.
 - Parameters: `createExecution: execution :: WorkflowExecution =>`
 - Return types: `count -> Integer => self.count`
 - Nullable fields with `= nil` may omit the type if genuinely untyped
+- **Always add doc comments** (`///`) on all classes and meaningful methods, with examples
+- Class-level: describe purpose, responsibility, and key invariants
+- Method-level: describe behavior, params, return value, and include a usage example
+- Example:
+  ```beamtalk
+  /// Append events to a workflow's history, auto-assigning eventIds.
+  ///
+  ///   store appendEvents: "wf-1" events: #(ExduraEvent new)
+  ///   // => #(ExduraEvent(eventId: 1, ...))
+  appendEvents: workflowId :: String events: newEvents :: List =>
+  ```
+- **Always run `beamtalk fmt` before committing** — CI enforces `beamtalk fmt-check`
 
 ## Essential Patterns
 
