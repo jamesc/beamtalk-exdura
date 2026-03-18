@@ -414,6 +414,81 @@ Actor subclass: WorkflowContext
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     nil
 
+  /// Start a child workflow and return a ChildWorkflowHandle.
+  ///
+  /// During replay, checks for a ChildWorkflowStarted + ChildWorkflowCompleted
+  /// event pair at the current cursor position. If found, returns a handle
+  /// with the cached result. Otherwise transitions to live execution and
+  /// dispatches via the engine.
+  ///
+  ///   handle := ctx startChildWorkflow: ProcessItem
+  ///     method: #run: with: #("data")
+  startChildWorkflow: workflowClass method: selector with: args =>
+    self
+      startChildWorkflow: workflowClass
+      method: selector
+      with: args
+      options: #{}
+
+  /// Start a child workflow with options, or return cached result during replay.
+  ///
+  /// Options may include:
+  ///   #parentClosePolicy — #terminate (default), #requestCancel, or #abandon
+  ///
+  ///   handle := ctx startChildWorkflow: ProcessItem
+  ///     method: #run: with: #("data")
+  ///     options: #{#parentClosePolicy => #abandon}
+  startChildWorkflow: workflowClass method: _selector with: args options: options =>
+    // Try replay: check for ChildWorkflowStarted + ChildWorkflowCompleted pair
+    self.isReplaying
+      ifTrue: [
+        skippable := WorkflowContext countSkippableEventsFrom: self.replayCursor + 1 history: self.eventHistory
+        startedIdx := self.replayCursor + skippable + 1
+        completedIdx := startedIdx + 1
+        completedIdx <= self.eventHistory size
+          ifTrue: [
+            startedEvent := self.eventHistory at: startedIdx
+            completedEvent := self.eventHistory at: completedIdx
+            isStarted := startedEvent eventType =:= #ChildWorkflowStarted
+            isCompleted := completedEvent eventType =:= #ChildWorkflowCompleted
+            (isStarted and: [isCompleted])
+              ifTrue: [
+                // Consume replay: advance cursor past Started+Completed
+                self.replayCursor := completedIdx
+                // Safe point: collect consecutive SignalReceived/StateSnapshot events
+                replaySignals := WorkflowContext collectReplaySignalsFrom: completedIdx + 1 history: self.eventHistory
+                skipCount := WorkflowContext countSkippableEventsFrom: completedIdx + 1 history: self.eventHistory
+                self.replayCursor := completedIdx + skipCount
+                self.deliveredSignals := self.deliveredSignals ++ replaySignals
+                // Safe point: capture workflow snapshot for queries
+                self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+                // Return a handle with the cached result
+                childId := startedEvent payload at: #childWorkflowId
+                cachedResult := completedEvent payload at: #result
+                ^ChildWorkflowHandle forReplay: childId result: cachedResult
+              ]
+          ]
+      ]
+    // No replay match — transition to live execution
+    self.isReplaying := false
+    // Generate a child workflow ID
+    childId := self.workflowId ++ "-child-" ++ (self.replayCursor + 1) asString
+    handle := self.engine
+      startChildWorkflow: workflowClass
+      id: childId
+      args: args
+      parentWorkflowId: self.workflowId
+      options: options
+    self.replayCursor := self.replayCursor + 1
+    // Safe point: drain buffered signals from the engine
+    signals := self.engine drainSignals: self.workflowId
+    signals size > 0 ifTrue: [
+      self.deliveredSignals := self.deliveredSignals ++ signals
+    ]
+    // Safe point: capture workflow snapshot for queries
+    self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    handle
+
   /// Block until a signal with the given name arrives or timeout expires.
   ///
   /// Repeatedly drains signals from the engine, processes registered handlers,

@@ -1,0 +1,91 @@
+/// Handle to a child workflow execution, returned by ctx startChildWorkflow:.
+///
+/// Provides a `result` method that blocks until the child workflow completes
+/// and returns its result. The handle polls the engine's EventStore for
+/// completion status.
+///
+/// Unlike WorkflowHandle (which uses ExduraClient), ChildWorkflowHandle
+/// works directly with the WorkflowEngine and EventStore, since child
+/// workflows are managed within the engine process.
+///
+///   handle := ChildWorkflowHandle
+///     for: "child-wf-1" engine: engine eventStore: store
+///   result := handle result          // blocks until child completes
+///   result := handle result: 5000    // blocks with 5s timeout
+Value subclass: ChildWorkflowHandle
+  state: childWorkflowId :: String = ""
+  state: engine = nil
+  state: eventStore = nil
+  state: cachedResult = nil
+  state: hasCachedResult :: Boolean = false
+
+  /// Create a new ChildWorkflowHandle for the given child workflow.
+  ///
+  ///   ChildWorkflowHandle for: "child-1" engine: eng eventStore: store
+  class for: childWorkflowId :: String engine: anEngine eventStore: aStore =>
+    self
+      new: #{
+        #childWorkflowId => childWorkflowId,
+        #engine => anEngine,
+        #eventStore => aStore
+      }
+
+  /// Create a handle with a pre-cached result (used during replay).
+  ///
+  ///   ChildWorkflowHandle forReplay: "child-1" result: 42
+  class forReplay: childWorkflowId :: String result: aResult =>
+    self
+      new: #{
+        #childWorkflowId => childWorkflowId,
+        #cachedResult => aResult,
+        #hasCachedResult => true
+      }
+
+  /// Block until the child workflow completes and return the result.
+  ///
+  /// If the handle was created during replay with a cached result,
+  /// returns immediately. Otherwise polls the EventStore every 100ms.
+  ///
+  ///   result := handle result
+  result =>
+    self hasCachedResult ifTrue: [^self cachedResult]
+    [true]
+      whileTrue: [
+        exec := self eventStore getExecution: self childWorkflowId
+        exec isNil
+          ifFalse: [
+            exec status =:= #completed ifTrue: [^exec result]
+            exec status =:= #failed ifTrue: [
+              self error: "Child workflow failed: {exec result}"
+            ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Child workflow cancelled: {self childWorkflowId}"
+            ]
+          ]
+        Timer sleep: 100
+      ]
+
+  /// Block until the child workflow completes or the timeout (ms) expires.
+  ///
+  ///   result := handle result: 5000
+  result: timeout :: Integer =>
+    self hasCachedResult ifTrue: [^self cachedResult]
+    deadline := (Erlang os system_time: #millisecond) + timeout
+    [true]
+      whileTrue: [
+        exec := self eventStore getExecution: self childWorkflowId
+        exec isNil
+          ifFalse: [
+            exec status =:= #completed ifTrue: [^exec result]
+            exec status =:= #failed ifTrue: [
+              self error: "Child workflow failed: {exec result}"
+            ]
+            exec status =:= #cancelled ifTrue: [
+              self error: "Child workflow cancelled: {self childWorkflowId}"
+            ]
+          ]
+        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+          self error: "Child workflow result timed out after {timeout}ms"
+        ]
+        Timer sleep: 100
+      ]

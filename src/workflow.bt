@@ -2,7 +2,7 @@
 ///
 /// Workflows are simple Objects that define a `run:ctx:` method. The `ctx`
 /// parameter is a WorkflowContext that provides activity dispatch, replay,
-/// and signal handling.
+/// signal handling, and child workflow support.
 /// No Actor — no inherited state issues.
 ///
 /// Activity dispatch supports options for retry and timeouts:
@@ -32,6 +32,12 @@
 ///
 ///   payload := ctx waitForSignal: "approve" timeout: 60000
 ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+///
+/// Child workflows enable decomposition. Each child has its own event
+/// history and lifecycle:
+///
+///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #(item)
+///   result := handle result   // blocks until child completes
 ///
 /// Continue-as-new resets the event history for long-running workflows:
 ///
@@ -64,7 +70,8 @@ Object subclass: Workflow
   /// Subclass hook — override this with workflow logic.
   /// ctx is a WorkflowContext that provides runActivity:method:with:,
   /// runActivity:method:with:options:, sleep:, onSignal:do:,
-  /// waitForSignal:timeout:, waitForCondition:timeout:, and setState:to:.
+  /// waitForSignal:timeout:, waitForCondition:timeout:, setState:to:,
+  /// startChildWorkflow:method:with:, and startChildWorkflow:method:with:options:.
   run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"
 
   /// Subclass hook — register query handlers via the context.

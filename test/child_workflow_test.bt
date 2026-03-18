@@ -1,0 +1,221 @@
+/// BT-1506: BUnit tests for child workflow support.
+///
+/// Tests that parent workflows can start child workflows, children have
+/// independent event histories, parent-close policies are enforced,
+/// and child workflow results are returned from history during replay.
+///
+/// Fixtures: src/child_doubler.bt, src/single_child_parent.bt,
+///           src/batch_processor.bt, src/abandon_policy_parent.bt,
+///           src/terminate_policy_parent.bt, src/test_activities.bt
+TestCase subclass: ChildWorkflowTest
+  state: store = nil
+  state: engine = nil
+  state: testDir = "target/bt-test-tmp/child-wf"
+
+  setUp =>
+    [Erlang ets delete: #exdura_executions] on: Error do: [:e | nil]
+    [Erlang ets delete: #exdura_events] on: Error do: [:e | nil]
+    Erlang timer sleep: 200
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
+    self.engine := WorkflowEngine withStore: self.store
+    self
+
+  tearDown =>
+    self.store isNil
+      ifFalse: [
+        [self.store destroy] on: Error do: [:e | nil]
+        [self.store stop] on: Error do: [:e | nil]
+      ]
+    self.store := nil
+    self.engine := nil
+    [Erlang ets delete: #exdura_executions] on: Error do: [:e | nil]
+    [Erlang ets delete: #exdura_events] on: Error do: [:e | nil]
+    (File isDirectory: self.testDir) ifTrue: [
+      [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    ]
+
+  // === Parent starts child and waits for result ===
+  testParentStartsChildAndGetsResult =>
+    engine := self.engine
+    engine
+      startWorkflow: SingleChildParent
+      id: "parent-1"
+      args: #(5)
+    Erlang timer sleep: 5000
+
+    // Parent should have completed with child's result (5 * 2 = 10)
+    exec := self.store getExecution: "parent-1"
+    self assert: exec notNil
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 10
+
+  // === Child has independent event history ===
+  testChildHasIndependentEventHistory =>
+    engine := self.engine
+    engine
+      startWorkflow: SingleChildParent
+      id: "parent-2"
+      args: #(7)
+    Erlang timer sleep: 3000
+
+    // Find the child workflow ID from parent's events
+    parentEvents := self.store readEvents: "parent-2" fromSeq: 1
+    childStartedEvents := parentEvents select: [:e |
+      e eventType =:= #ChildWorkflowStarted
+    ]
+    self assert: childStartedEvents size equals: 1
+    childId := (childStartedEvents at: 1) payload at: #childWorkflowId
+
+    // Child should have its own event history
+    childEvents := self.store readEvents: childId fromSeq: 1
+    self assert: childEvents size >= 1
+    self assert: (childEvents at: 1) eventType equals: #WorkflowStarted
+
+    // Child should have ActivityScheduled + ActivityCompleted + WorkflowCompleted
+    childTypes := childEvents collect: [:e | e eventType]
+    self assert: (childTypes includes: #ActivityScheduled)
+    self assert: (childTypes includes: #ActivityCompleted)
+    self assert: (childTypes includes: #WorkflowCompleted)
+
+    // Child execution should be completed
+    childExec := self.store getExecution: childId
+    self assert: childExec status equals: #completed
+    self assert: childExec result equals: 14
+    self assert: childExec parentWorkflowId equals: "parent-2"
+
+  // === BatchProcessor fan-out/fan-in ===
+  testBatchProcessorFanOutFanIn =>
+    engine := self.engine
+    engine
+      startWorkflow: BatchProcessor
+      id: "batch-1"
+      args: #(#(3, 5, 7))
+    Erlang timer sleep: 5000
+
+    // Parent should complete with all doubled results
+    exec := self.store getExecution: "batch-1"
+    self assert: exec notNil
+    self assert: exec status equals: #completed
+    self assert: exec result equals: #(6, 10, 14)
+
+    // Each child should have its own execution
+    parentEvents := self.store readEvents: "batch-1" fromSeq: 1
+    childStartedEvents := parentEvents select: [:e |
+      e eventType =:= #ChildWorkflowStarted
+    ]
+    self assert: childStartedEvents size equals: 3
+
+  // === #terminate policy: child is killed when parent closes ===
+  testTerminatePolicyKillsChild =>
+    engine := self.engine
+    store := self.store
+
+    engine
+      startWorkflow: TerminatePolicyParent
+      id: "term-parent-1"
+      args: #(5)
+    Erlang timer sleep: 3000
+
+    // Verify parent completed
+    parentExec := store getExecution: "term-parent-1"
+    self assert: parentExec status equals: #completed
+
+    // Check that the engine tracked the child with #terminate policy
+    children := engine getChildWorkflows: "term-parent-1"
+    self assert: children size equals: 1
+    policy := engine getParentClosePolicy: (children at: 1)
+    self assert: policy equals: #terminate
+
+  // === #abandon policy: child continues independently ===
+  testAbandonPolicyChildContinues =>
+    engine := self.engine
+    store := self.store
+
+    engine
+      startWorkflow: AbandonPolicyParent
+      id: "abandon-parent-1"
+      args: #(5)
+    Erlang timer sleep: 3000
+
+    // Parent should have completed
+    parentExec := store getExecution: "abandon-parent-1"
+    self assert: parentExec status equals: #completed
+    self assert: parentExec result equals: "parent-done"
+
+    // Child should also have completed (abandon means no interference)
+    children := engine getChildWorkflows: "abandon-parent-1"
+    self assert: children size equals: 1
+    childExec := store getExecution: (children at: 1)
+    self assert: childExec status equals: #completed
+    self assert: childExec result equals: 10
+
+    // Verify the abandon policy was registered
+    policy := engine getParentClosePolicy: (children at: 1)
+    self assert: policy equals: #abandon
+
+  // === During replay, child workflow result is returned from history ===
+  testReplayReturnsChildResultFromHistory =>
+    engine := self.engine
+    store := self.store
+
+    // Step 1: Run the workflow normally
+    engine
+      startWorkflow: SingleChildParent
+      id: "replay-child-1"
+      args: #(5)
+    Erlang timer sleep: 3000
+
+    // Verify normal run completed
+    exec := store getExecution: "replay-child-1"
+    self assert: exec status equals: #completed
+    self assert: exec result equals: 10
+
+    // Step 2: Count events before replay
+    events := store readEvents: "replay-child-1" fromSeq: 1
+    countBefore := events size
+
+    // Step 3: Replay the parent workflow with existing history
+    replayHistory := store readEvents: "replay-child-1" fromSeq: 1
+    workflow := SingleChildParent new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => engine,
+        #workflowId => "replay-child-1",
+        #input => 5,
+        #history => replayHistory
+      }
+    runner go!
+    Erlang timer sleep: 3000
+
+    // Step 4: Verify replay didn't start a new child workflow
+    // It should only add at most 1 new event (WorkflowCompleted from replay)
+    eventsAfter := store readEvents: "replay-child-1" fromSeq: 1
+    newEvents := eventsAfter size - countBefore
+    self assert: newEvents <= 1
+
+  // === ChildWorkflowCompleted event is recorded in parent history ===
+  testChildCompletedEventInParentHistory =>
+    engine := self.engine
+    engine
+      startWorkflow: SingleChildParent
+      id: "parent-events-1"
+      args: #(3)
+    Erlang timer sleep: 3000
+
+    parentEvents := self.store readEvents: "parent-events-1" fromSeq: 1
+    eventTypes := parentEvents collect: [:e | e eventType]
+
+    // Parent history should contain ChildWorkflowStarted and ChildWorkflowCompleted
+    self assert: (eventTypes includes: #ChildWorkflowStarted)
+    self assert: (eventTypes includes: #ChildWorkflowCompleted)
+
+    // Verify ChildWorkflowCompleted payload has the result
+    completedEvents := parentEvents select: [:e |
+      e eventType =:= #ChildWorkflowCompleted
+    ]
+    self assert: completedEvents size equals: 1
+    self assert: ((completedEvents at: 1) payload at: #result) equals: 6

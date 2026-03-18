@@ -1,0 +1,14 @@
+/// Test fixture: parent workflow that starts a single child and returns its result.
+///
+/// Used by ChildWorkflowTest to verify parent-child workflow execution.
+///
+///   engine startWorkflow: SingleChildParent id: "p-1" args: #(5)
+///   // starts ChildDoubler, returns 10
+Workflow subclass: SingleChildParent
+
+  run: value ctx: ctx -> Integer =>
+    handle := ctx
+      startChildWorkflow: ChildDoubler
+      method: #run:
+      with: #(value)
+    handle result

@@ -19,6 +19,8 @@ Actor subclass: WorkflowEngine
   state: signalBuffers :: Dictionary = #{}
   state: workflowSnapshots :: Dictionary = #{}
   state: workflowQueryHandlers :: Dictionary = #{}
+  state: childWorkflows :: Dictionary = #{}
+  state: parentClosePolicy :: Dictionary = #{}
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
@@ -378,6 +380,13 @@ Actor subclass: WorkflowEngine
 
   /// Record a WorkflowCompleted event and update execution status.
   ///
+  /// If this workflow has a parent, records a ChildWorkflowCompleted event
+  /// in the parent's history. Enforces parent-close policies on any child
+  /// workflows of this workflow.
+  ///
+  /// All logic is inlined to avoid self-send deadlock (Actor self-sends
+  /// re-enter the mailbox and deadlock while processing the current message).
+  ///
   ///   engine completeWorkflow: "wf-1" result: 42
   completeWorkflow: workflowId result: result =>
     now := Erlang os system_time: #second
@@ -392,8 +401,54 @@ Actor subclass: WorkflowEngine
       updateExecution: workflowId
       status: #completed
       result: result
+    // Inline: if this is a child workflow, record completion in parent's history
+    exec := self.eventStore getExecution: workflowId
+    (exec isNil not and: [exec parentWorkflowId isNil not])
+      ifTrue: [
+        parentId := exec parentWorkflowId
+        childCompletedEvent := ExduraEvent
+          new: #{
+            #eventType => #ChildWorkflowCompleted,
+            #timestamp => now,
+            #payload => #{#childWorkflowId => workflowId, #result => result}
+          }
+        self.eventStore appendEvents: parentId events: #(childCompletedEvent)
+      ]
+    // Inline: enforce parent-close policies on our children
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self.eventStore
+    policies := self.parentClosePolicy
+    toTerminate := children
+      select: [:childId |
+        childExec := store getExecution: childId
+        isRunning := childExec isNil not and: [childExec status =:= #running]
+        policy := policies at: childId ifAbsent: [#terminate]
+        isRunning and: [policy =:= #terminate]
+      ]
+    // Inline termination: record failed events for each child to terminate
+    toTerminate
+      do: [:childId |
+        failNow := Erlang os system_time: #second
+        childFailEvent := ExduraEvent
+          new: #{
+            #eventType => #WorkflowFailed,
+            #timestamp => failNow,
+            #payload => #{#error => "Parent workflow closed"}
+          }
+        store appendEvents: childId events: #(childFailEvent)
+        store
+          updateExecution: childId
+          status: #failed
+          result: "Parent workflow closed"
+      ]
 
   /// Record a WorkflowFailed event and update execution status.
+  ///
+  /// If this workflow has a parent, records a ChildWorkflowFailed event
+  /// in the parent's history. Enforces parent-close policies on any child
+  /// workflows of this workflow.
+  ///
+  /// All logic is inlined to avoid self-send deadlock.
   ///
   ///   engine failWorkflow: "wf-1" reason: "something went wrong"
   failWorkflow: workflowId reason: reason =>
@@ -409,6 +464,46 @@ Actor subclass: WorkflowEngine
       updateExecution: workflowId
       status: #failed
       result: reason
+    // Inline: if this is a child workflow, record failure in parent's history
+    exec := self.eventStore getExecution: workflowId
+    (exec isNil not and: [exec parentWorkflowId isNil not])
+      ifTrue: [
+        parentId := exec parentWorkflowId
+        childFailedEvent := ExduraEvent
+          new: #{
+            #eventType => #ChildWorkflowFailed,
+            #timestamp => now,
+            #payload => #{#childWorkflowId => workflowId, #error => reason}
+          }
+        self.eventStore appendEvents: parentId events: #(childFailedEvent)
+      ]
+    // Inline: enforce parent-close policies on our children
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self.eventStore
+    policies := self.parentClosePolicy
+    toTerminate := children
+      select: [:childId |
+        childExec := store getExecution: childId
+        isRunning := childExec isNil not and: [childExec status =:= #running]
+        policy := policies at: childId ifAbsent: [#terminate]
+        isRunning and: [policy =:= #terminate]
+      ]
+    // Inline termination: record failed events for each child to terminate
+    toTerminate
+      do: [:childId |
+        failNow := Erlang os system_time: #second
+        childFailEvent := ExduraEvent
+          new: #{
+            #eventType => #WorkflowFailed,
+            #timestamp => failNow,
+            #payload => #{#error => "Parent workflow closed"}
+          }
+        store appendEvents: childId events: #(childFailEvent)
+        store
+          updateExecution: childId
+          status: #failed
+          result: "Parent workflow closed"
+      ]
 
   /// Save a state snapshot for a workflow at the given eventId.
   ///
@@ -483,6 +578,101 @@ Actor subclass: WorkflowEngine
   ///   engine getSnapshot: "wf-1"
   getSnapshot: workflowId :: String =>
     self.workflowSnapshots at: workflowId ifAbsent: [nil]
+
+  /// Start a child workflow and return a ChildWorkflowHandle.
+  ///
+  /// Creates a new workflow execution with a parentWorkflowId reference,
+  /// records ChildWorkflowStarted in the parent's event history, and
+  /// launches the child workflow asynchronously. The child has its own
+  /// independent event history.
+  ///
+  /// Options may include:
+  ///   #parentClosePolicy — #terminate (default), #requestCancel, or #abandon
+  ///
+  ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
+  ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
+  startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary =>
+    now := Erlang os system_time: #second
+    wfType := workflowClass name asString
+    policy := options at: #parentClosePolicy ifAbsent: [#terminate]
+
+    // Record ChildWorkflowStarted event in parent's history
+    startedEvent := ExduraEvent
+      new: #{
+        #eventType => #ChildWorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #childWorkflowId => childWorkflowId,
+          #workflowType => wfType,
+          #args => args,
+          #parentClosePolicy => policy
+        }
+      }
+    self.eventStore appendEvents: parentId events: #(startedEvent)
+
+    // Track parent-child relationship
+    existing := self.childWorkflows at: parentId ifAbsent: [#()]
+    self.childWorkflows := self.childWorkflows at: parentId put: (existing ++ #(childWorkflowId))
+    self.parentClosePolicy := self.parentClosePolicy at: childWorkflowId put: policy
+
+    // Create child execution with parentWorkflowId
+    execution := WorkflowExecution
+      new: #{
+        #workflowId => childWorkflowId,
+        #runId => childWorkflowId,
+        #workflowType => wfType,
+        #taskQueue => "default",
+        #args => args,
+        #status => #running,
+        #parentWorkflowId => parentId,
+        #startedAt => now
+      }
+    self.eventStore createExecution: execution
+
+    // Record WorkflowStarted event in child's own history
+    childStartEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowStarted,
+        #timestamp => now,
+        #payload => #{
+          #workflowId => childWorkflowId,
+          #workflowType => wfType,
+          #args => args
+        }
+      }
+    self.eventStore appendEvents: childWorkflowId events: #(childStartEvent)
+
+    // Load child's event history and launch asynchronously
+    history := self.eventStore readEvents: childWorkflowId fromSeq: 1
+    input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
+    workflow := workflowClass new
+    runner := WorkflowRunner
+      spawnWith: #{
+        #workflow => workflow,
+        #engine => self,
+        #workflowId => childWorkflowId,
+        #input => input,
+        #history => history
+      }
+    runner go!
+
+    // Return a handle for the caller to wait on
+    ChildWorkflowHandle
+      for: childWorkflowId
+      engine: self
+      eventStore: self.eventStore
+
+  /// Return the list of child workflow IDs for a parent (for testing).
+  ///
+  ///   engine getChildWorkflows: "parent-1"
+  getChildWorkflows: parentId :: String =>
+    self.childWorkflows at: parentId ifAbsent: [#()]
+
+  /// Return the parent-close policy for a child workflow (for testing).
+  ///
+  ///   engine getParentClosePolicy: "child-1"
+  getParentClosePolicy: childWorkflowId :: String =>
+    self.parentClosePolicy at: childWorkflowId ifAbsent: [#terminate]
 
   /// Record a WorkflowContinuedAsNew event in the history.
   ///
