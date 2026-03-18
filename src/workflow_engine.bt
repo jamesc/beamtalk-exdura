@@ -40,6 +40,8 @@ Actor subclass: WorkflowEngine
     eng
 
   /// Initialize engine with an EventStore and optional ActivityWorkerPool.
+  /// Called by withStore: for standalone use. When started under the
+  /// supervisor via withArgs:, eventStore/activityPool are set by spawnWith:.
   initWithStore: aStore pool: aPool =>
     self.eventStore := aStore
     self.activityPool := aPool

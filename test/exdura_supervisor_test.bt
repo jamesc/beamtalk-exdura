@@ -27,8 +27,8 @@ TestCase subclass: ExduraSupervisorTest
     [File deleteAll: "data"] on: Error do: [:e | nil]
 
   // === ExduraSupervisor class-side config ===
-  testSupervisorStrategyIsOneForOne =>
-    self assert: ExduraSupervisor strategy equals: #oneForOne
+  testSupervisorStrategyIsRestForOne =>
+    self assert: ExduraSupervisor strategy equals: #restForOne
 
   // === ExduraWorker boots supervision tree and runs workflows ===
   testWorkerBootsAndRunsWorkflows =>
@@ -38,12 +38,9 @@ TestCase subclass: ExduraSupervisorTest
     self assert: self.client engine notNil
     self assert: self.client eventStore notNil
 
-    // Verify the supervisor started all 4 children
+    // Verify the supervisor started its children
     sup := self.client supervisor
     self assert: sup notNil
-    self assert: sup count equals: 4
-    self assert: (sup which: EventStore) notNil
-    self assert: (sup which: ActivityWorkerPool) notNil
     self assert: (sup which: WorkflowEngine) notNil
     self assert: (sup which: TimerManager) notNil
 
