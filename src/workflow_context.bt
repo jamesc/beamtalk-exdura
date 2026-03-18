@@ -33,7 +33,7 @@ Actor subclass: WorkflowContext
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
   runActivity: activityClass method: selector with: args =>
     canReplay := self canReplayHere
-    canReplay ifTrue: [^(self consumeReplay)]
+    canReplay ifTrue: [^self consumeReplay]
     self.isReplaying := false
     result := self.engine
       scheduleActivity: activityClass
