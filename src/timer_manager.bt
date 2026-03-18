@@ -1,16 +1,106 @@
-/// Placeholder Actor for timer management (Phase 2).
+/// Manages pending durable timers and re-arms them on startup.
 ///
-/// TimerManager will coordinate durable timers for workflow sleep and
-/// timeout operations. In Phase 1, timers use direct Timer sleep: calls.
-/// This placeholder ensures the supervision tree has the correct shape
-/// for Phase 2 integration.
+/// TimerManager scans workflow event histories for unresolved timers
+/// (TimerStarted without a matching TimerFired) and reconstructs them
+/// via the WorkflowEngine. This ensures timers survive process restarts.
 ///
 ///   manager := TimerManager spawn
-///   manager status   // => #ready
+///   manager initWith: engine eventStore: store
+///   manager reconstructPendingTimers: #("wf-1", "wf-2")
 Actor subclass: TimerManager
+  state: engine = nil
+  state: eventStore = nil
   state: status :: Symbol = #ready
+  state: pendingCount :: Integer = 0
+
+  /// Find unresolved timers in an event history.
+  ///
+  /// Returns a list of dictionaries with #duration and #fireAt for each
+  /// TimerStarted event that has no matching TimerFired.
+  ///
+  ///   TimerManager findPendingTimers: events
+  ///   // => #(#{#duration => 5000, #fireAt => 1710000005000})
+  class findPendingTimers: events :: List -> List =>
+    // Count TimerStarted and TimerFired events.
+    // If started > fired, the last (started - fired) timers are pending.
+    counts := events
+      inject: #{#started => 0, #fired => 0}
+      into: [:acc :evt |
+        evt eventType =:= #TimerStarted
+          ifTrue: [
+            #{#started => (acc at: #started) + 1, #fired => (acc at: #fired)}
+          ]
+          ifFalse: [
+            evt eventType =:= #TimerFired ifTrue: [
+              #{#started => (acc at: #started), #fired => (acc at: #fired) + 1}
+            ] ifFalse: [acc]
+          ]
+      ]
+    startedCount := counts at: #started
+    firedCount := counts at: #fired
+    pendingCount := startedCount - firedCount
+    pendingCount <= 0 ifTrue: [^#()]
+    // Collect all TimerStarted events, take the last pendingCount
+    allStarted := events
+      inject: #()
+      into: [:acc :evt |
+        evt eventType =:= #TimerStarted ifTrue: [acc ++ #(evt)] ifFalse: [acc]
+      ]
+    // Take the last pendingCount entries
+    startIdx := allStarted size - pendingCount + 1
+    startIdx < 1 ifTrue: [startIdx := 1]
+    pendingEvents := allStarted drop: startIdx - 1
+    pendingEvents
+      collect: [:evt |
+        payload := evt payload
+        dur := payload at: #duration ifAbsent: [0]
+        fireAt := payload at: #fireAt ifAbsent: [evt timestamp + dur]
+        #{#duration => dur, #fireAt => fireAt}
+      ]
 
   /// Return the current status of the timer manager.
   ///
   ///   manager status   // => #ready
   status -> Symbol => self.status
+
+  /// Return the number of timers currently pending reconstruction.
+  ///
+  ///   manager pendingCount   // => 0
+  pendingCount -> Integer => self.pendingCount
+
+  /// Initialize the timer manager with an engine and event store.
+  ///
+  ///   manager initWith: engine eventStore: store
+  initWith: anEngine eventStore: aStore =>
+    self.engine := anEngine
+    self.eventStore := aStore
+
+  /// Scan event histories for unresolved timers and reconstruct them.
+  ///
+  /// For each workflow ID, reads the event history and checks for
+  /// TimerStarted events that lack a corresponding TimerFired.
+  /// Unresolved timers are re-armed via the engine's reconstructTimer
+  /// method.
+  ///
+  ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
+  ///   // => 1  (number of timers reconstructed)
+  reconstructPendingTimers: workflowIds :: List -> Integer =>
+    self.status := #scanning
+    count := workflowIds
+      inject: 0
+      into: [:acc :wfId |
+        pending := TimerManager findPendingTimers: (self.eventStore readEvents: wfId fromSeq: 1)
+        pending
+          do: [:timerInfo |
+            dur := timerInfo at: #duration
+            fireAt := timerInfo at: #fireAt
+            self.engine
+              reconstructTimer: dur
+              fireAt: fireAt
+              workflowId: wfId
+          ]
+        acc + pending size
+      ]
+    self.pendingCount := count
+    self.status := #ready
+    count
