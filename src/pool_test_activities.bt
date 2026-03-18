@@ -1,0 +1,38 @@
+/// Test activities for ActivityWorkerPool tests (BT-1495).
+///
+/// Provides activities that succeed, crash, or block for testing
+/// worker pool behavior including crash recovery and timeout enforcement.
+///
+///   PoolTestActivities doubleIt: #(5)       // => 10
+///   PoolTestActivities crashIt: #("boom")   // raises error
+///   PoolTestActivities slowIt: #(2000)      // sleeps 2000ms then returns
+Activity subclass: PoolTestActivities
+
+  /// Double the given number. Simple success case.
+  ///
+  ///   PoolTestActivities doubleIt: #(5)   // => 10
+  class doubleIt: args :: List -> Integer =>
+    n := args at: 1
+    n * 2
+
+  /// Raise an error with the given message. Tests crash recovery.
+  ///
+  ///   PoolTestActivities crashIt: #("boom")   // raises user_error
+  class crashIt: args :: List =>
+    msg := args at: 1
+    self error: msg
+
+  /// Sleep for the given duration (ms) then return #done. Tests timeout.
+  ///
+  ///   PoolTestActivities slowIt: #(2000)   // sleeps 2s, returns #done
+  class slowIt: args :: List -> Symbol =>
+    ms := args at: 1
+    Timer sleep: ms
+    #done
+
+  /// Add two numbers from a dictionary.
+  ///
+  ///   PoolTestActivities addNumbers: #(#{#a => 3, #b => 4})   // => 7
+  class addNumbers: args :: List -> Integer =>
+    dict := args at: 1
+    (dict at: #a) + (dict at: #b)

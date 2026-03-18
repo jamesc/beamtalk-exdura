@@ -1,0 +1,33 @@
+/// An Actor that executes a single activity task in a supervised process (BT-1495).
+///
+/// Each ActivityWorker runs as a child of the ActivityWorkerSupervisor
+/// (DynamicSupervisor). It is spawned via startChild, then initialized
+/// with initWith:selector:args: before calling execute.
+///
+/// Timeout enforcement is handled by the ActivityWorkerPool, which kills
+/// the worker process via Erlang exit:reason: #kill when the timeout fires.
+///
+///   worker := supervisor startChild
+///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
+///   result := worker execute   // => 10
+Actor subclass: ActivityWorker
+  state: activityClass = nil
+  state: selector = nil
+  state: args :: List = #()
+
+  /// Initialize the worker with activity details.
+  ///
+  ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
+  initWith: anActivityClass selector: aSelector args: someArgs =>
+    self.activityClass := anActivityClass
+    self.selector := aSelector
+    self.args := someArgs
+
+  /// Execute the activity class method and return the result.
+  ///
+  /// Calls the activity class method with the stored arguments.
+  /// Exceptions propagate to the caller (caught by the pool).
+  ///
+  ///   worker execute   // => 10
+  execute =>
+    self.activityClass perform: self.selector withArguments: #(self.args)

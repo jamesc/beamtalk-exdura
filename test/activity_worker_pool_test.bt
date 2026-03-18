@@ -1,0 +1,251 @@
+/// BT-1495: BUnit tests for ActivityWorkerPool, ActivityWorker, and
+/// ActivityWorkerSupervisor.
+///
+/// Tests supervised activity execution, concurrency limits, worker crash
+/// recovery, and startToCloseTimeout enforcement.
+///
+/// Fixtures: src/pool_test_activities.bt, src/activity_worker.bt,
+///           src/activity_worker_pool.bt, src/activity_worker_supervisor.bt
+TestCase subclass: ActivityWorkerPoolTest
+  state: pool = nil
+  state: store = nil
+  state: engine = nil
+
+  setUp =>
+    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
+    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    self.pool := ActivityWorkerPool spawn
+    self.store := EventStore spawn
+    self.engine := WorkflowEngine withStore: self.store pool: self.pool
+    self
+
+  tearDown =>
+    self.pool isNil ifFalse: [[self.pool destroy] on: Error do: [:e | nil]]
+    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
+    self.pool := nil
+    self.store := nil
+    self.engine := nil
+
+  // === ActivityWorkerSupervisor ===
+  testActivityWorkerSupervisorIsSupervisor =>
+    self assert: ActivityWorkerSupervisor isSupervisor
+
+  testActivityWorkerSupervisorChildClass =>
+    self assert: ActivityWorkerSupervisor childClass equals: ActivityWorker
+
+  // === ActivityWorker: basic execution ===
+  testWorkerExecutesActivityAndReturnsResult =>
+    sup := ActivityWorkerSupervisor supervise
+    worker := sup startChild
+    worker
+      initWith: PoolTestActivities
+      selector: #doubleIt:
+      args: #(7)
+    result := worker execute
+    self assert: result equals: 14
+    [sup stop] on: Error do: [:e | nil]
+
+  // === ActivityWorkerPool: successful execution ===
+  testPoolExecutesActivitySuccessfully =>
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: nil
+    self assert: (outcome at: #status) equals: #completed
+    self assert: (outcome at: #result) equals: 10
+
+  testPoolReturnsCorrectResultForDifferentArgs =>
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #addNumbers:
+      args: #(#{#a => 3, #b => 4})
+      timeout: nil
+    self assert: (outcome at: #status) equals: #completed
+    self assert: (outcome at: #result) equals: 7
+
+  // === ActivityWorkerPool: concurrency tracking ===
+  testPoolActiveCountStartsAtZero =>
+    self assert: self.pool activeCount equals: 0
+
+  testPoolDefaultMaxConcurrent =>
+    self assert: self.pool maxConcurrent equals: 10
+
+  testPoolSetMaxConcurrent =>
+    self.pool setMaxConcurrent: 3
+    self assert: self.pool maxConcurrent equals: 3
+
+  // === ActivityWorkerPool: concurrency limit enforcement ===
+  testPoolRejectsWhenAtCapacity =>
+    self.pool setMaxConcurrent: 0
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: nil
+    self assert: (outcome at: #status) equals: #rejected
+
+  // === ActivityWorkerPool: worker crash recovery ===
+  testPoolCatchesWorkerCrash =>
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("boom")
+      timeout: nil
+    self assert: (outcome at: #status) equals: #failed
+    self assert: ((outcome at: #error) includesSubstring: "boom")
+
+  testPoolRecoverAfterCrash =>
+    // First call crashes
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("first crash")
+      timeout: nil
+    // Second call should succeed (pool is still functional)
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(3)
+      timeout: nil
+    self assert: (outcome at: #status) equals: #completed
+    self assert: (outcome at: #result) equals: 6
+
+  // === ActivityWorkerPool: timeout enforcement ===
+  testPoolTimesOutSlowActivity =>
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #slowIt:
+      args: #(5000)
+      timeout: 100
+    // Should be either timedOut or failed (depending on race)
+    status := outcome at: #status
+    self assert: (status =:= #timedOut or: [status =:= #failed])
+
+  testPoolNoTimeoutWhenActivityIsFast =>
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: 5000
+    self assert: (outcome at: #status) equals: #completed
+    self assert: (outcome at: #result) equals: 10
+
+  // === ActivityWorkerPool: activeCount stability ===
+  testPoolActiveCountReturnsToZeroAfterSuccess =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: nil
+    self assert: self.pool activeCount equals: 0
+
+  testPoolActiveCountReturnsToZeroAfterCrash =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("count test")
+      timeout: nil
+    self assert: self.pool activeCount equals: 0
+
+  testPoolActiveCountReturnsToZeroAfterTimeout =>
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #slowIt:
+      args: #(5000)
+      timeout: 100
+    self assert: self.pool activeCount equals: 0
+
+  // === WorkflowEngine integration: dispatch through pool ===
+  testEngineDispatchesThroughPool =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-pool-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    result := self.engine
+      scheduleActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      workflowId: "wf-pool-1"
+    self assert: result equals: 10
+    // Verify events recorded
+    events := self.store readEvents: "wf-pool-1" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+    self assert: (events at: 2) eventType equals: #ActivityCompleted
+
+  testEngineRecordsActivityFailedOnCrash =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-pool-fail-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    // Engine should raise on activity failure
+    self
+      should: [
+        self.engine
+          scheduleActivity: PoolTestActivities
+          selector: #crashIt:
+          args: #("engine crash test")
+          workflowId: "wf-pool-fail-1"
+      ]
+      raise: #runtime_error
+    // Verify ActivityFailed event was recorded
+    events := self.store readEvents: "wf-pool-fail-1" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+    self assert: (events at: 2) eventType equals: #ActivityFailed
+
+  testEngineRecordsActivityTimedOut =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-pool-timeout-1",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    // Engine should raise on timeout
+    self
+      should: [
+        self.engine
+          scheduleActivity: PoolTestActivities
+          selector: #slowIt:
+          args: #(5000)
+          workflowId: "wf-pool-timeout-1"
+          options: #{#startToCloseTimeout => 100}
+      ]
+      raise: #user_error
+    // Verify events were recorded (either TimedOut or Failed)
+    events := self.store readEvents: "wf-pool-timeout-1" fromSeq: 1
+    self assert: events size equals: 2
+    self assert: (events at: 1) eventType equals: #ActivityScheduled
+
+  // === Full workflow with pool ===
+  testFullWorkflowWithPool =>
+    self.engine
+      startWorkflow: TwoActivityWorkflow
+      id: "wf-pool-full-1"
+      args: #(5)
+    Erlang timer sleep: 1000
+    events := self.store readEvents: "wf-pool-full-1" fromSeq: 1
+    self assert: events size equals: 6
+    self assert: (events at: 1) eventType equals: #WorkflowStarted
+    self assert: (events at: 2) eventType equals: #ActivityScheduled
+    self assert: (events at: 3) eventType equals: #ActivityCompleted
+    self assert: (events at: 4) eventType equals: #ActivityScheduled
+    self assert: (events at: 5) eventType equals: #ActivityCompleted
+    self assert: (events at: 6) eventType equals: #WorkflowCompleted
+    // Verify results
+    self assert: ((events at: 3) payload at: #result) equals: 10
+    self assert: ((events at: 5) payload at: #result) equals: 20

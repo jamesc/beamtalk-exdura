@@ -2,27 +2,41 @@
 ///
 /// The WorkflowEngine is the central orchestrator for the Exdura workflow
 /// runtime. It manages workflow lifecycle (start, complete, fail), dispatches
-/// activity execution, and maintains the event history via EventStore.
+/// activity execution through a supervised worker pool, and maintains the
+/// event history via EventStore.
 ///
-/// In Phase 0, activities execute directly (no worker pool). The engine
-/// records events for every state transition to enable deterministic replay.
+/// Activities execute in supervised child processes under a DynamicSupervisor
+/// (ActivityWorkerPool). Worker crashes are caught and reported as
+/// ActivityFailed. Timeouts are enforced via Timer.
 ///
 ///   store := EventStore spawn
-///   engine := WorkflowEngine withStore: store
+///   pool := ActivityWorkerPool spawn
+///   engine := WorkflowEngine withStore: store pool: pool
 ///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
 Actor subclass: WorkflowEngine
   state: eventStore = nil
+  state: activityPool = nil
 
-  /// Create a new WorkflowEngine with the given EventStore.
+  /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
+  ///
+  ///   engine := WorkflowEngine withStore: (EventStore spawn) pool: (ActivityWorkerPool spawn)
+  class withStore: anEventStore pool: aPool =>
+    eng := self spawn
+    eng initWithStore: anEventStore pool: aPool
+    eng
+
+  /// Create a new WorkflowEngine with an EventStore (no pool — legacy Phase 0).
   ///
   ///   engine := WorkflowEngine withStore: (EventStore spawn)
   class withStore: anEventStore =>
     eng := self spawn
-    eng initWithStore: anEventStore
+    eng initWithStore: anEventStore pool: nil
     eng
 
-  /// Initialize engine with an EventStore reference (called by withStore:).
-  initWithStore: aStore => self.eventStore := aStore
+  /// Initialize engine with an EventStore and optional ActivityWorkerPool.
+  initWithStore: aStore pool: aPool =>
+    self.eventStore := aStore
+    self.activityPool := aPool
 
   /// Start a new workflow execution.
   ///
@@ -78,10 +92,7 @@ Actor subclass: WorkflowEngine
     runner go!
     workflow
 
-  /// Execute an activity class method and record events.
-  ///
-  /// Called by Workflow actors during normal (non-replay) execution.
-  /// Receives the activity class and selector separately for dispatch.
+  /// Execute an activity class method and record events (no options).
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
@@ -96,7 +107,8 @@ Actor subclass: WorkflowEngine
   /// Execute an activity with options (retry policy, timeouts).
   ///
   /// Records ActivityScheduled, executes with retry logic per RetryPolicy,
-  /// and records ActivityCompleted or ActivityFailed.
+  /// and records ActivityCompleted or ActivityFailed. If an ActivityWorkerPool
+  /// is available, dispatches through it; otherwise falls back to direct execution.
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
@@ -124,19 +136,80 @@ Actor subclass: WorkflowEngine
       rpDict
     ] ifFalse: [RetryPolicy new: rpDict]
 
-    // Delegate to ActivityRetryExecutor (plain Object, avoids Actor deadlock)
-    ActivityRetryExecutor
-      execute: activityClass
-      selector: selector
-      args: args
-      eventStore: self.eventStore
-      workflowId: workflowId
-      retryPolicy: rp
+    // Dispatch through pool if available, otherwise use ActivityRetryExecutor
+    self.activityPool isNil
+      ifTrue: [
+        // No pool — use retry executor with direct execution
+        ActivityRetryExecutor
+          execute: activityClass
+          selector: selector
+          args: args
+          eventStore: self.eventStore
+          workflowId: workflowId
+          retryPolicy: rp
+      ]
+      ifFalse: [
+        // Pool available — supervised worker execution with timeout
+        timeout := options at: #startToCloseTimeout ifAbsent: [nil]
+        outcome := self.activityPool
+          executeActivity: activityClass
+          selector: selector
+          args: args
+          timeout: timeout
+        status := outcome at: #status
+        status =:= #completed
+          ifTrue: [
+            result := outcome at: #result
+            self recordActivityCompleted: result workflowId: workflowId
+            result
+          ]
+          ifFalse: [
+            status =:= #timedOut
+              ifTrue: [
+                self recordActivityTimedOut: workflowId
+                self error: "Activity timed out"
+              ]
+              ifFalse: [
+                reason := outcome at: #error ifAbsent: ["unknown error"]
+                self recordActivityFailed: reason workflowId: workflowId
+                self error: "Activity failed: {reason}"
+              ]
+          ]
+      ]
+
+  /// Record an ActivityCompleted event.
+  recordActivityCompleted: result workflowId: workflowId =>
+    completedNow := Erlang os system_time: #second
+    completedEvent := ExduraEvent
+      new: #{
+        #eventType => #ActivityCompleted,
+        #timestamp => completedNow,
+        #payload => #{#result => result}
+      }
+    self.eventStore appendEvents: workflowId events: #(completedEvent)
+
+  /// Record an ActivityFailed event.
+  recordActivityFailed: reason workflowId: workflowId =>
+    failedNow := Erlang os system_time: #second
+    failedEvent := ExduraEvent
+      new: #{
+        #eventType => #ActivityFailed,
+        #timestamp => failedNow,
+        #payload => #{#error => reason}
+      }
+    self.eventStore appendEvents: workflowId events: #(failedEvent)
+
+  /// Record an ActivityTimedOut event.
+  recordActivityTimedOut: workflowId =>
+    timedOutNow := Erlang os system_time: #second
+    timedOutEvent := ExduraEvent new: #{
+      #eventType => #ActivityTimedOut,
+      #timestamp => timedOutNow,
+      #payload => #{}
+    }
+    self.eventStore appendEvents: workflowId events: #(timedOutEvent)
 
   /// Record a TimerStarted event and sleep for the given duration (ms).
-  ///
-  /// During replay, the WorkflowContext handles returning immediately
-  /// if TimerFired is already in the history.
   ///
   ///   engine scheduleTimer: 5000 workflowId: "wf-1"
   scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
@@ -212,3 +285,6 @@ Actor subclass: WorkflowEngine
 
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore
+
+  /// Return the ActivityWorkerPool (for testing/inspection).
+  activityPool => self.activityPool
