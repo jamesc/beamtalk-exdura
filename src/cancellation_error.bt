@@ -1,0 +1,13 @@
+/// Error raised in a workflow when cancellation is requested.
+///
+/// Workflows can catch CancellationError with `on:do:` to perform cleanup
+/// (compensation). After cleanup, re-raising the error marks the workflow
+/// as cancelled.
+///
+///   [
+///     ctx runActivity: OrderActivities method: #charge: with: #(orderId)
+///   ] on: CancellationError do: [:e |
+///     ctx runActivity: OrderActivities method: #refund: with: #(orderId)
+///     e signal   // Re-raise cancellation
+///   ]
+Error subclass: CancellationError

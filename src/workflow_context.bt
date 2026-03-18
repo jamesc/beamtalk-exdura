@@ -319,6 +319,10 @@ Actor subclass: WorkflowContext
       ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     result
 
   /// Sleep for the given duration (milliseconds), recording timer events.
@@ -412,6 +416,10 @@ Actor subclass: WorkflowContext
       ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     nil
 
   /// Start a child workflow and return a ChildWorkflowHandle.
@@ -487,6 +495,10 @@ Actor subclass: WorkflowContext
     ]
     // Safe point: capture workflow snapshot for queries
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
+    // Safe point: check for cancellation
+    (self.engine isCancelled: self.workflowId) ifTrue: [
+      CancellationError new signal: "Workflow cancelled"
+    ]
     handle
 
   /// Block until a signal with the given name arrives or timeout expires.

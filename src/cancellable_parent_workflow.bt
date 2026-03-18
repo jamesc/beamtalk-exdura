@@ -1,0 +1,25 @@
+/// Test workflow that starts a child and performs a long task (BT-1508).
+///
+/// Used to test that cancelling the parent propagates cancellation to the
+/// child workflow per the parent-close policy.
+///
+///   engine startWorkflow: CancellableParentWorkflow id: "p-1" args: #(5)
+Workflow subclass: CancellableParentWorkflow
+
+  /// Start a child workflow and then do a long task.
+  ///
+  /// The child is started with default (#terminate) policy. After starting
+  /// the child, the parent enters a long activity — this provides the
+  /// window for cancellation during testing.
+  run: value ctx: ctx =>
+    handle := ctx
+      startChildWorkflow: SlowWorkflow
+      method: #run:
+      with: #(10000)
+    // Do a long activity that creates a safe point for cancellation
+    ctx
+      runActivity: CancellationActivities
+      method: #longTask:
+      with: #(value)
+    result := handle result
+    #{#value => value, #childResult => result}

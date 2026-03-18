@@ -21,6 +21,7 @@ Actor subclass: WorkflowEngine
   state: workflowQueryHandlers :: Dictionary = #{}
   state: childWorkflows :: Dictionary = #{}
   state: parentClosePolicy :: Dictionary = #{}
+  state: cancelledWorkflows :: Dictionary = #{}
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
@@ -771,6 +772,98 @@ Actor subclass: WorkflowEngine
       }
     self.eventStore appendEvents: workflowId events: #(markerEvent)
     nil
+
+  /// Cancel a running workflow.
+  ///
+  /// Records a WorkflowCancelled event, sets the cancellation flag so the
+  /// WorkflowContext raises CancellationError at the next safe point,
+  /// cancels pending child workflows per their parent-close policy, and
+  /// updates the execution status to #cancelled.
+  ///
+  ///   engine cancelWorkflow: "wf-1"
+  cancelWorkflow: workflowId :: String =>
+    now := Erlang os system_time: #second
+
+    // Record WorkflowCancelled event
+    cancelEvent := ExduraEvent
+      new: #{
+        #eventType => #WorkflowCancelled,
+        #timestamp => now,
+        #payload => #{#workflowId => workflowId}
+      }
+    self.eventStore appendEvents: workflowId events: #(cancelEvent)
+
+    // Set cancellation flag for the WorkflowContext to check
+    self.cancelledWorkflows := self.cancelledWorkflows at: workflowId put: true
+
+    // Cancel child workflows per parent-close policy
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self.eventStore
+    policies := self.parentClosePolicy
+    children
+      do: [:childId |
+        childExec := store getExecution: childId
+        isRunning := childExec isNil not and: [childExec status =:= #running]
+        isRunning
+          ifTrue: [
+            policy := policies at: childId ifAbsent: [#terminate]
+            (policy =:= #terminate or: [policy =:= #requestCancel])
+              ifTrue: [
+                // Cancel the child — record event, set flag, update status
+                childCancelEvent := ExduraEvent
+                  new: #{
+                    #eventType => #WorkflowCancelled,
+                    #timestamp => now,
+                    #payload => #{#workflowId => childId}
+                  }
+                store appendEvents: childId events: #(childCancelEvent)
+                self.cancelledWorkflows := self.cancelledWorkflows at: childId put: true
+                store
+                  updateExecution: childId
+                  status: #cancelled
+                  result: "Cancelled by parent workflow"
+              ]
+          ]
+      ]
+
+    // Update parent execution status to cancelled
+    self.eventStore
+      updateExecution: workflowId
+      status: #cancelled
+      result: "Workflow cancelled"
+
+    // If this workflow has a parent, record ChildWorkflowFailed in parent's history
+    exec := self.eventStore getExecution: workflowId
+    (exec isNil not and: [exec parentWorkflowId isNil not])
+      ifTrue: [
+        parentId := exec parentWorkflowId
+        childCancelledEvent := ExduraEvent
+          new: #{
+            #eventType => #ChildWorkflowFailed,
+            #timestamp => now,
+            #payload => #{
+              #childWorkflowId => workflowId,
+              #error => "Workflow cancelled"
+            }
+          }
+        self.eventStore appendEvents: parentId events: #(childCancelledEvent)
+      ]
+    nil
+
+  /// Check if a workflow has been cancelled.
+  ///
+  /// Returns true if cancelWorkflow: has been called for this workflow ID.
+  /// Used by WorkflowContext to check at safe points.
+  ///
+  ///   engine isCancelled: "wf-1"   // => true or false
+  isCancelled: workflowId :: String =>
+    self.cancelledWorkflows at: workflowId ifAbsent: [false]
+
+  /// Clear the cancellation flag for a workflow (after it has been handled).
+  ///
+  ///   engine clearCancellation: "wf-1"
+  clearCancellation: workflowId :: String =>
+    self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 
   /// Return the underlying EventStore (for testing/inspection).
   eventStore => self.eventStore

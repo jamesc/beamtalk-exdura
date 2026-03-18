@@ -53,10 +53,21 @@ Actor subclass: WorkflowRunner
     ]
     // Capture initial snapshot before execution starts
     self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-    // Run the workflow and check for continue-as-new sentinel.
-    // ContinueAsNewRequest is a Value returned by ctx continueAsNew: — it signals
-    // the runner to restart the workflow with fresh history and new args.
-    result := self.workflow run: self.input ctx: ctx
+    // Run the workflow and check for continue-as-new or cancellation.
+    // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
+    // CancellationError propagates when the workflow is cancelled and doesn't
+    // catch (or re-raises) the error. The runner records #cancelled status.
+    resultOrError := [
+      #{#ok => (self.workflow run: self.input ctx: ctx)}
+    ] on: CancellationError do: [:e | #{#cancelled => true}]
+    (resultOrError includesKey: #cancelled)
+      ifTrue: [
+        // Workflow was cancelled — the engine already recorded the
+        // WorkflowCancelled event and updated execution status in cancelWorkflow:.
+        self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+        ^nil
+      ]
+    result := resultOrError at: #ok
     (result isKindOf: ContinueAsNewRequest)
       ifTrue: [
         // Continue-as-new: delegate to engine to start fresh execution

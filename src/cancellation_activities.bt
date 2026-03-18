@@ -1,0 +1,33 @@
+/// Test activities for cancellation tests (BT-1508).
+///
+/// Provides activities that simulate long-running operations and
+/// compensation actions for testing cancellation behavior.
+///
+///   CancellationActivities longTask: #("data")   // sleeps 5s
+///   CancellationActivities compensate: #("ref")  // returns compensation ref
+Activity subclass: CancellationActivities
+
+  /// Simulate a long-running task that takes 5 seconds.
+  ///
+  ///   CancellationActivities longTask: #("data")
+  ///   // => #{#status => "completed", #data => "data"}
+  class longTask: args :: List =>
+    data := args at: 1
+    Timer sleep: 5000
+    #{#status => "completed", #data => data}
+
+  /// Simulate a quick task that completes immediately.
+  ///
+  ///   CancellationActivities quickTask: #("data")
+  ///   // => #{#status => "done", #data => "data"}
+  class quickTask: args :: List =>
+    data := args at: 1
+    #{#status => "done", #data => data}
+
+  /// Simulate a compensation (cleanup) action.
+  ///
+  ///   CancellationActivities compensate: #("reservation-123")
+  ///   // => #{#compensated => true, #ref => "reservation-123"}
+  class compensate: args :: List =>
+    ref := args at: 1
+    #{#compensated => true, #ref => ref}
