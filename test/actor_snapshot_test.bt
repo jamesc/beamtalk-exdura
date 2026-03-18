@@ -4,7 +4,7 @@
 /// to field-name messages through doesNotUnderstand:args:. Verifies immutability
 /// — snapshot state is frozen at capture time, unaffected by later Actor mutations.
 ///
-/// Fixture: src/snapshot_test_actor.bt (SnapshotTestActor)
+/// Fixture: test/fixtures/snapshot_test_actor.bt (SnapshotTestActor)
 TestCase subclass: ActorSnapshotTest
 
   /// ActorSnapshot of: captures all state fields from a live Actor.

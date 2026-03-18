@@ -4,9 +4,9 @@
 /// independent event histories, parent-close policies are enforced,
 /// and child workflow results are returned from history during replay.
 ///
-/// Fixtures: src/child_doubler.bt, src/single_child_parent.bt,
-///           src/batch_processor.bt, src/abandon_policy_parent.bt,
-///           src/terminate_policy_parent.bt, src/test_activities.bt
+/// Fixtures: test/fixtures/child_doubler.bt, test/fixtures/single_child_parent.bt,
+///           test/fixtures/batch_processor.bt, test/fixtures/abandon_policy_parent.bt,
+///           test/fixtures/terminate_policy_parent.bt, test/fixtures/test_activities.bt
 TestCase subclass: ChildWorkflowTest
   state: store = nil
   state: engine = nil

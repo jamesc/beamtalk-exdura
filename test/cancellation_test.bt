@@ -4,8 +4,8 @@
 /// is raised and catchable for compensation, pending activities are cancelled,
 /// and child workflows are cancelled per parent-close policy.
 ///
-/// Fixtures: src/cancellable_order_workflow.bt, src/cancellable_parent_workflow.bt,
-///           src/cancellation_activities.bt, src/slow_workflow.bt
+/// Fixtures: test/fixtures/cancellable_order_workflow.bt, test/fixtures/cancellable_parent_workflow.bt,
+///           test/fixtures/cancellation_activities.bt, test/fixtures/slow_workflow.bt
 TestCase subclass: CancellationTest
   state: client = nil
   state: store = nil

@@ -3,7 +3,7 @@
 /// Tests that continueAsNew: stops the current execution, marks it as
 /// continued_as_new, starts a fresh execution with the provided args,
 /// and that the new execution has a fresh event history.
-/// Fixture: src/poller_workflow.bt, src/batch_activities.bt
+/// Fixture: test/fixtures/poller_workflow.bt, test/fixtures/batch_activities.bt
 TestCase subclass: ContinueAsNewTest
   state: client = nil
 

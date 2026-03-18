@@ -1,8 +1,8 @@
 /// BT-1492: BUnit tests for Workflow, Activity, and WorkflowEngine core.
 ///
 /// Tests activity dispatch, event recording, workflow lifecycle, and replay.
-/// Fixtures: src/test_activities.bt, src/two_activity_workflow.bt,
-///           src/passthrough_workflow.bt
+/// Fixtures: test/fixtures/test_activities.bt, test/fixtures/two_activity_workflow.bt,
+///           test/fixtures/passthrough_workflow.bt
 TestCase subclass: WorkflowEngineTest
   state: store = nil
   state: engine = nil

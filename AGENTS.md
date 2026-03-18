@@ -5,9 +5,10 @@
 ```
 exdura/
 ├── beamtalk.toml    # Package manifest
-├── src/             # Source files (.bt)
+├── src/             # Library source files (.bt)
 │   └── main.bt      # Entry point
 ├── test/            # BUnit test files
+│   └── fixtures/    # Test-only workflow/activity definitions
 ├── _build/          # Build output (generated)
 ├── AGENTS.md        # This file
 ├── .github/
@@ -16,6 +17,8 @@ exdura/
 ├── README.md
 └── .gitignore
 ```
+
+**Important:** Test fixture files (workflows and activities used only by tests) go in `test/fixtures/`, NOT `src/`. Only library code belongs in `src/`.
 
 ## Build & Run
 
