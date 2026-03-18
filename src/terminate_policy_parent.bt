@@ -1,0 +1,15 @@
+/// Test fixture: parent workflow that starts a child with default #terminate policy.
+///
+/// Returns immediately without waiting for the child. The engine should
+/// terminate the child when the parent closes.
+///
+///   engine startWorkflow: TerminatePolicyParent id: "p-1" args: #(5)
+Workflow subclass: TerminatePolicyParent
+
+  run: value ctx: ctx =>
+    _handle := ctx
+      startChildWorkflow: ChildDoubler
+      method: #run:
+      with: #(value)
+    // Return immediately without waiting for child
+    "parent-done"

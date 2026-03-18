@@ -1,0 +1,13 @@
+/// Test fixture: simple child workflow that doubles its input via an activity.
+///
+/// Used by ChildWorkflowTest to verify child workflow execution and replay.
+///
+///   ctx startChildWorkflow: ChildDoubler method: #run: with: #(5)
+///   // child returns 10
+Workflow subclass: ChildDoubler
+
+  run: value ctx: ctx -> Integer =>
+    ctx
+      runActivity: TestActivities
+      method: #doubleIt:
+      with: #(value)

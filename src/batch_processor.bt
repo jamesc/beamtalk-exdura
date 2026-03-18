@@ -1,0 +1,17 @@
+/// Test fixture: BatchProcessor pattern from SPEC.md section 5.7 (fan-out/fan-in).
+///
+/// Starts multiple child workflows in parallel and collects all results.
+///
+///   engine startWorkflow: BatchProcessor id: "b-1" args: #(#(3, 5, 7))
+///   // returns #(6, 10, 14)
+Workflow subclass: BatchProcessor
+
+  run: items ctx: ctx -> List =>
+    handles := items
+      collect: [:item |
+        ctx
+          startChildWorkflow: ChildDoubler
+          method: #run:
+          with: #(item)
+      ]
+    handles collect: [:h | h result]

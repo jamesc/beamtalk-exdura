@@ -1,0 +1,16 @@
+/// Test fixture: parent workflow that starts a child with #abandon close policy.
+///
+/// Returns immediately without waiting for the child. The child should
+/// continue running independently after the parent completes.
+///
+///   engine startWorkflow: AbandonPolicyParent id: "p-1" args: #(5)
+Workflow subclass: AbandonPolicyParent
+
+  run: value ctx: ctx =>
+    _handle := ctx
+      startChildWorkflow: ChildDoubler
+      method: #run:
+      with: #(value)
+      options: #{#parentClosePolicy => #abandon}
+    // Return immediately without waiting for child
+    "parent-done"
