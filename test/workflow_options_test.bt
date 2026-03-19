@@ -274,10 +274,10 @@ TestCase subclass: WorkflowOptionsTest
       }
 
     // Measure time — replay should be near-instant (no 50ms sleep)
-    startTime := Erlang os system_time: #millisecond
+    startTime := Time nowMs
     runner go!
     Erlang timer sleep: 500
-    endTime := Erlang os system_time: #millisecond
+    endTime := Time nowMs
     _elapsed := endTime - startTime
 
     // Activities should NOT have been re-executed

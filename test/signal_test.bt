@@ -28,7 +28,7 @@ TestCase subclass: SignalTest
   testOnSignalRegistersHandler =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -53,7 +53,7 @@ TestCase subclass: SignalTest
   testOnSignalHandlerUpdatesVars =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -94,7 +94,7 @@ TestCase subclass: SignalTest
   testWaitForSignalReturnsPayload =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -126,7 +126,7 @@ TestCase subclass: SignalTest
   testWaitForSignalTimesOut =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -154,7 +154,7 @@ TestCase subclass: SignalTest
   testWaitForConditionReturnsWhenTrue =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -188,7 +188,7 @@ TestCase subclass: SignalTest
   testWaitForConditionTimesOut =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -218,7 +218,7 @@ TestCase subclass: SignalTest
   testReplaySignalHandlersFromHistory =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{

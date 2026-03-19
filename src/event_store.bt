@@ -147,15 +147,12 @@ Actor subclass: EventStore
   saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
     path := self snapshotFilePath: workflowId
     data := #{#state => state, #eventId => eventId}
-    binary := Erlang erlang term_to_binary: data
-    {#ok, fd} := Erlang file open: path with: #(#write, #binary, #raw)
-    [Erlang file write: fd with: binary]
-      on: Error
-      do: [:e |
-        Erlang file close: fd
-        self error: "Failed to write snapshot for {workflowId}: " ++ e printString
+    binary := Binary serialize: data
+    result := File writeBinary: path contents: binary
+    result isError
+      ifTrue: [
+        self error: "Failed to write snapshot for {workflowId}: " ++ (result error) printString
       ]
-    Erlang file close: fd
     nil
 
   /// Load the latest snapshot for a workflow and return events after it.
@@ -171,13 +168,15 @@ Actor subclass: EventStore
   ///   ]
   readEventsFromSnapshot: workflowId :: String =>
     path := self snapshotFilePath: workflowId
-    readResult := Erlang file read_file: path
+    readResult := File readBinary: path
     readResult isError ifTrue: [^nil]
-    {#ok, content} := readResult
-    contentSize := Erlang erlang byte_size: content
+    content := readResult unwrap
+    contentSize := Binary size: content
     contentSize =:= 0 ifTrue: [^nil]
-    snapshot := Erlang erlang binary_to_term: content
+    snapshot := Binary deserialize: content
+    @expect type
     snapEventId := snapshot at: #eventId
+    @expect type
     snapState := snapshot at: #state
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
@@ -235,24 +234,21 @@ Actor subclass: EventStore
     // Serialize all events — inline to avoid self-capture in block
     bins := evts
       collect: [:evt |
-        Erlang erlang
-          term_to_binary: #{
+        Binary
+          serialize: #{
             #eventId => evt eventId,
             #eventType => evt eventType,
             #timestamp => evt timestamp,
             #payload => evt payload
           }
       ]
-    combined := Erlang erlang iolist_to_binary: bins
-    // Append to file (create if missing); ensure fd is closed even on write error
-    {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
-    [Erlang file write: fd with: combined]
-      on: Error
-      do: [:e |
-        Erlang file close: fd
-        self error: "Failed to write events for {workflowId}: " ++ e printString
+    combined := Binary fromIolist: bins
+    // Append to file (create if missing)
+    result := File appendBinary: path contents: combined
+    result isError
+      ifTrue: [
+        self error: "Failed to write events for {workflowId}: " ++ (result error) printString
       ]
-    Erlang file close: fd
 
   /// Scan the events directory and reload all event histories into ETS.
   reloadFromDisk =>
@@ -271,11 +267,11 @@ Actor subclass: EventStore
     wfIds
       do: [:wfId |
         path := evDir ++ "/{wfId}.etf"
-        readResult := Erlang file read_file: path
-        (readResult =:= #error)
-          ifFalse: [
-            {#ok, content} := readResult
-            contentSize := Erlang erlang byte_size: content
+        readResult := File readBinary: path
+        readResult isError not
+          ifTrue: [
+            content := readResult unwrap
+            contentSize := Binary size: content
             contentSize > 0
               ifTrue: [
                 events := EventStore

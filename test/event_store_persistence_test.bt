@@ -16,8 +16,12 @@ TestCase subclass: EventStorePersistenceTest
 
   setUp =>
     // Clean up any leftover ETS tables and test directory
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
@@ -31,8 +35,12 @@ TestCase subclass: EventStorePersistenceTest
         [self.store stop] on: Error do: [:e | nil]
       ]
     self.store := nil
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
@@ -43,10 +51,8 @@ TestCase subclass: EventStorePersistenceTest
   /// Used to pre-populate files for reload tests.
   writeEtfEvent: workflowId :: String event: evtDict :: Dictionary =>
     path := self.testDir ++ "/events/{workflowId}.etf"
-    bin := Erlang erlang term_to_binary: evtDict
-    {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
-    Erlang file write: fd with: bin
-    Erlang file close: fd
+    bin := Binary serialize: evtDict
+    File appendBinary: path contents: bin
 
   // --- Directory creation ---
   testDirectoriesCreatedOnInitialize =>
@@ -96,7 +102,7 @@ TestCase subclass: EventStorePersistenceTest
       }
     self.store appendEvents: "wf-etf-valid" events: #(evt)
     // Read the file back and verify contents
-    {#ok, content} := Erlang file read_file: (self.testDir ++ "/events/wf-etf-valid.etf")
+    content := (File readBinary: (self.testDir ++ "/events/wf-etf-valid.etf")) unwrap
     {dict, _used} := Erlang erlang binary_to_term: content with: #(#used)
     self assert: (dict at: #eventId) equals: 1
     self assert: (dict at: #eventType) equals: #WorkflowStarted
@@ -124,11 +130,11 @@ TestCase subclass: EventStorePersistenceTest
         #payload => #{}
       })
     // Parse the file directly to verify all 3 events are there
-    {#ok, content} := Erlang file read_file: (self.testDir ++ "/events/wf-multi.etf")
+    content := (File readBinary: (self.testDir ++ "/events/wf-multi.etf")) unwrap
     events := EventStore
       parseEtfBinary: content
       offset: 0
-      size: (Erlang erlang byte_size: content)
+      size: (Binary size: content)
       acc: #()
     self assert: events size equals: 3
     self assert: (events at: 1) eventId equals: 1

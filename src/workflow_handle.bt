@@ -12,14 +12,14 @@ Value subclass: WorkflowHandle
   field: workflowId :: String = ""
   field: client = nil
 
-  /// Display as WorkflowHandle(wf-1)
-  printString => "WorkflowHandle({self workflowId})"
-
   /// Create a new WorkflowHandle for the given workflow and client.
   ///
   ///   WorkflowHandle for: "wf-1" client: aClient
   class for: workflowId :: String client: aClient =>
     self new: #{#workflowId => workflowId, #client => aClient}
+
+  /// Display as WorkflowHandle(wf-1)
+  printString => "WorkflowHandle({self workflowId})"
 
   /// Block until the workflow completes and return the result.
   ///

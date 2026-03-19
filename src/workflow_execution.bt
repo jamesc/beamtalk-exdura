@@ -14,9 +14,6 @@
 Value subclass: WorkflowExecution
   field: workflowId :: String = ""
   field: runId :: String = ""
-
-  /// Display as WorkflowExecution(order-123 running)
-  printString => "WorkflowExecution({self workflowId} {self status})"
   field: workflowType :: String = ""
   field: taskQueue :: String = ""
   field: args :: List = #()
@@ -27,3 +24,6 @@ Value subclass: WorkflowExecution
   field: startedAt :: Integer = 0
   field: closedAt = nil
   field: searchAttributes :: Dictionary = #{}
+
+  /// Display as WorkflowExecution(order-123 running)
+  printString => "WorkflowExecution({self workflowId} {self status})"

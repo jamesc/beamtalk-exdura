@@ -142,7 +142,7 @@ TestCase subclass: SnapshotTest
         #snapshotInterval => 10
       }
     // Create execution and start event first
-    now := Erlang os system_time: #second
+    now := Time nowS
     execution := WorkflowExecution
       new: #{
         #workflowId => "wf-snap-exec",
@@ -193,7 +193,7 @@ TestCase subclass: SnapshotTest
         #history => #(),
         #snapshotInterval => 10
       }
-    now := Erlang os system_time: #second
+    now := Time nowS
     execution := WorkflowExecution
       new: #{
         #workflowId => "wf-snap-replay",
@@ -264,7 +264,7 @@ TestCase subclass: SnapshotTest
         #history => #(),
         #snapshotInterval => 9999
       }
-    now := Erlang os system_time: #second
+    now := Time nowS
     execution := WorkflowExecution
       new: #{
         #workflowId => "wf-no-snap",

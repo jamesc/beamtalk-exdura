@@ -4,8 +4,12 @@ TestCase subclass: EventStoreReloadTest
   field: dataDir = "target/bt-test-tmp/es-reload"
 
   setUp =>
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
     (File isDirectory: self.dataDir) ifTrue: [
       [File deleteAll: self.dataDir] on: Error do: [:e | nil]
     ]
@@ -20,8 +24,12 @@ TestCase subclass: EventStoreReloadTest
         [self.store stop] on: Error do: [:e | nil]
       ]
     self.store := nil
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
     (File isDirectory: self.dataDir) ifTrue: [
       [File deleteAll: self.dataDir] on: Error do: [:e | nil]
     ]
@@ -29,10 +37,8 @@ TestCase subclass: EventStoreReloadTest
   /// Write an event as ETF to disk.
   writeEtfEvent: workflowId :: String event: evtDict :: Dictionary =>
     path := self.dataDir ++ "/events/{workflowId}.etf"
-    bin := Erlang erlang term_to_binary: evtDict
-    {#ok, fd} := Erlang file open: path with: #(#write, #append, #binary, #raw)
-    Erlang file write: fd with: bin
-    Erlang file close: fd
+    bin := Binary serialize: evtDict
+    File appendBinary: path contents: bin
 
   testSpawnWithEmptyDirectory =>
     // Simplest test: spawn with empty events dir
@@ -145,16 +151,16 @@ TestCase subclass: EventStoreReloadTest
     self assert: events size equals: 0
 
   testPartiallyCorruptRecoversParsableEvents =>
-    validBin := Erlang erlang
-      term_to_binary: #{
+    validBin := Binary
+      serialize: #{
         #eventId => 1,
         #eventType => #WorkflowStarted,
         #timestamp => 100,
         #payload => #{}
       }
     garbageBin := Erlang erlang list_to_binary: #(255, 255, 0, 1, 2, 3)
-    combined := Erlang erlang iolist_to_binary: #(validBin, garbageBin)
-    Erlang file write_file: (self.dataDir ++ "/events/wf-partial.etf") with: combined
+    combined := Binary fromIolist: #(validBin, garbageBin)
+    File writeBinary: (self.dataDir ++ "/events/wf-partial.etf") contents: combined
     self.store := EventStore spawnWith: #{#dataDir => self.dataDir}
     events := self.store readEvents: "wf-partial" fromSeq: 1
     self assert: events size equals: 1

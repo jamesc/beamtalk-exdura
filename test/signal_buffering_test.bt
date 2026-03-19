@@ -218,7 +218,7 @@ TestCase subclass: SignalBufferingTest
 
     // Build a synthetic event history with a signal at a safe point
     // WorkflowStarted, ActivityScheduled, ActivityCompleted, SignalReceived
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{
@@ -283,7 +283,7 @@ TestCase subclass: SignalBufferingTest
   testReplaySignalsDeliveredFromHistory =>
     engine := self.client engine
     store := self.client eventStore
-    now := Erlang os system_time: #second
+    now := Time nowS
 
     exec := WorkflowExecution
       new: #{

@@ -57,7 +57,7 @@ TestCase subclass: DurableTimerTest
         #taskQueue => "default",
         #args => #(),
         #status => #running,
-        #startedAt => (Erlang os system_time: #second)
+        #startedAt => (Time nowS)
       }
     self.store createExecution: execution
 
@@ -178,7 +178,7 @@ TestCase subclass: DurableTimerTest
 
   /// TimerManager: findPendingTimers identifies unresolved timers.
   testTimerManagerFindsPendingTimers =>
-    nowMs := Erlang os system_time: #millisecond
+    nowMs := Time nowMs
 
     // Build a history with TimerStarted but no TimerFired
     events := #(ExduraEvent
@@ -200,7 +200,7 @@ TestCase subclass: DurableTimerTest
 
   /// TimerManager: no pending timers when all are matched.
   testTimerManagerNoPendingWhenAllFired =>
-    nowMs := Erlang os system_time: #millisecond
+    nowMs := Time nowMs
 
     events := #(ExduraEvent
       new: #{
@@ -224,7 +224,7 @@ TestCase subclass: DurableTimerTest
   /// TimerManager: reconstructPendingTimers re-arms expired timers.
   testTimerManagerReconstructsPendingTimers =>
     // Create a workflow with a pending timer in the store
-    pastMs := (Erlang os system_time: #millisecond) - 10000
+    pastMs := (Time nowMs) - 10000
     wfId := "wf-tm-3"
 
     // Create execution record

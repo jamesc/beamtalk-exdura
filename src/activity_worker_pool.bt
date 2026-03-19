@@ -63,13 +63,11 @@ Actor subclass: ActivityWorkerPool
       selector: selector
       args: args
     // Set up timeout: kill worker process after timeout ms.
-    // Uses Erlang exit:reason: #kill to force immediate process termination,
+    // Uses Pid kill to force immediate process termination,
     // which causes the pending gen_server call to fail instantly.
     timer := timeout isNil ifTrue: [
       nil
-    ] ifFalse: [
-      Timer after: timeout do: [Erlang erlang exit: worker reason: #kill]
-    ]
+    ] ifFalse: [Timer after: timeout do: [worker kill]]
     // Execute the activity in the worker's process
     outcome := [worker execute]
       on: Exception

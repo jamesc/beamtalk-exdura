@@ -5,7 +5,7 @@
 /// with initWith:selector:args: before calling execute.
 ///
 /// Timeout enforcement is handled by the ActivityWorkerPool, which kills
-/// the worker process via Erlang exit:reason: #kill when the timeout fires.
+/// the worker process via Pid kill when the timeout fires.
 ///
 ///   worker := supervisor startChild
 ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
