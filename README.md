@@ -54,8 +54,8 @@ handle := client
   taskQueue: "default"
   options: #{}
 
-// Block until the workflow completes
-result := handle result
+// Block until the workflow completes (5 second timeout)
+result := handle result: 5000
 // => #{#inventory => #{#status => "reserved", ...},
 //     #payment => #{#status => "charged", ...}}
 ```

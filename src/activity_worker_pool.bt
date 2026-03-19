@@ -68,31 +68,29 @@ Actor subclass: ActivityWorkerPool
     timer := timeout isNil ifTrue: [
       nil
     ] ifFalse: [Timer after: timeout do: [worker kill]]
-    // Execute the activity in the worker's process
+    // Execute the activity in the worker's process.
+    // The exception handler returns early (^) from the method so that the
+    // success path can unconditionally wrap the result. This avoids the
+    // previous bug where an activity returning a Dictionary with a #status
+    // key (e.g. #{#status => "reserved"}) was misidentified as a pool
+    // error outcome.
     outcome := [worker execute]
       on: Exception
       do: [:e |
         timer isNil ifFalse: [timer cancel]
+        self.activeCount := self.activeCount - 1
         // Distinguish timeout from crash: if timer was set and has fired,
         // the worker was killed by timeout
         (timer isNil not and: [
           timer isActive not
         ]) ifTrue: [
-          #{#status => #timedOut}
-        ] ifFalse: [#{#status => #failed, #error => e message}]
+          ^#{#status => #timedOut}
+        ] ifFalse: [^#{#status => #failed, #error => e message}]
       ]
-    // Always decrement active count (once) before returning
+    // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
-    // If exception handler returned a status dict, pass it through.
-    // Note: if an activity returns a Dictionary with a #status key, this
-    // would be misinterpreted. A future improvement could use a tagged
-    // wrapper (e.g. Value subclass) instead of bare dictionaries.
-    ((outcome isKindOf: Dictionary) and: [outcome includesKey: #status])
-      ifTrue: [outcome]
-      ifFalse: [
-        timer isNil ifFalse: [timer cancel]
-        #{#status => #completed, #result => outcome}
-      ]
+    timer isNil ifFalse: [timer cancel]
+    #{#status => #completed, #result => outcome}
 
   /// Stop the pool and its supervisor.
   ///
