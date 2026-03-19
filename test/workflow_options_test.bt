@@ -6,35 +6,26 @@
 /// Fixtures: FlakyActivity, NonRetryableActivity, NonRetryableError,
 ///           SleepWorkflow, CountingActivity.
 TestCase subclass: WorkflowOptionsTest
-  state: store = nil
-  state: engine = nil
-  state: counterTable = nil
-  state: flakyTable = nil
+  field: store = nil
+  field: engine = nil
+  field: counterTable = nil
+  field: flakyTable = nil
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    [(Ets named: #counting_activity_calls) delete] on: Error do: [:e | nil]
-    [(Ets named: #flaky_activity_state) delete] on: Error do: [:e | nil]
-    self.counterTable := Ets new: #counting_activity_calls type: #set
+    self.store := TestFixtureRegistry store
+    self.engine := TestFixtureRegistry engine
+    TestFixtureRegistry cleanCounter: #counting_activity_calls
+    TestFixtureRegistry cleanCounter: #flaky_activity_state
+    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
     self.counterTable at: #callCount put: 0
-    self.flakyTable := Ets new: #flaky_activity_state type: #set
-    self.store := EventStore spawn
-    self.engine := WorkflowEngine withStore: self.store
+    self.flakyTable := Ets newOrExisting: #flaky_activity_state type: #set
+    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
-    self.counterTable isNil ifFalse: [
-      [self.counterTable delete] on: Error do: [:e | nil]
-    ]
-    self.flakyTable isNil ifFalse: [
-      [self.flakyTable delete] on: Error do: [:e | nil]
-    ]
-    self.store := nil
-    self.engine := nil
-    self.counterTable := nil
-    self.flakyTable := nil
+    TestFixtureRegistry cleanData
+    TestFixtureRegistry cleanCounter: #counting_activity_calls
+    TestFixtureRegistry cleanCounter: #flaky_activity_state
 
   // ── Helpers ──
 

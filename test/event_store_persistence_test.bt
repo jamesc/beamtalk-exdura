@@ -11,13 +11,13 @@
 // (which is fragile due to named ETS table lifecycle timing).
 
 TestCase subclass: EventStorePersistenceTest
-  state: store = nil
-  state: testDir = "target/bt-test-tmp/event-store-persist"
+  field: store = nil
+  field: testDir = "target/bt-test-tmp/event-store-persist"
 
   setUp =>
     // Clean up any leftover ETS tables and test directory
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
@@ -31,8 +31,8 @@ TestCase subclass: EventStorePersistenceTest
         [self.store stop] on: Error do: [:e | nil]
       ]
     self.store := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]

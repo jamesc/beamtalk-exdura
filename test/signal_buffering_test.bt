@@ -4,12 +4,12 @@
 /// engine and delivered at safe points. Verifies SignalReceived events are
 /// recorded in the event history and delivery order matches arrival order.
 TestCase subclass: SignalBufferingTest
-  state: client = nil
-  state: testDir = "target/bt-test-tmp/signal-buffering"
+  field: client = nil
+  field: testDir = "target/bt-test-tmp/signal-buffering"
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
@@ -23,8 +23,8 @@ TestCase subclass: SignalBufferingTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]

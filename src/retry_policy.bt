@@ -11,8 +11,8 @@
 ///     #nonRetryableErrors => #("InvalidInput")
 ///   }
 Value subclass: RetryPolicy
-  state: initialInterval :: Integer = 1000
-  state: backoffCoefficient :: Float = 2.0
-  state: maximumInterval = nil
-  state: maximumAttempts = nil
-  state: nonRetryableErrors :: List = #()
+  field: initialInterval :: Integer = 1000
+  field: backoffCoefficient :: Float = 2.0
+  field: maximumInterval = nil
+  field: maximumAttempts = nil
+  field: nonRetryableErrors :: List = #()

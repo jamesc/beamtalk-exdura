@@ -12,18 +12,18 @@
 ///     #startedAt => 1710000000
 ///   }
 Value subclass: WorkflowExecution
-  state: workflowId :: String = ""
-  state: runId :: String = ""
+  field: workflowId :: String = ""
+  field: runId :: String = ""
 
   /// Display as WorkflowExecution(order-123 running)
   printString => "WorkflowExecution({self workflowId} {self status})"
-  state: workflowType :: String = ""
-  state: taskQueue :: String = ""
-  state: args :: List = #()
-  state: status :: Symbol = #running
-  state: result = nil
-  state: error = nil
-  state: parentWorkflowId = nil
-  state: startedAt :: Integer = 0
-  state: closedAt = nil
-  state: searchAttributes :: Dictionary = #{}
+  field: workflowType :: String = ""
+  field: taskQueue :: String = ""
+  field: args :: List = #()
+  field: status :: Symbol = #running
+  field: result = nil
+  field: error = nil
+  field: parentWorkflowId = nil
+  field: startedAt :: Integer = 0
+  field: closedAt = nil
+  field: searchAttributes :: Dictionary = #{}

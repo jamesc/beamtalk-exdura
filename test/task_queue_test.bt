@@ -1,7 +1,7 @@
 // BT-1497: BUnit tests for TaskQueue Actor (ETS-backed FIFO queue).
 
 TestCase subclass: TaskQueueTest
-  state: queue = nil
+  field: queue = nil
 
   setUp =>
     self.queue := TaskQueue spawn

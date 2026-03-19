@@ -321,7 +321,7 @@ Actor subclass: WorkflowContext
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     // Safe point: check for cancellation
     (self.engine isCancelled: self.workflowId) ifTrue: [
-      CancellationError new signal: "Workflow cancelled"
+      CancellationError signal: "Workflow cancelled"
     ]
     result
 
@@ -418,7 +418,7 @@ Actor subclass: WorkflowContext
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     // Safe point: check for cancellation
     (self.engine isCancelled: self.workflowId) ifTrue: [
-      CancellationError new signal: "Workflow cancelled"
+      CancellationError signal: "Workflow cancelled"
     ]
     nil
 
@@ -497,7 +497,7 @@ Actor subclass: WorkflowContext
     self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
     // Safe point: check for cancellation
     (self.engine isCancelled: self.workflowId) ifTrue: [
-      CancellationError new signal: "Workflow cancelled"
+      CancellationError signal: "Workflow cancelled"
     ]
     handle
 
@@ -561,7 +561,7 @@ Actor subclass: WorkflowContext
           ]
         // Safe point: check for cancellation
         (self.engine isCancelled: self.workflowId) ifTrue: [
-          CancellationError new signal: "Workflow cancelled"
+          CancellationError signal: "Workflow cancelled"
         ]
         // Clear processed signals (handlers already ran)
         self.deliveredSignals := #()
@@ -619,7 +619,7 @@ Actor subclass: WorkflowContext
         (block value: self.workflowVars) ifTrue: [^nil]
         // Safe point: check for cancellation
         (self.engine isCancelled: self.workflowId) ifTrue: [
-          CancellationError new signal: "Workflow cancelled"
+          CancellationError signal: "Workflow cancelled"
         ]
         Timer sleep: 50
       ]

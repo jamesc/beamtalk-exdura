@@ -3,5 +3,5 @@
 /// Activities throw NonRetryableError to skip the retry policy and
 /// propagate the error immediately to the workflow.
 ///
-///   NonRetryableError new signal: "Invalid input"
+///   NonRetryableError signal: "Invalid input"
 Error subclass: NonRetryableError

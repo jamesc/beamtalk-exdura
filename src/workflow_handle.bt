@@ -9,8 +9,8 @@
 ///   result := handle result          // blocks until complete
 ///   result := handle result: 5000    // blocks with 5s timeout
 Value subclass: WorkflowHandle
-  state: workflowId :: String = ""
-  state: client = nil
+  field: workflowId :: String = ""
+  field: client = nil
 
   /// Display as WorkflowHandle(wf-1)
   printString => "WorkflowHandle({self workflowId})"

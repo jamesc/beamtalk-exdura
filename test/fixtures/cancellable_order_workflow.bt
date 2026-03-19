@@ -9,8 +9,9 @@ Workflow subclass: CancellableOrderWorkflow
 
   /// Register query handlers to observe workflow state during tests.
   registerQueries: ctx =>
-    ctx setState: #status to: "pending"
-    ctx setState: #compensated to: false
+    ctx
+      setState: #status to: "pending";
+      setState: #compensated to: false
     ctx onQuery: "getStatus" do: [:snap | snap status]
 
   /// Process an order with cancellation-aware compensation.
@@ -42,7 +43,8 @@ Workflow subclass: CancellableOrderWorkflow
           runActivity: CancellationActivities
           method: #compensate:
           with: #(orderId)
-        ctx setState: #compensated to: true
-        ctx setState: #status to: "cancelled"
+        ctx
+          setState: #compensated to: true;
+          setState: #status to: "cancelled"
         e signal  // Re-raise cancellation
       ]

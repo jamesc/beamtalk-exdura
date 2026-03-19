@@ -9,17 +9,19 @@ Workflow subclass: OrderWorkflow
 
   /// Register query handlers for order status and full order info.
   registerQueries: ctx =>
-    ctx setState: #status to: "pending"
-    ctx setState: #orderId to: ""
-    ctx onQuery: "getStatus" do: [:snap | snap status]
+    ctx
+      setState: #status to: "pending";
+      setState: #orderId to: "";
+      onQuery: "getStatus" do: [:snap | snap status]
     ctx onQuery: "getOrder" do: [:snap |
       #{#orderId => snap orderId, #status => snap status}
     ]
 
   /// Process an order: set status through stages with activities between.
   run: orderId ctx: ctx =>
-    ctx setState: #orderId to: orderId
-    ctx setState: #status to: "processing"
+    ctx
+      setState: #orderId to: orderId;
+      setState: #status to: "processing"
     ctx
       runActivity: TestActivities
       method: #doubleIt:

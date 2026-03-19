@@ -1,0 +1,127 @@
+/// Singleton registry for sharing expensive test fixtures across test methods.
+///
+/// With Value-based TestCase, setUp runs per test method. This registry
+/// caches EventStore/WorkflowEngine/ActivityWorkerPool actors in an ETS
+/// table so they can be reused instead of respawned.
+///
+///   store := TestFixtureRegistry store: "target/bt-test-tmp/my-test"
+///   engine := TestFixtureRegistry engine
+///   TestFixtureRegistry cleanData   // clear ETS tables between tests
+Object subclass: TestFixtureRegistry
+
+  /// Ensure the registry ETS table exists.
+  class ensureRegistry =>
+    (Erlang ets whereis: #test_fixture_registry) =:= #undefined
+      ifTrue: [Ets new: #test_fixture_registry type: #set]
+
+  /// Get or create a shared EventStore for the given data directory.
+  /// If the data dir changed, destroys the old store and engine first.
+  class store: dataDir :: String =>
+    self ensureRegistry
+    self maybeInvalidate: dataDir
+    registry := Ets named: #test_fixture_registry
+    registry at: #dataDir put: dataDir
+    cached := registry at: #store ifAbsent: [nil]
+    (cached isNil not and: [cached isAlive]) ifTrue: [^cached]
+    self deleteTable: #exdura_executions
+    self deleteTable: #exdura_events
+    store := EventStore spawnWith: #{#dataDir => dataDir}
+    registry at: #store put: store
+    store
+
+  /// Get or create a shared EventStore with default data dir.
+  class store =>
+    self store: "data"
+
+  /// Get or create a shared WorkflowEngine wired to the shared store.
+  class engine =>
+    self ensureRegistry
+    registry := Ets named: #test_fixture_registry
+    cached := registry at: #engine ifAbsent: [nil]
+    (cached isNil not and: [cached isAlive]) ifTrue: [^cached]
+    store := registry at: #store ifAbsent: [nil]
+    engine := WorkflowEngine withStore: store
+    registry at: #engine put: engine
+    engine
+
+  /// Get or create a shared WorkflowEngine wired to store and pool.
+  class engineWithPool =>
+    self ensureRegistry
+    registry := Ets named: #test_fixture_registry
+    cached := registry at: #engine ifAbsent: [nil]
+    (cached isNil not and: [cached isAlive]) ifTrue: [^cached]
+    store := registry at: #store ifAbsent: [nil]
+    pool := self pool
+    engine := WorkflowEngine withStore: store pool: pool
+    registry at: #engine put: engine
+    engine
+
+  /// Get or create a shared ActivityWorkerPool.
+  class pool =>
+    self ensureRegistry
+    registry := Ets named: #test_fixture_registry
+    cached := registry at: #pool ifAbsent: [nil]
+    (cached isNil not and: [cached isAlive]) ifTrue: [^cached]
+    pool := ActivityWorkerPool spawn
+    registry at: #pool put: pool
+    pool
+
+  /// Clear all rows in ETS data tables without destroying actors.
+  class cleanData =>
+    self clearTable: #exdura_executions
+    self clearTable: #exdura_events
+
+  /// Clear a counter table (e.g. #counting_activity_calls).
+  class cleanCounter: name :: Symbol =>
+    self clearTable: name
+
+  /// Clean data directory for file-persistence tests.
+  class cleanDir: dir :: String =>
+    (File isDirectory: dir) ifTrue: [
+      [File deleteAll: dir] on: Error do: [:e | nil]
+    ]
+
+  /// Invalidate if the data dir changed from what was cached.
+  class maybeInvalidate: dataDir :: String =>
+    (Erlang ets whereis: #test_fixture_registry) =:= #undefined ifTrue: [^nil]
+    cachedDir := (Ets named: #test_fixture_registry) at: #dataDir ifAbsent: [nil]
+    cachedDir isNil ifTrue: [^nil]
+    cachedDir /= dataDir ifTrue: [self invalidate]
+
+  /// Destroy cached engine and store so next call creates fresh ones.
+  class invalidate =>
+    (Erlang ets whereis: #test_fixture_registry) =:= #undefined ifTrue: [^nil]
+    registry := Ets named: #test_fixture_registry
+    engine := registry at: #engine ifAbsent: [nil]
+    engine isNil ifFalse: [[engine stop] on: Error do: [:e | nil]]
+    registry removeKey: #engine
+    store := registry at: #store ifAbsent: [nil]
+    store isNil ifFalse: [
+      [store destroy] on: Error do: [:e | nil]
+      [store stop] on: Error do: [:e | nil]
+    ]
+    registry removeKey: #store
+    registry removeKey: #dataDir
+    self deleteTable: #exdura_executions
+    self deleteTable: #exdura_events
+
+  /// Destroy all cached fixtures. Use at end of full test run.
+  class destroyAll =>
+    self invalidate
+    (Erlang ets whereis: #test_fixture_registry) =:= #undefined ifTrue: [^nil]
+    registry := Ets named: #test_fixture_registry
+    pool := registry at: #pool ifAbsent: [nil]
+    pool isNil ifFalse: [[pool destroy] on: Error do: [:e | nil]]
+    registry delete
+
+  // --- Private helpers ---
+
+  /// Clear all rows from a named ETS table if it exists.
+  class clearTable: name :: Symbol =>
+    ref := Erlang ets whereis: name
+    ref =:= #undefined ifFalse: [Erlang ets delete_all_objects: ref]
+
+  /// Delete a named ETS table if it exists.
+  class deleteTable: name :: Symbol =>
+    (Erlang ets whereis: name) =:= #undefined
+      ifFalse: [(Ets named: name) delete]

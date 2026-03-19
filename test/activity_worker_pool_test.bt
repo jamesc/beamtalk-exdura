@@ -7,24 +7,19 @@
 /// Fixtures: test/fixtures/pool_test_activities.bt, src/activity_worker.bt,
 ///           src/activity_worker_pool.bt, src/activity_worker_supervisor.bt
 TestCase subclass: ActivityWorkerPoolTest
-  state: pool = nil
-  state: store = nil
-  state: engine = nil
+  field: pool = nil
+  field: store = nil
+  field: engine = nil
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    self.pool := ActivityWorkerPool spawn
-    self.store := EventStore spawn
-    self.engine := WorkflowEngine withStore: self.store pool: self.pool
+    self.store := TestFixtureRegistry store
+    self.pool := TestFixtureRegistry pool
+    self.engine := TestFixtureRegistry engineWithPool
+    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    self.pool isNil ifFalse: [[self.pool destroy] on: Error do: [:e | nil]]
-    self.store isNil ifFalse: [[self.store destroy] on: Error do: [:e | nil]]
-    self.pool := nil
-    self.store := nil
-    self.engine := nil
+    TestFixtureRegistry cleanData
 
   // === ActivityWorkerSupervisor ===
   testActivityWorkerSupervisorIsSupervisor =>

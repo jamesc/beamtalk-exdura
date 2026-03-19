@@ -8,34 +8,20 @@
 ///           test/fixtures/batch_processor.bt, test/fixtures/abandon_policy_parent.bt,
 ///           test/fixtures/terminate_policy_parent.bt, test/fixtures/test_activities.bt
 TestCase subclass: ChildWorkflowTest
-  state: store = nil
-  state: engine = nil
-  state: testDir = "target/bt-test-tmp/child-wf"
+  field: store = nil
+  field: engine = nil
+  field: testDir = "target/bt-test-tmp/child-wf"
 
   setUp =>
-    [Erlang ets delete: #exdura_executions] on: Error do: [:e | nil]
-    [Erlang ets delete: #exdura_events] on: Error do: [:e | nil]
-    Erlang timer sleep: 200
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
-    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
-    self.engine := WorkflowEngine withStore: self.store
+    TestFixtureRegistry cleanDir: self.testDir
+    self.store := TestFixtureRegistry store: self.testDir
+    self.engine := TestFixtureRegistry engine
+    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    self.store isNil
-      ifFalse: [
-        [self.store destroy] on: Error do: [:e | nil]
-        [self.store stop] on: Error do: [:e | nil]
-      ]
-    self.store := nil
-    self.engine := nil
-    [Erlang ets delete: #exdura_executions] on: Error do: [:e | nil]
-    [Erlang ets delete: #exdura_events] on: Error do: [:e | nil]
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
+    TestFixtureRegistry cleanData
+    TestFixtureRegistry cleanDir: self.testDir
 
   // === Parent starts child and waits for result ===
   testParentStartsChildAndGetsResult =>

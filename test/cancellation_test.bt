@@ -7,13 +7,13 @@
 /// Fixtures: test/fixtures/cancellable_order_workflow.bt, test/fixtures/cancellable_parent_workflow.bt,
 ///           test/fixtures/cancellation_activities.bt, test/fixtures/slow_workflow.bt
 TestCase subclass: CancellationTest
-  state: client = nil
-  state: store = nil
-  state: engine = nil
+  field: client = nil
+  field: store = nil
+  field: engine = nil
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     Erlang timer sleep: 200
     self.client := ExduraClient connect: #{}
     self.engine := self.client engine
@@ -29,8 +29,8 @@ TestCase subclass: CancellationTest
     self.client := nil
     self.engine := nil
     self.store := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
 
   // === client cancel: cancels a running workflow ===
   testClientCancelCancelsRunningWorkflow =>
@@ -147,7 +147,7 @@ TestCase subclass: CancellationTest
     self assert: (CancellationError isKindOf: Error)
     // Verify CancellationError can be caught with on:do:
     result := [
-      CancellationError new signal: "test cancel"
+      CancellationError signal: "test cancel"
     ] on: CancellationError do: [:e | #caught]
     self assert: result equals: #caught
 

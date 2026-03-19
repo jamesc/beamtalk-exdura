@@ -6,4 +6,4 @@
 ///
 ///   ContinueAsNewRequest new: #{#args => #("nextCursor")}
 Value subclass: ContinueAsNewRequest
-  state: args :: List = #()
+  field: args :: List = #()

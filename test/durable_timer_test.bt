@@ -7,39 +7,25 @@
 /// 4. Expired timer on replay (fire time passed — fires immediately)
 /// 5. TimerManager scanning and reconstruction
 TestCase subclass: DurableTimerTest
-  state: store = nil
-  state: engine = nil
-  state: counterTable = nil
-  state: testDir = "target/bt-test-tmp/durable-timer"
+  field: store = nil
+  field: engine = nil
+  field: counterTable = nil
+  field: testDir = "target/bt-test-tmp/durable-timer"
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
-    self.counterTable := [
-      Ets named: #counting_activity_calls
-    ] on: Error do: [:e | Ets new: #counting_activity_calls type: #set]
+    TestFixtureRegistry cleanDir: self.testDir
+    self.store := TestFixtureRegistry store: self.testDir
+    self.engine := TestFixtureRegistry engine
+    TestFixtureRegistry cleanCounter: #counting_activity_calls
+    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
     self.counterTable at: #callCount put: 0
-    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
-    self.engine := WorkflowEngine withStore: self.store
+    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    self.store isNil
-      ifFalse: [
-        [self.store destroy] on: Error do: [:e | nil]
-        [self.store stop] on: Error do: [:e | nil]
-      ]
-    self.store := nil
-    self.engine := nil
-    self.counterTable := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
+    TestFixtureRegistry cleanData
+    TestFixtureRegistry cleanCounter: #counting_activity_calls
+    TestFixtureRegistry cleanDir: self.testDir
 
   // ── Helpers ──
 

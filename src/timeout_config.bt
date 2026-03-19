@@ -10,9 +10,9 @@
 ///     #heartbeatTimeout => 10000
 ///   }
 Value subclass: TimeoutConfig
-  state: workflowExecutionTimeout = nil
-  state: workflowRunTimeout = nil
-  state: scheduleToCloseTimeout = nil
-  state: startToCloseTimeout = nil
-  state: scheduleToStartTimeout = nil
-  state: heartbeatTimeout = nil
+  field: workflowExecutionTimeout = nil
+  field: workflowRunTimeout = nil
+  field: scheduleToCloseTimeout = nil
+  field: startToCloseTimeout = nil
+  field: scheduleToStartTimeout = nil
+  field: heartbeatTimeout = nil

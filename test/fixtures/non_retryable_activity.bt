@@ -12,4 +12,4 @@ Activity subclass: NonRetryableActivity
   class doWork: args :: List =>
     dict := args at: 1
     input := dict at: #input
-    NonRetryableError new signal: "Invalid input: {input}"
+    NonRetryableError signal: "Invalid input: {input}"

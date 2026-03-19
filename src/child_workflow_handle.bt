@@ -13,11 +13,11 @@
 ///   result := handle result          // blocks until child completes
 ///   result := handle result: 5000    // blocks with 5s timeout
 Value subclass: ChildWorkflowHandle
-  state: childWorkflowId :: String = ""
-  state: engine = nil
-  state: eventStore = nil
-  state: cachedResult = nil
-  state: hasCachedResult :: Boolean = false
+  field: childWorkflowId :: String = ""
+  field: engine = nil
+  field: eventStore = nil
+  field: cachedResult = nil
+  field: hasCachedResult :: Boolean = false
 
   /// Create a new ChildWorkflowHandle for the given child workflow.
   ///

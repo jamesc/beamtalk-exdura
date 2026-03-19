@@ -1,7 +1,7 @@
 /// Convenience entry point for booting the Exdura workflow engine.
 ///
-/// Starts ExduraSupervisor (if not already running), applies configuration,
-/// and returns a connected ExduraClient.
+/// Starts ExduraSupervisor, wires children together, applies
+/// configuration, and returns a connected ExduraClient.
 ///
 ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
 ///   handle := client start: OrderWorkflow id: "order-1"
@@ -15,8 +15,7 @@ Object subclass: ExduraWorker
   class start: config :: Dictionary =>
     sup := ExduraSupervisor supervise
 
-    // Wire engine to its supervised siblings (can't happen in initialize
-    // because calling back into the supervisor from child init deadlocks)
+    // Wire engine to its supervised siblings
     engine := sup which: WorkflowEngine
     store := sup which: EventStore
     pool := sup which: ActivityWorkerPool

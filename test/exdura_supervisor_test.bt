@@ -4,7 +4,7 @@
 /// full ExduraWorker start: flow including running workflows through
 /// the client.
 TestCase subclass: ExduraSupervisorTest
-  state: client = nil
+  field: client = nil
 
   setUp =>
     [File deleteAll: "data"] on: Error do: [:e | nil]

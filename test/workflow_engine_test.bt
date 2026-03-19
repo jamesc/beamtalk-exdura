@@ -4,33 +4,20 @@
 /// Fixtures: test/fixtures/test_activities.bt, test/fixtures/two_activity_workflow.bt,
 ///           test/fixtures/passthrough_workflow.bt
 TestCase subclass: WorkflowEngineTest
-  state: store = nil
-  state: engine = nil
-  state: testDir = "target/bt-test-tmp/wf-engine"
+  field: store = nil
+  field: engine = nil
+  field: testDir = "target/bt-test-tmp/wf-engine"
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
-    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
-    self.engine := WorkflowEngine withStore: self.store
+    TestFixtureRegistry cleanDir: self.testDir
+    self.store := TestFixtureRegistry store: self.testDir
+    self.engine := TestFixtureRegistry engine
+    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    self.store isNil
-      ifFalse: [
-        [self.store destroy] on: Error do: [:e | nil]
-        [self.store stop] on: Error do: [:e | nil]
-      ]
-    self.store := nil
-    self.engine := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
-    (File isDirectory: self.testDir) ifTrue: [
-      [File deleteAll: self.testDir] on: Error do: [:e | nil]
-    ]
+    TestFixtureRegistry cleanData
+    TestFixtureRegistry cleanDir: self.testDir
 
   // === Activity base class ===
   testActivityIsObjectSubclass => self assert: (Activity inheritsFrom: Object)

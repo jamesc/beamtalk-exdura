@@ -12,12 +12,12 @@
 ///     #taskQueue => "email-queue"
 ///   }
 Value subclass: ActivityTask
-  state: taskId :: String = ""
-  state: workflowId :: String = ""
-  state: activityType :: String = ""
-  state: args :: List = #()
-  state: taskQueue :: String = ""
-  state: retryPolicy :: Dictionary = #{}
-  state: timeoutConfig :: Dictionary = #{}
-  state: heartbeatTimeout = nil
-  state: attempt :: Integer = 1
+  field: taskId :: String = ""
+  field: workflowId :: String = ""
+  field: activityType :: String = ""
+  field: args :: List = #()
+  field: taskQueue :: String = ""
+  field: retryPolicy :: Dictionary = #{}
+  field: timeoutConfig :: Dictionary = #{}
+  field: heartbeatTimeout = nil
+  field: attempt :: Integer = 1

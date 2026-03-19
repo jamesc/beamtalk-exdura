@@ -1,11 +1,11 @@
 /// BT-1496: Tests that verify EventStore reloads events from pre-existing ETF files.
 TestCase subclass: EventStoreReloadTest
-  state: store = nil
-  state: dataDir = "target/bt-test-tmp/es-reload"
+  field: store = nil
+  field: dataDir = "target/bt-test-tmp/es-reload"
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.dataDir) ifTrue: [
       [File deleteAll: self.dataDir] on: Error do: [:e | nil]
     ]
@@ -20,8 +20,8 @@ TestCase subclass: EventStoreReloadTest
         [self.store stop] on: Error do: [:e | nil]
       ]
     self.store := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     (File isDirectory: self.dataDir) ifTrue: [
       [File deleteAll: self.dataDir] on: Error do: [:e | nil]
     ]

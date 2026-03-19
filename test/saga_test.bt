@@ -25,7 +25,7 @@ TestCase subclass: SagaTest
     log := CompensationLog spawn
     saga := Saga spawn
     saga addCompensation: [log add: "first"]
-    saga addCompensation: [Error new signal: "boom"]
+    saga addCompensation: [Error signal: "boom"]
     saga addCompensation: [log add: "third"]
     saga compensate
     // "third" runs first (reverse), then the error block, then "first"
@@ -48,7 +48,7 @@ TestCase subclass: SagaTest
     saga addCompensation: [log add: "undo-debit"]
 
     // Step 2: Credit fails
-    [Error new signal: "credit failed"] on: Error do: [:e | saga compensate]
+    [Error signal: "credit failed"] on: Error do: [:e | saga compensate]
 
     // Only debit happened, then its compensation ran
     self assert: log entries equals: #("debit", "undo-debit")
@@ -59,7 +59,7 @@ TestCase subclass: SagaTest
     saga := Saga spawn
     saga addCompensation: [log add: "comp-1"]
     saga addCompensation: [log add: "comp-2"]
-    saga addCompensation: [Error new signal: "comp-3 failed"]
+    saga addCompensation: [Error signal: "comp-3 failed"]
     saga addCompensation: [log add: "comp-4"]
     saga compensate
     // Reverse order: comp-4, comp-3 (fails), comp-2, comp-1

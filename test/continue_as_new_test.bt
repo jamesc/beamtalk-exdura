@@ -5,11 +5,11 @@
 /// and that the new execution has a fresh event history.
 /// Fixture: test/fixtures/poller_workflow.bt, test/fixtures/batch_activities.bt
 TestCase subclass: ContinueAsNewTest
-  state: client = nil
+  field: client = nil
 
   setUp =>
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
     self.client := ExduraClient connect: #{}
     self
 
@@ -20,8 +20,8 @@ TestCase subclass: ContinueAsNewTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
-    [(Ets named: #exdura_executions) delete] on: Error do: [:e | nil]
-    [(Ets named: #exdura_events) delete] on: Error do: [:e | nil]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
 
   // === ContinueAsNewRequest sentinel ===
   testContinueAsNewRequestIsAValue =>

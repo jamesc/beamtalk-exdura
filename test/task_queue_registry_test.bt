@@ -1,7 +1,7 @@
 // BT-1497: BUnit tests for TaskQueueRegistry (named queue management).
 
 TestCase subclass: TaskQueueRegistryTest
-  state: registry = nil
+  field: registry = nil
 
   setUp =>
     self.registry := TaskQueueRegistry spawn

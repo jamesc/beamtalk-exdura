@@ -26,7 +26,6 @@ Actor subclass: ActorSnapshot
   ///   snap := ActorSnapshot of: someActor
   ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
   class of: actor :: Actor =>
-    ActorSnapshot
     data := actor fieldNames inject: #{} into: [:acc :name |
       acc at: name put: (actor fieldAt: name)
     ]
