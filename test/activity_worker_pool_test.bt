@@ -12,14 +12,20 @@ TestCase subclass: ActivityWorkerPoolTest
   field: engine = nil
 
   setUp =>
-    self.store := TestFixtureRegistry store
-    self.pool := TestFixtureRegistry pool
-    self.engine := TestFixtureRegistry engineWithPool
-    TestFixtureRegistry cleanData
+    // Clean ETS tables if they exist
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    // Create fresh actors
+    self.store := EventStore spawn
+    self.pool := ActivityWorkerPool spawn
+    self.engine := WorkflowEngine withStore: self.store pool: self.pool
     self
 
   tearDown =>
-    TestFixtureRegistry cleanData
+    self.store isNil ifFalse: [
+      [self.store destroy] on: Error do: [:e | nil]
+      [self.store stop] on: Error do: [:e | nil]
+    ]
 
   // === ActivityWorkerSupervisor ===
   testActivityWorkerSupervisorIsSupervisor =>

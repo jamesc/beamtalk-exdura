@@ -52,7 +52,7 @@ Value subclass: WorkflowHandle
   ///
   ///   result := handle result: 5000   // 5 second timeout
   result: timeout :: Integer =>
-    deadline := (Erlang os system_time: #millisecond) + timeout
+    deadline := (Time nowMs) + timeout
     [true]
       whileTrue: [
         exec := self client getExecution: self workflowId
@@ -67,7 +67,7 @@ Value subclass: WorkflowHandle
             ]
             exec status =:= #continued_as_new ifTrue: []
           ]
-        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+        (Time nowMs) >= deadline ifTrue: [
           self error: "Workflow result timed out after {timeout}ms"
         ]
         Timer sleep: 100

@@ -45,7 +45,7 @@ Object subclass: ActivityRetryExecutor
     // Success — record ActivityCompleted and return
     (resultOrError includesKey: #ok)
       ifTrue: [
-        completedNow := Erlang os system_time: #second
+        completedNow := Time nowMs div: 1000
         completedEvent := ExduraEvent
           new: #{
             #eventType => #ActivityCompleted,

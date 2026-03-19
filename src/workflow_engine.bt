@@ -53,7 +53,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
   startWorkflow: workflowClass id: workflowId args: args =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     wfType := workflowClass name asString
     execution := WorkflowExecution
       new: #{
@@ -180,7 +180,7 @@ Actor subclass: WorkflowEngine
   ///     args: #(5) workflowId: "wf-1"
   ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
   scheduleActivity: activityClass selector: selector args: args workflowId: workflowId options: options =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
 
     // Record ActivityScheduled event
     scheduledEvent := ExduraEvent
@@ -245,7 +245,7 @@ Actor subclass: WorkflowEngine
 
   /// Record an ActivityCompleted event.
   recordActivityCompleted: result workflowId: workflowId =>
-    completedNow := Erlang os system_time: #second
+    completedNow := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
         #eventType => #ActivityCompleted,
@@ -256,7 +256,7 @@ Actor subclass: WorkflowEngine
 
   /// Record an ActivityFailed event.
   recordActivityFailed: reason workflowId: workflowId =>
-    failedNow := Erlang os system_time: #second
+    failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{
         #eventType => #ActivityFailed,
@@ -267,7 +267,7 @@ Actor subclass: WorkflowEngine
 
   /// Record an ActivityTimedOut event.
   recordActivityTimedOut: workflowId =>
-    timedOutNow := Erlang os system_time: #second
+    timedOutNow := Time nowMs div: 1000
     timedOutEvent := ExduraEvent new: #{
       #eventType => #ActivityTimedOut,
       #timestamp => timedOutNow,
@@ -282,7 +282,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine scheduleTimer: 5000 workflowId: "wf-1"
   scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
-    nowMs := Erlang os system_time: #millisecond
+    nowMs := Time nowMs
     fireAt := nowMs + duration
 
     // Record TimerStarted event with fireAt for durable reconstruction
@@ -298,7 +298,7 @@ Actor subclass: WorkflowEngine
     Timer sleep: duration
 
     // Record TimerFired event
-    firedNow := Erlang os system_time: #millisecond
+    firedNow := Time nowMs
     firedEvent := ExduraEvent
       new: #{
         #eventType => #TimerFired,
@@ -315,14 +315,14 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
   reconstructTimer: duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
-    nowMs := Erlang os system_time: #millisecond
+    nowMs := Time nowMs
     remaining := fireAt - nowMs
 
     // If fire time has passed, fire immediately; otherwise wait for remainder
     remaining > 0 ifTrue: [Timer sleep: remaining]
 
     // Record TimerFired event
-    firedNow := Erlang os system_time: #millisecond
+    firedNow := Time nowMs
     firedEvent := ExduraEvent
       new: #{
         #eventType => #TimerFired,
@@ -346,7 +346,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
   bufferSignal: workflowId :: String name: signalName :: String payload: data =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
 
     // Record SignalReceived event
     signalEvent := ExduraEvent
@@ -392,7 +392,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine completeWorkflow: "wf-1" result: 42
   completeWorkflow: workflowId result: result =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
         #eventType => #WorkflowCompleted,
@@ -431,7 +431,7 @@ Actor subclass: WorkflowEngine
     // Inline termination: record failed events for each child to terminate
     toTerminate
       do: [:childId |
-        failNow := Erlang os system_time: #second
+        failNow := Time nowMs div: 1000
         childFailEvent := ExduraEvent
           new: #{
             #eventType => #WorkflowFailed,
@@ -455,7 +455,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine failWorkflow: "wf-1" reason: "something went wrong"
   failWorkflow: workflowId reason: reason =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{
         #eventType => #WorkflowFailed,
@@ -494,7 +494,7 @@ Actor subclass: WorkflowEngine
     // Inline termination: record failed events for each child to terminate
     toTerminate
       do: [:childId |
-        failNow := Erlang os system_time: #second
+        failNow := Time nowMs div: 1000
         childFailEvent := ExduraEvent
           new: #{
             #eventType => #WorkflowFailed,
@@ -516,7 +516,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
   saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     snapshotEvent := ExduraEvent
       new: #{
         #eventType => #StateSnapshot,
@@ -595,7 +595,7 @@ Actor subclass: WorkflowEngine
   ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
   ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
   startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     wfType := workflowClass name asString
     policy := options at: #parentClosePolicy ifAbsent: [#terminate]
 
@@ -684,7 +684,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine recordContinueAsNew: "wf-1" args: #("nextCursor")
   recordContinueAsNew: workflowId :: String args: args :: List =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     continueEvent := ExduraEvent
       new: #{
         #eventType => #WorkflowContinuedAsNew,
@@ -723,7 +723,7 @@ Actor subclass: WorkflowEngine
     self.workflowQueryHandlers := self.workflowQueryHandlers removeKey: workflowId
 
     // Update the existing execution record to running for the new attempt
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     wfType := workflowClass name asString
     self.eventStore
       updateExecution: workflowId
@@ -765,7 +765,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
   recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String =>
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
     markerEvent := ExduraEvent
       new: #{
         #eventType => #VersionMarker,
@@ -788,7 +788,7 @@ Actor subclass: WorkflowEngine
     exec := self.eventStore getExecution: workflowId
     (exec isNil or: [(exec status =:= #running) == false]) ifTrue: [^nil]
 
-    now := Erlang os system_time: #second
+    now := Time nowMs div: 1000
 
     // Record WorkflowCancelled event
     cancelEvent := ExduraEvent

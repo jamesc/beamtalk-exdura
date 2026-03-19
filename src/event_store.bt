@@ -30,7 +30,7 @@ Actor subclass: EventStore
   class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List =>
     offset >= totalSize ifTrue: [^acc]
     // Extract remaining bytes
-    remaining := Erlang binary part: binary arg: (Erlang erlang list_to_tuple: #(offset, totalSize - offset))
+    remaining := Erlang binary part: binary arg: (Tuple withAll: #(offset, totalSize - offset))
     // Parse next term with 'used' option to know how many bytes were consumed
     parseResult := [
       Erlang erlang binary_to_term: remaining with: #(#used)

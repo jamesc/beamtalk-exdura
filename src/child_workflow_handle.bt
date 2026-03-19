@@ -70,7 +70,7 @@ Value subclass: ChildWorkflowHandle
   ///   result := handle result: 5000
   result: timeout :: Integer =>
     self hasCachedResult ifTrue: [^self cachedResult]
-    deadline := (Erlang os system_time: #millisecond) + timeout
+    deadline := (Time nowMs) + timeout
     [true]
       whileTrue: [
         exec := self eventStore getExecution: self childWorkflowId
@@ -84,7 +84,7 @@ Value subclass: ChildWorkflowHandle
               self error: "Child workflow cancelled: {self childWorkflowId}"
             ]
           ]
-        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+        (Time nowMs) >= deadline ifTrue: [
           self error: "Child workflow result timed out after {timeout}ms"
         ]
         Timer sleep: 100

@@ -14,19 +14,26 @@ TestCase subclass: SnapshotTest
   field: testDir = "target/bt-test-tmp/snapshot"
 
   setUp =>
-    TestFixtureRegistry cleanDir: self.testDir
-    self.store := TestFixtureRegistry store: self.testDir
-    self.engine := TestFixtureRegistry engine
-    TestFixtureRegistry cleanCounter: #counting_activity_calls
+    // Clean ETS tables if they exist
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [(Ets named: #counting_activity_calls) delete]
+    // Clean data dir if needed
+    (File isDirectory: self.testDir) ifTrue: [[File deleteAll: self.testDir] on: Error do: [:e | nil]]
+    // Create fresh actors
+    self.store := EventStore spawnWith: #{#dataDir => self.testDir}
+    self.engine := WorkflowEngine withStore: self.store
+    // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
     self.counterTable at: #callCount put: 0
-    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    TestFixtureRegistry cleanData
-    TestFixtureRegistry cleanCounter: #counting_activity_calls
-    TestFixtureRegistry cleanDir: self.testDir
+    self.store isNil ifFalse: [
+      [self.store destroy] on: Error do: [:e | nil]
+      [self.store stop] on: Error do: [:e | nil]
+    ]
+    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [(Ets named: #counting_activity_calls) delete]
 
   // ── Helpers ──
 

@@ -12,20 +12,28 @@ TestCase subclass: WorkflowOptionsTest
   field: flakyTable = nil
 
   setUp =>
-    self.store := TestFixtureRegistry store
-    self.engine := TestFixtureRegistry engine
-    TestFixtureRegistry cleanCounter: #counting_activity_calls
-    TestFixtureRegistry cleanCounter: #flaky_activity_state
+    // Clean ETS tables if they exist
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [(Ets named: #counting_activity_calls) delete]
+    (Erlang ets whereis: #flaky_activity_state) =:= #undefined ifFalse: [(Ets named: #flaky_activity_state) delete]
+    // Create fresh actors
+    self.store := EventStore spawn
+    self.engine := WorkflowEngine withStore: self.store
+    // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
     self.counterTable at: #callCount put: 0
+    // Flaky table
     self.flakyTable := Ets newOrExisting: #flaky_activity_state type: #set
-    TestFixtureRegistry cleanData
     self
 
   tearDown =>
-    TestFixtureRegistry cleanData
-    TestFixtureRegistry cleanCounter: #counting_activity_calls
-    TestFixtureRegistry cleanCounter: #flaky_activity_state
+    self.store isNil ifFalse: [
+      [self.store destroy] on: Error do: [:e | nil]
+      [self.store stop] on: Error do: [:e | nil]
+    ]
+    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [(Ets named: #counting_activity_calls) delete]
+    (Erlang ets whereis: #flaky_activity_state) =:= #undefined ifFalse: [(Ets named: #flaky_activity_state) delete]
 
   // ── Helpers ──
 

@@ -512,7 +512,7 @@ Actor subclass: WorkflowContext
   ///
   ///   payload := ctx waitForSignal: "approve" timeout: 60000
   waitForSignal: name :: String timeout: ms :: Integer =>
-    deadline := (Erlang os system_time: #millisecond) + ms
+    deadline := (Time nowMs) + ms
     // Check already-delivered signals first (from previous safe points)
     found := WorkflowContext findSignal: name in: self.deliveredSignals
     (found at: #found)
@@ -526,7 +526,7 @@ Actor subclass: WorkflowContext
     // ifTrue:/ifFalse: inside whileTrue: doesn't propagate).
     [true]
       whileTrue: [
-        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+        (Time nowMs) >= deadline ifTrue: [
           self error: "waitForSignal timed out after {ms}ms"
         ]
         // Drain signals: return new signals as expression value
@@ -580,7 +580,7 @@ Actor subclass: WorkflowContext
   ///
   ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
   waitForCondition: block timeout: ms :: Integer =>
-    deadline := (Erlang os system_time: #millisecond) + ms
+    deadline := (Time nowMs) + ms
     // Check condition immediately
     (block value: self.workflowVars) ifTrue: [^nil]
     // Poll loop — uses expression-style ifTrue:ifFalse: to avoid the
@@ -588,7 +588,7 @@ Actor subclass: WorkflowContext
     // ifTrue:/ifFalse: inside whileTrue: doesn't propagate).
     [true]
       whileTrue: [
-        (Erlang os system_time: #millisecond) >= deadline ifTrue: [
+        (Time nowMs) >= deadline ifTrue: [
           self error: "waitForCondition timed out after {ms}ms"
         ]
         // Drain signals: return new signals as expression value
