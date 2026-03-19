@@ -8,8 +8,12 @@ TestCase subclass: ExduraClientTest
 
   setUp =>
     // Clean up any leftover ETS tables
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
     self.client := ExduraClient connect: #{}
     self
 
@@ -20,8 +24,12 @@ TestCase subclass: ExduraClientTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [(Ets named: #exdura_executions) delete]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [(Ets named: #exdura_events) delete]
+    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
+      (Ets named: #exdura_executions) delete
+    ]
+    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
+      (Ets named: #exdura_events) delete
+    ]
 
   // === ExduraClient connect: ===
   testConnectCreatesClient =>
