@@ -93,7 +93,7 @@ Object subclass: ActivityRetryExecutor
     backoffCoefficient := config at: #backoffCoefficient
     maximumInterval := config at: #maximumInterval
     rawDelay := initialInterval * (backoffCoefficient raisedTo: attempt - 1)
-    delay := rawDelay asFloat ceiling
+    delay := rawDelay ceiling
     cappedDelay := maximumInterval notNil ifTrue: [
       delay min: maximumInterval
     ] ifFalse: [delay]

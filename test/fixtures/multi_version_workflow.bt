@@ -3,8 +3,7 @@
 /// Uses two different version names to verify they coexist independently.
 /// Returns a string combining both version paths.
 ///
-///   workflow := MultiVersionWorkflow new
-///   workflow run: "test" ctx: ctx
+///   MultiVersionWorkflow run: "test" ctx: ctx
 ///   // => "pay-v1:notify-v2"
 Object subclass: MultiVersionWorkflow
 

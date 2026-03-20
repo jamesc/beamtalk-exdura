@@ -97,10 +97,9 @@ TestCase subclass: VersioningTest
     // The replay should still use version 1 from the recorded history
     self resetCallCount
     replayHistory := self.store readEvents: "wf-ver-2" fromSeq: 1
-    workflow := VersionedWorkflowV2 new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => VersionedWorkflowV2,
         #engine => self.engine,
         #workflowId => "wf-ver-2",
         #input => "test",
@@ -184,10 +183,9 @@ TestCase subclass: VersioningTest
 
     // Step 3: Replay with V2 workflow (defaultVersion changed to 2)
     self resetCallCount
-    workflow := VersionedWorkflowV2 new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => VersionedWorkflowV2,
         #engine => self.engine,
         #workflowId => "wf-ver-replay",
         #input => "data",

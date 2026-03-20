@@ -94,10 +94,9 @@ TestCase subclass: ReplayProofTest
 
     // Step 3: Replay — new WorkflowRunner with the SAME workflow ID's history
     replayHistory := self.store readEvents: "wf-proof-2" fromSeq: 1
-    workflow := TwoStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-2",
         #input => "world",
@@ -124,10 +123,9 @@ TestCase subclass: ReplayProofTest
     // Replay
     self resetCallCount
     replayHistory := self.store readEvents: "wf-proof-3" fromSeq: 1
-    workflow := TwoStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-3",
         #input => "test",
@@ -171,10 +169,9 @@ TestCase subclass: ReplayProofTest
     self resetCallCount
     self assert: self callCount equals: 0
 
-    workflow := TwoStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-4",
         #input => "partial",

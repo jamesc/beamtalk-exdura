@@ -86,19 +86,18 @@ Actor subclass: WorkflowEngine
     // Get the input argument for run:
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
 
-    // Create workflow object and run via WorkflowRunner.
-    // The runner runs asynchronously (go!) so the engine doesn't deadlock.
-    workflow := workflowClass new
+    // Run via WorkflowRunner asynchronously so the engine doesn't deadlock.
+    // Workflow is an Object subclass (class-methods only), so pass the class directly.
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => workflowClass,
         #engine => self,
         #workflowId => workflowId,
         #input => input,
         #history => history
       }
     runner go!
-    workflow
+    workflowClass
 
   /// Replay a workflow, using a snapshot if available for optimization.
   ///
@@ -124,7 +123,6 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
   replayWorkflow: workflowClass id: workflowId input: input snapshotInterval: interval :: Integer =>
-    workflow := workflowClass new
     history := self.eventStore readEvents: workflowId fromSeq: 1
     snapResult := self.eventStore readEventsFromSnapshot: workflowId
     snapResult isNil
@@ -132,7 +130,7 @@ Actor subclass: WorkflowEngine
         // No snapshot — full replay from event history
         runner := WorkflowRunner
           spawnWith: #{
-            #workflow => workflow,
+            #workflow => workflowClass,
             #engine => self,
             #workflowId => workflowId,
             #input => input,
@@ -146,7 +144,7 @@ Actor subclass: WorkflowEngine
         snapshot := snapResult at: #snapshot
         runner := WorkflowRunner
           spawnWith: #{
-            #workflow => workflow,
+            #workflow => workflowClass,
             #engine => self,
             #workflowId => workflowId,
             #input => input,
@@ -156,7 +154,7 @@ Actor subclass: WorkflowEngine
           }
         runner go!
       ]
-    workflow
+    workflowClass
 
   /// Execute an activity class method and record events (no options).
   ///
@@ -648,10 +646,9 @@ Actor subclass: WorkflowEngine
     // Load child's event history and launch asynchronously
     history := self.eventStore readEvents: childWorkflowId fromSeq: 1
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
-    workflow := workflowClass new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => workflowClass,
         #engine => self,
         #workflowId => childWorkflowId,
         #input => input,
@@ -746,17 +743,16 @@ Actor subclass: WorkflowEngine
     // Load fresh history and start the new workflow
     history := self.eventStore readEvents: workflowId fromSeq: 1
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
-    workflow := workflowClass new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => workflowClass,
         #engine => self,
         #workflowId => workflowId,
         #input => input,
         #history => history
       }
     runner go!
-    workflow
+    workflowClass
 
   /// Record a VersionMarker event for a workflow.
   ///

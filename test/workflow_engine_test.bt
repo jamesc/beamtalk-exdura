@@ -148,10 +148,9 @@ TestCase subclass: WorkflowEngineTest
 
     // Step 3: Run the workflow again in replay mode with existing history
     replayHistory := self.store readEvents: "wf-replay-1" fromSeq: 1
-    workflow := TwoActivityWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => TwoActivityWorkflow,
         #engine => self.engine,
         #workflowId => "wf-replay-1",
         #input => 5,

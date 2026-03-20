@@ -114,10 +114,9 @@ TestCase subclass: DurableTimerTest
     // Step 2: Replay with full history — should NOT re-execute activities or sleep
     self resetCallCount
     replayHistory := self.store readEvents: "wf-timer-2" fromSeq: 1
-    workflow := SleepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-2",
         #input => "hello",
@@ -172,10 +171,9 @@ TestCase subclass: DurableTimerTest
     // Step 3: Replay with partial history — timer fire time has passed,
     // so it should fire immediately and continue to second activity.
     self resetCallCount
-    workflow := SleepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-3",
         #input => "hello",

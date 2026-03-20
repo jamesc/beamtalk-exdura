@@ -276,7 +276,7 @@ TestCase subclass: WorkflowOptionsTest
     self assert: self callCount equals: 0
 
     replayHistory := self.store readEvents: "wf-sleep-replay-1" fromSeq: 1
-    workflow := SleepWorkflow new
+    workflow := SleepWorkflow
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => workflow,

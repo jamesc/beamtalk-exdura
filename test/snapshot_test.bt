@@ -142,10 +142,9 @@ TestCase subclass: SnapshotTest
     // Use a small snapshot interval (every 10 events = 5 activities)
     // to trigger snapshot creation with fewer activities.
     // 8 activities at interval 10 triggers 1 snapshot (at event 10).
-    workflow := ManyStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-exec",
         #input => 8,
@@ -194,10 +193,9 @@ TestCase subclass: SnapshotTest
     self resetCallCount
     // Step 1: Run workflow with small snapshot interval.
     // 8 activities at interval 10 triggers 1 snapshot.
-    workflow := ManyStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-replay",
         #input => 8,
@@ -265,10 +263,9 @@ TestCase subclass: SnapshotTest
   testFullReplayWithoutSnapshot =>
     self resetCallCount
     // Run workflow without triggering snapshots (very large interval)
-    workflow := ManyStepWorkflow new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-no-snap",
         #input => 5,

@@ -178,10 +178,9 @@ TestCase subclass: ChildWorkflowTest
 
     // Step 3: Replay the parent workflow with existing history
     replayHistory := store readEvents: "replay-child-1" fromSeq: 1
-    workflow := SingleChildParent new
     runner := WorkflowRunner
       spawnWith: #{
-        #workflow => workflow,
+        #workflow => SingleChildParent,
         #engine => engine,
         #workflowId => "replay-child-1",
         #input => 5,

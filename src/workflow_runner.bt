@@ -6,7 +6,7 @@
 /// point and replays only subsequent events.
 ///
 ///   runner := WorkflowRunner spawnWith: #{
-///     #workflow => TwoActivityWorkflow new,
+///     #workflow => TwoActivityWorkflow,
 ///     #engine => engine,
 ///     #workflowId => "wf-1",
 ///     #input => "hello",
@@ -74,7 +74,7 @@ Actor subclass: WorkflowRunner
         // Continue-as-new: delegate to engine to start fresh execution
         self.engine
           continueAsNewWorkflow: self.workflowId
-          workflowClass: self.workflow class
+          workflowClass: self.workflow
           args: result args
       ]
       ifFalse: [
