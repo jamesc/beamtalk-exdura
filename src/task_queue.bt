@@ -19,7 +19,7 @@ Actor subclass: TaskQueue
   /// Initialize the ETS ordered_set table for FIFO ordering.
   initialize =>
     id := System uniqueId
-    tableName := Erlang erlang binary_to_atom: "exdura_tq_{id}"
+    tableName := "exdura_tq_{id}" asAtom
     self.table := Ets new: tableName type: #orderedSet
     self.nextSeq := 1
 

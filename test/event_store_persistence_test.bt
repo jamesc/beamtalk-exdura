@@ -103,7 +103,7 @@ TestCase subclass: EventStorePersistenceTest
     self.store appendEvents: "wf-etf-valid" events: #(evt)
     // Read the file back and verify contents
     content := (File readBinary: (self.testDir ++ "/events/wf-etf-valid.etf")) unwrap
-    {dict, _used} := Erlang erlang binary_to_term: content with: #(#used)
+    dict := Binary deserialize: content
     self assert: (dict at: #eventId) equals: 1
     self assert: (dict at: #eventType) equals: #WorkflowStarted
     self assert: (dict at: #timestamp) equals: 12345
