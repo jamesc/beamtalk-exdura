@@ -18,7 +18,7 @@
 ///   history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
 Workflow subclass: OrderWorkflow
 
-  run: order ctx: ctx =>
+  class run: order ctx: ctx =>
     inventory := ctx
       runActivity: OrderActivities
       method: #reserveInventory:

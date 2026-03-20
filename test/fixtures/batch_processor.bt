@@ -6,7 +6,7 @@
 ///   // returns #(6, 10, 14)
 Workflow subclass: BatchProcessor
 
-  run: items ctx: ctx -> List =>
+  class run: items ctx: ctx -> List =>
     handles := items
       collect: [:item |
         ctx

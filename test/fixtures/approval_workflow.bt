@@ -7,7 +7,7 @@
 Workflow subclass: ApprovalWorkflow
 
   /// Run the approval workflow: register handler, wait for approval.
-  run: _requestId ctx: ctx -> Dictionary =>
+  class run: _requestId ctx: ctx -> Dictionary =>
     ctx setVar: #approved to: false;
       setVar: #approver to: nil;
       onSignal: "approve" do: [:payload :vars |

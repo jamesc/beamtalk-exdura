@@ -6,7 +6,7 @@
 ///   // starts ChildDoubler, returns 10
 Workflow subclass: SingleChildParent
 
-  run: value ctx: ctx -> Integer =>
+  class run: value ctx: ctx -> Integer =>
     handle := ctx
       startChildWorkflow: ChildDoubler
       method: #run:

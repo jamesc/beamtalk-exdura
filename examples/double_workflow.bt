@@ -13,7 +13,7 @@
 ///   history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
 Workflow subclass: DoubleWorkflow
 
-  run: value ctx: ctx =>
+  class run: value ctx: ctx =>
     doubled := ctx
       runActivity: MathActivities
       method: #doubleIt:

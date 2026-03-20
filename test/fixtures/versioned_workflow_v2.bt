@@ -10,11 +10,11 @@
 ///   // => "v1-result" (replay of workflow originally run with V1)
 Object subclass: VersionedWorkflowV2
 
-  run: _args ctx: ctx -> String =>
+  class run: _args ctx: ctx -> String =>
     v := ctx
       version: "payment-flow"
       defaultVersion: 2
       maxVersion: 2
     v == 1 ifTrue: ["v1-result"] ifFalse: ["v2-result"]
 
-  registerQueries: _ctx => nil
+  class registerQueries: _ctx => nil

@@ -8,7 +8,7 @@
 Workflow subclass: CancellableOrderWorkflow
 
   /// Register query handlers to observe workflow state during tests.
-  registerQueries: ctx =>
+  class registerQueries: ctx =>
     ctx setState: #status to: "pending"; setState: #compensated to: false
     ctx onQuery: "getStatus" do: [:snap | snap status]
 
@@ -17,7 +17,7 @@ Workflow subclass: CancellableOrderWorkflow
   /// 1. Reserve inventory (quick activity)
   /// 2. Enter cancellable section with long-running activity
   /// 3. On cancellation: compensate by releasing reservation, then re-raise
-  run: orderId ctx: ctx =>
+  class run: orderId ctx: ctx =>
     ctx setState: #status to: "reserving"
     _reservation := ctx
       runActivity: CancellationActivities

@@ -6,7 +6,7 @@
 ///   engine startWorkflow: TerminatePolicyParent id: "p-1" args: #(5)
 Workflow subclass: TerminatePolicyParent
 
-  run: value ctx: ctx =>
+  class run: value ctx: ctx =>
     _handle := ctx
       startChildWorkflow: ChildDoubler
       method: #run:

@@ -7,7 +7,7 @@
 ///   // => "pay-v1:notify-v2"
 Object subclass: MultiVersionWorkflow
 
-  run: _args ctx: ctx -> String =>
+  class run: _args ctx: ctx -> String =>
     payV := ctx
       version: "payment-flow"
       defaultVersion: 1
@@ -20,4 +20,4 @@ Object subclass: MultiVersionWorkflow
     notifyLabel := notifyV == 2 ifTrue: ["notify-v2"] ifFalse: ["notify-v3"]
     "{payLabel}:{notifyLabel}"
 
-  registerQueries: _ctx => nil
+  class registerQueries: _ctx => nil

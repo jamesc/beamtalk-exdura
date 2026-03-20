@@ -6,4 +6,4 @@
 Workflow subclass: PassthroughWorkflow
 
   /// Return input unchanged.
-  run: input ctx: _ctx => input
+  class run: input ctx: _ctx => input

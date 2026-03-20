@@ -25,6 +25,10 @@ TestCase subclass: WorkflowOptionsTest
     (Erlang ets whereis: #flaky_activity_state) =:= #undefined ifFalse: [
       (Ets named: #flaky_activity_state) delete
     ]
+    // Clean on-disk event/snapshot files from previous runs
+    (File isDirectory: "data") ifTrue: [
+      [File deleteAll: "data"] on: Error do: [:e | nil]
+    ]
     // Create fresh actors
     self.store := EventStore spawn
     self.engine := WorkflowEngine withStore: self.store

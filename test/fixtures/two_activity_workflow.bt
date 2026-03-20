@@ -8,7 +8,7 @@
 Workflow subclass: TwoActivityWorkflow
 
   /// Run two activities: double the input, then add the result to itself.
-  run: input ctx: ctx -> Integer =>
+  class run: input ctx: ctx -> Integer =>
     doubled := ctx
       runActivity: TestActivities
       method: #doubleIt:

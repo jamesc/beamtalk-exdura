@@ -22,7 +22,7 @@ Workflow subclass: ManyStepWorkflow
   /// Run N sequential activities, accumulating a running total.
   /// Input is the number of activities to run.
   /// Uses class helper to avoid block mutation gotcha with activity calls.
-  run: count ctx: ctx -> Integer =>
+  class run: count ctx: ctx -> Integer =>
     ManyStepWorkflow
       runSteps: count
       from: 1

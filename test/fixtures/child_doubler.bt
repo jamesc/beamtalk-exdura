@@ -6,7 +6,7 @@
 ///   // child returns 10
 Workflow subclass: ChildDoubler
 
-  run: value ctx: ctx -> Integer =>
+  class run: value ctx: ctx -> Integer =>
     ctx
       runActivity: TestActivities
       method: #doubleIt:

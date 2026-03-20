@@ -9,7 +9,7 @@ Workflow subclass: TwoStepWorkflow
 
   /// Run two sequential activities: first processes the input,
   /// second processes the first result.
-  run: input ctx: ctx -> Dictionary =>
+  class run: input ctx: ctx -> Dictionary =>
     a := ctx
       runActivity: CountingActivity
       method: #doWork:

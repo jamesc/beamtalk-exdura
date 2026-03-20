@@ -8,11 +8,11 @@
 ///   // => "v1-result" (first execution with defaultVersion 1)
 Object subclass: VersionedWorkflowV1
 
-  run: _args ctx: ctx -> String =>
+  class run: _args ctx: ctx -> String =>
     v := ctx
       version: "payment-flow"
       defaultVersion: 1
       maxVersion: 2
     v == 1 ifTrue: ["v1-result"] ifFalse: ["v2-result"]
 
-  registerQueries: _ctx => nil
+  class registerQueries: _ctx => nil

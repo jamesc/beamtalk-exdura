@@ -72,7 +72,7 @@ Object subclass: Workflow
   /// runActivity:method:with:options:, sleep:, onSignal:do:,
   /// waitForSignal:timeout:, waitForCondition:timeout:, setState:to:,
   /// startChildWorkflow:method:with:, and startChildWorkflow:method:with:options:.
-  run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"
+  class run: _args ctx: _ctx => self error: "Subclass must implement run:ctx:"
 
   /// Subclass hook — register query handlers via the context.
   ///
@@ -81,4 +81,4 @@ Object subclass: Workflow
   ///
   ///   registerQueries: ctx =>
   ///     ctx onQuery: "getStatus" do: [:snap | snap status]
-  registerQueries: _ctx => nil
+  class registerQueries: _ctx => nil

@@ -7,6 +7,6 @@
 Workflow subclass: SlowWorkflow
 
   /// Sleep for the given duration (ms) and return #done.
-  run: durationMs ctx: ctx =>
+  class run: durationMs ctx: ctx =>
     ctx sleep: durationMs
     #done

@@ -8,7 +8,7 @@
 Workflow subclass: SlowOrderWorkflow
 
   /// Register query handlers for status and full order info.
-  registerQueries: ctx =>
+  class registerQueries: ctx =>
     ctx setState: #status to: "pending";
       setState: #orderId to: "";
       onQuery: "getStatus" do: [:snap | snap status]
@@ -17,7 +17,7 @@ Workflow subclass: SlowOrderWorkflow
     ]
 
   /// Process an order with a sleep between activity calls.
-  run: orderId ctx: ctx =>
+  class run: orderId ctx: ctx =>
     ctx setState: #orderId to: orderId; setState: #status to: "processing"
     ctx
       runActivity: TestActivities
