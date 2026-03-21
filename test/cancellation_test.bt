@@ -30,6 +30,8 @@ TestCase subclass: CancellationTest
     self
 
   tearDown =>
+    self.engine isNil
+      ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
     self.client isNil
       ifFalse: [
         [self.client destroy] on: Error do: [:e | nil]
