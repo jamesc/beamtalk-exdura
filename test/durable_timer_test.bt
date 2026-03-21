@@ -68,7 +68,7 @@ TestCase subclass: DurableTimerTest
         #taskQueue => "default",
         #args => #(),
         #status => #running,
-        #startedAt => (Time nowS)
+        #startedAt => Time nowS
       }
     self.store createExecution: execution
 
