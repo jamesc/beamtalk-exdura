@@ -174,9 +174,7 @@ Actor subclass: EventStore
     contentSize := Binary size: content
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := Binary deserialize: content
-    @expect type
     snapEventId := snapshot at: #eventId
-    @expect type
     snapState := snapshot at: #state
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
@@ -259,7 +257,6 @@ Actor subclass: EventStore
     result isError ifTrue: [^nil]
     files := result unwrap
     // Collect workflow IDs from .etf filenames
-    @expect type
     etfFiles := files select: [:f | f endsWith: ".etf"]
     wfIds := etfFiles collect: [:f | f take: f size - 4]
     // Load each workflow's events from disk into ETS
