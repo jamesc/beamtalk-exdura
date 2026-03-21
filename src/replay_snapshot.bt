@@ -1,0 +1,12 @@
+/// Checkpoint of workflow replay state for snapshot-based optimization.
+///
+/// Captures the replay cursor position and delivered signals at a safe
+/// point so that future replays can skip already-processed events.
+///
+///   ReplaySnapshot new: #{
+///     #replayCursor => 50,
+///     #deliveredSignals => #("sig-1", "sig-2")
+///   }
+Value subclass: ReplaySnapshot
+  field: replayCursor :: Integer = 0
+  field: deliveredSignals :: List = #()

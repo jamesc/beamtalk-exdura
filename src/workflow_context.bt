@@ -152,14 +152,14 @@ Actor subclass: WorkflowContext
   /// workflow always runs from the beginning.
   ///
   ///   ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
-  initWithSnapshot: snapshot :: Dictionary(Symbol, Integer | List) engine: anEngine workflowId: anId history: aHistory =>
+  initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine workflowId: anId history: aHistory =>
     self.engine := anEngine
     self.workflowId := anId
     self.eventHistory := aHistory
     // Cursor starts at 1 — workflow replays all activities from the beginning
     self.replayCursor := 1
     // Pre-populate delivered signals from snapshot
-    self.deliveredSignals := snapshot at: #deliveredSignals ifAbsent: [#()]
+    self.deliveredSignals := snapshot deliveredSignals
     self.eventsSinceSnapshot := 0
     self.isReplaying := aHistory size > 1
 
@@ -307,7 +307,7 @@ Actor subclass: WorkflowContext
     self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
     self.eventsSinceSnapshot >= self.snapshotInterval
       ifTrue: [
-        snapState := #{
+        snapState := ReplaySnapshot new: #{
           #replayCursor => self.replayCursor,
           #deliveredSignals => self.deliveredSignals
         }
@@ -404,7 +404,7 @@ Actor subclass: WorkflowContext
     self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
     self.eventsSinceSnapshot >= self.snapshotInterval
       ifTrue: [
-        snapState := #{
+        snapState := ReplaySnapshot new: #{
           #replayCursor => self.replayCursor,
           #deliveredSignals => self.deliveredSignals
         }

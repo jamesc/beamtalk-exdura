@@ -512,8 +512,8 @@ Actor subclass: WorkflowEngine
   /// snapshot state to disk via the EventStore. Used by WorkflowContext
   /// at configurable intervals to enable replay optimization.
   ///
-  ///   engine saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
-  saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
+  ///   engine saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer =>
     now := Time nowMs div: 1000
     snapshotEvent := ExduraEvent
       new: #{

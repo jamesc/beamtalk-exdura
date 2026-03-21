@@ -139,12 +139,12 @@ Actor subclass: EventStore
 
   /// Save a state snapshot for a workflow at the given eventId.
   ///
-  /// The snapshot is an ETF-serialized Dictionary containing the workflow
+  /// The snapshot is an ETF-serialized ReplaySnapshot containing the workflow
   /// context state at the time of the snapshot. It is written to
   /// `data/snapshots/{workflowId}.etf`, overwriting any previous snapshot.
   ///
-  ///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
-  saveSnapshot: workflowId :: String state: state :: Dictionary eventId: eventId :: Integer =>
+  ///   store saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer =>
     path := self snapshotFilePath: workflowId
     data := #{#state => state, #eventId => eventId}
     binary := Binary serialize: data
