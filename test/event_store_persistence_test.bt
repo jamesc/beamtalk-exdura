@@ -138,7 +138,7 @@ TestCase subclass: EventStorePersistenceTest
     events := EventStore
       parseEtfBinary: content
       offset: 0
-      size: (Binary size: content)
+      size: content byteSize
       acc: #()
     self assert: events size equals: 3
     self assert: (events at: 1) eventId equals: 1

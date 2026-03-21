@@ -171,7 +171,7 @@ Actor subclass: EventStore
     readResult := File readBinary: path
     readResult isError ifTrue: [^nil]
     content := readResult unwrap
-    contentSize := Binary size: content
+    contentSize := content byteSize
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := Binary deserialize: content
     @expect type
@@ -270,7 +270,7 @@ Actor subclass: EventStore
         readResult isError not
           ifTrue: [
             content := readResult unwrap
-            contentSize := Binary size: content
+            contentSize := content byteSize
             contentSize > 0
               ifTrue: [
                 events := EventStore
