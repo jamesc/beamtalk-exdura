@@ -307,10 +307,11 @@ Actor subclass: WorkflowContext
     self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
     self.eventsSinceSnapshot >= self.snapshotInterval
       ifTrue: [
-        snapState := ReplaySnapshot new: #{
-          #replayCursor => self.replayCursor,
-          #deliveredSignals => self.deliveredSignals
-        }
+        snapState := ReplaySnapshot
+          new: #{
+            #replayCursor => self.replayCursor,
+            #deliveredSignals => self.deliveredSignals
+          }
         self.engine
           saveSnapshot: self.workflowId
           state: snapState
@@ -404,10 +405,11 @@ Actor subclass: WorkflowContext
     self.eventsSinceSnapshot := self.eventsSinceSnapshot + 2
     self.eventsSinceSnapshot >= self.snapshotInterval
       ifTrue: [
-        snapState := ReplaySnapshot new: #{
-          #replayCursor => self.replayCursor,
-          #deliveredSignals => self.deliveredSignals
-        }
+        snapState := ReplaySnapshot
+          new: #{
+            #replayCursor => self.replayCursor,
+            #deliveredSignals => self.deliveredSignals
+          }
         self.engine
           saveSnapshot: self.workflowId
           state: snapState
