@@ -159,6 +159,7 @@ Actor subclass: WorkflowContext
     // Cursor starts at 1 — workflow replays all activities from the beginning
     self.replayCursor := 1
     // Pre-populate delivered signals from snapshot
+    @expect type
     self.deliveredSignals := snapshot at: #deliveredSignals ifAbsent: [#()]
     self.eventsSinceSnapshot := 0
     self.isReplaying := aHistory size > 1

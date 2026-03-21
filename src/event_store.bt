@@ -174,7 +174,9 @@ Actor subclass: EventStore
     contentSize := Binary size: content
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := Binary deserialize: content
+    @expect type
     snapEventId := snapshot at: #eventId
+    @expect type
     snapState := snapshot at: #state
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
