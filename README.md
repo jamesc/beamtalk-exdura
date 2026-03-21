@@ -1,5 +1,7 @@
 # Exdura
 
+[![CI](https://github.com/jamesc/beamtalk-exdura/actions/workflows/ci.yml/badge.svg)](https://github.com/jamesc/beamtalk-exdura/actions/workflows/ci.yml)
+
 A Temporal-inspired durable workflow engine built in [Beamtalk](https://beamtalk.dev) on the BEAM.
 
 Workflows are ordinary sequential code. The engine handles persistence, retries, and failure recovery transparently through event-sourced replay.
@@ -124,6 +126,8 @@ history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
 ```
 
 ## Building
+
+> **Note:** CI uses nightly beamtalk builds to track the latest compiler features.
 
 ```bash
 beamtalk build
