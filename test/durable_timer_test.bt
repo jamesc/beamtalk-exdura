@@ -125,7 +125,11 @@ TestCase subclass: DurableTimerTest
         #history => replayHistory
       }
     runner go!
+    // Wait for replay to complete — runner is async
     Erlang timer sleep: 500
+    // Stop engine before assertions to drain in-flight actors
+    [self.engine stop] on: Error do: [:e | nil]
+    self.engine := nil
 
     // Activities should not have been called again
     self assert: self callCount equals: 0
