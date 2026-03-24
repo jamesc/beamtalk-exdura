@@ -53,8 +53,12 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
   startWorkflow: workflowClass id: workflowId args: args =>
-    now := Time nowMs div: 1000
     wfType := workflowClass name asString
+    Erlang beamtalk_actor set_trace_context: #{
+      #workflowId => workflowId,
+      #workflowType => wfType
+    }
+    now := Time nowMs div: 1000
     execution := WorkflowExecution
       new: #{
         #workflowId => workflowId,
@@ -123,6 +127,10 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
   replayWorkflow: workflowClass id: workflowId input: input snapshotInterval: interval :: Integer =>
+    Erlang beamtalk_actor set_trace_context: #{
+      #workflowId => workflowId,
+      #workflowType => workflowClass name asString
+    }
     history := self.eventStore readEvents: workflowId fromSeq: 1
     snapResult := self.eventStore readEventsFromSnapshot: workflowId
     snapResult isNil
@@ -178,6 +186,7 @@ Actor subclass: WorkflowEngine
   ///     args: #(5) workflowId: "wf-1"
   ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
   scheduleActivity: activityClass selector: selector args: args workflowId: workflowId options: options =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
 
     // Record ActivityScheduled event
@@ -280,6 +289,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine scheduleTimer: 5000 workflowId: "wf-1"
   scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     nowMs := Time nowMs
     fireAt := nowMs + duration
 
@@ -313,6 +323,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
   reconstructTimer: duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     nowMs := Time nowMs
     remaining := fireAt - nowMs
 
@@ -344,6 +355,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
   bufferSignal: workflowId :: String name: signalName :: String payload: data =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
 
     // Record SignalReceived event
@@ -390,6 +402,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine completeWorkflow: "wf-1" result: 42
   completeWorkflow: workflowId result: result =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
@@ -453,6 +466,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine failWorkflow: "wf-1" reason: "something went wrong"
   failWorkflow: workflowId reason: reason =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{
@@ -593,6 +607,11 @@ Actor subclass: WorkflowEngine
   ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
   ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
   startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary =>
+    Erlang beamtalk_actor set_trace_context: #{
+      #workflowId => childWorkflowId,
+      #parentWorkflowId => parentId,
+      #workflowType => workflowClass name asString
+    }
     now := Time nowMs div: 1000
     wfType := workflowClass name asString
     policy := options at: #parentClosePolicy ifAbsent: [#terminate]
@@ -701,6 +720,10 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine continueAsNewWorkflow: "wf-1" workflowClass: PollerWorkflow args: #("nextCursor")
   continueAsNewWorkflow: workflowId :: String workflowClass: workflowClass args: args :: List =>
+    Erlang beamtalk_actor set_trace_context: #{
+      #workflowId => workflowId,
+      #workflowType => workflowClass name asString
+    }
     // Mark old execution as continued_as_new
     self.eventStore
       updateExecution: workflowId
@@ -780,6 +803,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine cancelWorkflow: "wf-1"
   cancelWorkflow: workflowId :: String =>
+    Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     // Guard: only cancel running workflows
     exec := self.eventStore getExecution: workflowId
     (exec isNil or: [(exec status =:= #running) == false]) ifTrue: [^nil]
