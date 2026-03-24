@@ -56,6 +56,21 @@ TestCase subclass: SnapshotTest
   /// Reset the call count to zero.
   resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
 
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 100ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // ── EventStore snapshot persistence tests ──
 
   /// saveSnapshot persists a snapshot file to disk.
@@ -178,10 +193,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-exec" events: #(startEvent)
     runner go!
-    Erlang timer sleep: 8000
-
-    // Verify workflow completed
-    exec := self.store getExecution: "wf-snap-exec"
+    exec := self awaitWorkflow: "wf-snap-exec" timeout: 5000
     self assert: exec status equals: #completed
 
     // Verify a snapshot was created
@@ -228,10 +240,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-replay" events: #(startEvent)
     runner go!
-    Erlang timer sleep: 8000
-
-    // Verify original completed
-    exec := self.store getExecution: "wf-snap-replay"
+    exec := self awaitWorkflow: "wf-snap-replay" timeout: 5000
     self assert: exec status equals: #completed
     originalResult := exec result
     _originalCallCount := self callCount
@@ -243,7 +252,8 @@ TestCase subclass: SnapshotTest
       id: "wf-snap-replay"
       input: 8
       snapshotInterval: 10
-    Erlang timer sleep: 8000
+    // Replay is near-instant (no live activity execution)
+    Erlang timer sleep: 1000
 
     // Step 3: Verify activities were NOT re-executed during replay
     // (all activities are replayed from history, not executed live)
@@ -298,10 +308,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-no-snap" events: #(startEvent)
     runner go!
-    Erlang timer sleep: 3000
-
-    // Verify completed
-    exec := self.store getExecution: "wf-no-snap"
+    exec := self awaitWorkflow: "wf-no-snap" timeout: 5000
     self assert: exec status equals: #completed
     self assert: exec result equals: 5
 
@@ -314,7 +321,8 @@ TestCase subclass: SnapshotTest
       replayWorkflow: ManyStepWorkflow
       id: "wf-no-snap"
       input: 5
-    Erlang timer sleep: 3000
+    // Replay is near-instant (no live activity execution)
+    Erlang timer sleep: 1000
 
     // During full replay, activities should NOT be re-executed
     self assert: self callCount equals: 0
