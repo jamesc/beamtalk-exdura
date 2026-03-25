@@ -1,7 +1,8 @@
 /// Executes an activity with exponential backoff retry logic (BT-1494).
 ///
 /// A plain Object (not Actor) that handles retry loops for activity execution.
-/// Uses recursive calls to avoid the block mutation gotcha with local variables.
+/// Uses Result tryDo: for exception capture and recursive calls to avoid the
+/// block mutation gotcha with local variables.
 ///
 ///   result := ActivityRetryExecutor
 ///     execute: TestActivities selector: #doWork: args: #(data)
@@ -36,31 +37,29 @@ Object subclass: ActivityRetryExecutor
     args := config at: #args
     eventStore := config at: #eventStore
     workflowId := config at: #workflowId
-    resultOrError := [
-      result := activityClass perform: selector withArguments: #(args)
-      #{#ok => result}
-    ] on: Exception do: [:e |
-      #{#error => e message, #errorClass => e class name asString}
+    outcome := Result tryDo: [
+      activityClass perform: selector withArguments: #(args)
     ]
     // Success — record ActivityCompleted and return
-    (resultOrError includesKey: #ok)
+    outcome ok
       ifTrue: [
         completedNow := Time nowMs div: 1000
         completedEvent := ExduraEvent
           new: #{
             #eventType => #ActivityCompleted,
             #timestamp => completedNow,
-            #payload => #{#result => (resultOrError at: #ok)}
+            #payload => #{#result => outcome value}
           }
         eventStore appendEvents: workflowId events: #(completedEvent)
-        ^resultOrError at: #ok
+        ^outcome value
       ]
-    // Failure — check non-retryable and exhaustion, then backoff and recurse
-    errMsg := resultOrError at: #error
-    errClass := resultOrError at: #errorClass
+    // Failure — extract error details
+    err := outcome error
+    errMsg := err message
+    errClass := err class name asString
+    // Check non-retryable errors
     nonRetryableErrors := config at: #nonRetryableErrors
-    isNonRetryable := nonRetryableErrors anySatisfy: [:nr | nr == errClass]
-    isNonRetryable
+    (nonRetryableErrors anySatisfy: [:nr | nr == errClass])
       ifTrue: [
         ^ActivityRetryHelper
           recordFailedAndRaise: eventStore
@@ -72,11 +71,10 @@ Object subclass: ActivityRetryExecutor
             #nonRetryable => true
           }
       ]
-    // 0 or nil means unlimited retries (per SPEC §4.1.4)
+    // Check retry exhaustion (0 or nil means unlimited per SPEC §4.1.4)
     maxAttempts := config at: #maxAttempts
     hasLimit := maxAttempts notNil and: [maxAttempts > 0]
-    exhausted := hasLimit and: [attempt >= maxAttempts]
-    exhausted
+    (hasLimit and: [attempt >= maxAttempts])
       ifTrue: [
         ^ActivityRetryHelper
           recordFailedAndRaise: eventStore
@@ -88,7 +86,7 @@ Object subclass: ActivityRetryExecutor
             #retriesExhausted => true
           }
       ]
-    // Calculate backoff delay
+    // Backoff and recurse
     initialInterval := config at: #initialInterval
     backoffCoefficient := config at: #backoffCoefficient
     maximumInterval := config at: #maximumInterval
@@ -98,5 +96,4 @@ Object subclass: ActivityRetryExecutor
       delay min: maximumInterval
     ] ifFalse: [delay]
     Timer sleep: cappedDelay
-    // Recurse with next attempt
     self tryAttempt: attempt + 1 config: config
