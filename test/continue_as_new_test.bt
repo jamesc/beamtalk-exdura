@@ -6,9 +6,11 @@
 /// Fixture: test/fixtures/poller_workflow.bt, test/fixtures/batch_activities.bt
 TestCase subclass: ContinueAsNewTest
   field: client = nil
+  field: testDir = "target/bt-test-tmp/continue-as-new"
 
   setUp =>
-    self.client := ExduraClient connect: #{}
+    [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{#dataDir => self.testDir}
     self
 
   tearDown =>

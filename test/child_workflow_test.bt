@@ -157,6 +157,7 @@ TestCase subclass: ChildWorkflowTest
     // Child should also have completed (abandon means no interference)
     children := engine getChildWorkflows: "abandon-parent-1"
     self assert: children size equals: 1
+    self awaitWorkflow: (children at: 1) timeout: 10000
     childExec := store getExecution: (children at: 1)
     self assert: childExec status equals: #completed
     self assert: childExec result equals: 10

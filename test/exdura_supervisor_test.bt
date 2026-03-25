@@ -7,8 +7,6 @@ TestCase subclass: ExduraSupervisorTest
   field: client = nil
 
   setUp =>
-    [File deleteAll: "data"] on: Error do: [:e | nil]
-    Erlang timer sleep: 200
     self
 
   tearDown =>
@@ -18,7 +16,6 @@ TestCase subclass: ExduraSupervisorTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
-    [File deleteAll: "data"] on: Error do: [:e | nil]
 
   // ── Helpers ──
 

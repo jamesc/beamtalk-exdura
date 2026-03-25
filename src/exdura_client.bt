@@ -26,8 +26,9 @@ Actor subclass: ExduraClient
   /// remote connections.
   ///
   ///   client := ExduraClient connect: #{#host => "localhost"}
-  class connect: _options :: Dictionary =>
-    store := EventStore spawn
+  class connect: options :: Dictionary =>
+    dataDir := options at: #dataDir ifAbsent: ["data"]
+    store := EventStore spawnWith: #{#dataDir => dataDir}
     pool := ActivityWorkerPool spawn
     eng := WorkflowEngine withStore: store pool: pool
     self spawnWith: #{#engine => eng, #eventStore => store}
@@ -127,10 +128,6 @@ Actor subclass: ExduraClient
         // then clean up files. Order matters: destroyWithFiles would crash the
         // EventStore, triggering a supervisor restart before we stop it.
         [self.supervisor stop] on: Error do: [:e | nil]
-        dataDir := "data"
-        (File isDirectory: dataDir) ifTrue: [
-          [File deleteAll: dataDir] on: Error do: [:e | nil]
-        ]
         ^nil
       ]
     // Non-supervised: clean up components individually

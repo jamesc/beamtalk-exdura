@@ -5,9 +5,11 @@
 /// TwoActivityWorkflow as test fixtures.
 TestCase subclass: ExduraClientTest
   field: client = nil
+  field: testDir = "target/bt-test-tmp/exdura-client"
 
   setUp =>
-    self.client := ExduraClient connect: #{}
+    [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{#dataDir => self.testDir}
     self
 
   tearDown =>

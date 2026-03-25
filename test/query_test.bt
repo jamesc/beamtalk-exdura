@@ -5,9 +5,11 @@
 /// stale-but-correct results during mid-execution.
 TestCase subclass: QueryTest
   field: client = nil
+  field: testDir = "target/bt-test-tmp/query"
 
   setUp =>
-    self.client := ExduraClient connect: #{}
+    [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{#dataDir => self.testDir}
     self
 
   tearDown =>
