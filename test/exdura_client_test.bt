@@ -159,12 +159,12 @@ TestCase subclass: ExduraClientTest
     self.client
       start: SlowWorkflow
       id: "cancel-wf-1"
-      args: #(10000)
+      args: #(500)
       taskQueue: "default"
       options: #{}
-    // Give the engine time to dispatch the workflow runner asynchronously,
-    // so the engine actor is free to handle the cancel: call.
-    Erlang timer sleep: 3000
+    // Wait for the workflow to complete (sleep: blocks the engine actor,
+    // so cancel can only get through after the timer fires).
+    Erlang timer sleep: 2000
     // Cancel through the engine directly to avoid double gen_server hop timeout.
     result := self.client engine cancelWorkflow: "cancel-wf-1"
     self assert: result equals: nil
