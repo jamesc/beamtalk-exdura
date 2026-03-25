@@ -28,6 +28,10 @@ Actor subclass: WorkflowRunner
   /// registers them with the engine, captures an initial snapshot, runs
   /// the workflow, captures a final snapshot, and records completion.
   go =>
+    Tracing setContext: #{
+      #workflowId => self.workflowId,
+      #workflowType => self.workflow name asString
+    }
     ctx := WorkflowContext spawn
     ctx setSnapshotInterval: self.snapshotInterval
     self.snapshot isNil
