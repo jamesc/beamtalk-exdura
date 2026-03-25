@@ -46,6 +46,24 @@ TestCase subclass: VersioningTest
   /// Reset the call count to zero.
   resetCallCount => self.counterTable at: #callCount put: 0
 
+  /// Poll for a workflow to reach a terminal status.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true]
+      whileTrue: [
+        exec := self.store getExecution: workflowId
+        (exec notNil
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
+        ]
+        Timer sleep: 50
+      ]
+
   // ── Tests ──
 
   /// First execution records a VersionMarker event and returns defaultVersion.
@@ -54,7 +72,7 @@ TestCase subclass: VersioningTest
       startWorkflow: VersionedWorkflowV1
       id: "wf-ver-1"
       args: #("test")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-ver-1" timeout: 10000
 
     // Verify workflow completed
     exec := self.store getExecution: "wf-ver-1"
@@ -80,7 +98,7 @@ TestCase subclass: VersioningTest
       startWorkflow: VersionedWorkflowV1
       id: "wf-ver-2"
       args: #("test")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-ver-2" timeout: 10000
 
     exec := self.store getExecution: "wf-ver-2"
     self assert: exec status equals: #completed
@@ -113,7 +131,7 @@ TestCase subclass: VersioningTest
       startWorkflow: MultiVersionWorkflow
       id: "wf-ver-3"
       args: #("test")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-ver-3" timeout: 10000
 
     exec := self.store getExecution: "wf-ver-3"
     self assert: exec status equals: #completed
@@ -137,8 +155,8 @@ TestCase subclass: VersioningTest
     self.engine
       startWorkflow: VersionedWorkflowV1
       id: "wf-branch-1"
-      args: #("order-1")
-    Erlang timer sleep: 1000
+      args: #("test")
+    self awaitWorkflow: "wf-branch-1" timeout: 10000
 
     exec1 := self.store getExecution: "wf-branch-1"
     self assert: exec1 result equals: "v1-result"
@@ -147,8 +165,8 @@ TestCase subclass: VersioningTest
     self.engine
       startWorkflow: VersionedWorkflowV2
       id: "wf-branch-2"
-      args: #("order-2")
-    Erlang timer sleep: 1000
+      args: #("test")
+    self awaitWorkflow: "wf-branch-2" timeout: 10000
 
     exec2 := self.store getExecution: "wf-branch-2"
     self assert: exec2 result equals: "v2-result"
@@ -159,8 +177,8 @@ TestCase subclass: VersioningTest
     self.engine
       startWorkflow: VersionedWorkflowV1
       id: "wf-ver-replay"
-      args: #("data")
-    Erlang timer sleep: 1000
+      args: #("test")
+    self awaitWorkflow: "wf-ver-replay" timeout: 10000
 
     originalExec := self.store getExecution: "wf-ver-replay"
     self assert: originalExec result equals: "v1-result"

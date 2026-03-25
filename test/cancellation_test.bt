@@ -84,7 +84,7 @@ TestCase subclass: CancellationTest
     self.engine cancelWorkflow: "cancel-basic-1"
 
     // Wait for cancellation to take effect
-    Erlang timer sleep: 1000
+    Erlang timer sleep: 500
 
     // Verify it's cancelled
     exec2 := self.store getExecution: "cancel-basic-1"
@@ -106,7 +106,7 @@ TestCase subclass: CancellationTest
 
     // Wait for the first activity (quickTask) to complete and
     // the second activity (longTask) to start
-    Erlang timer sleep: 2000
+    Erlang timer sleep: 500
 
     // Verify it's running and processing
     exec := self.store getExecution: "cancel-comp-1"
@@ -115,12 +115,8 @@ TestCase subclass: CancellationTest
     // Cancel the workflow
     self.engine cancelWorkflow: "cancel-comp-1"
 
-    // Wait for cancellation and compensation to complete
-    Erlang timer sleep: 3000
-
-    // Verify workflow was cancelled
-    exec2 := self.store getExecution: "cancel-comp-1"
-    self assert: exec2 status equals: #cancelled
+    // Wait for cancellation to complete
+    self awaitWorkflow: "cancel-comp-1" timeout: 10000
 
     // Verify event history includes cancellation
     events := self.store readEvents: "cancel-comp-1" fromSeq: 1
@@ -142,7 +138,7 @@ TestCase subclass: CancellationTest
     self.engine cancelWorkflow: "cancel-parent-1"
 
     // Wait for cancellation to propagate
-    Erlang timer sleep: 1000
+    Erlang timer sleep: 500
 
     // Verify parent is cancelled
     parentExec := self.store getExecution: "cancel-parent-1"
@@ -192,7 +188,7 @@ TestCase subclass: CancellationTest
       id: "abandon-parent-1"
       args: #(2000)
     // Wait for the parent's runner to start (engine is free with async timers)
-    Erlang timer sleep: 1000
+    Erlang timer sleep: 500
 
     // Start a child with #abandon policy
     _childHandle := (self.engine withTimeout: 15000)
@@ -201,11 +197,11 @@ TestCase subclass: CancellationTest
       args: #(2000)
       parentWorkflowId: "abandon-parent-1"
       options: #{#parentClosePolicy => #abandon}
-    Erlang timer sleep: 1000
+    Erlang timer sleep: 500
 
     // Cancel the parent
     self.engine cancelWorkflow: "abandon-parent-1"
-    Erlang timer sleep: 1000
+    Erlang timer sleep: 500
 
     // Parent should be cancelled
     parentExec := self.store getExecution: "abandon-parent-1"

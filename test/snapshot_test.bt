@@ -250,8 +250,8 @@ TestCase subclass: SnapshotTest
       id: "wf-snap-replay"
       input: inputDict
       snapshotInterval: 10
-    // Replay is near-instant (no live activity execution)
-    Erlang timer sleep: 3000
+    // Wait for replay to complete — records a new WorkflowCompleted event
+    Erlang timer sleep: 500
 
     // Step 3: Verify activities were NOT re-executed during replay
     // (all activities are replayed from history, not executed live)
@@ -322,7 +322,7 @@ TestCase subclass: SnapshotTest
       id: "wf-no-snap"
       input: inputDict
     // Replay is near-instant (no live activity execution)
-    Erlang timer sleep: 3000
+    Erlang timer sleep: 200
 
     // During full replay, activities should NOT be re-executed
     self assert: (self callCount - countBeforeReplay) equals: 0
