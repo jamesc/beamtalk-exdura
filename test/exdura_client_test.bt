@@ -74,7 +74,7 @@ TestCase subclass: ExduraClientTest
     handle := self.client
       start: SlowWorkflow
       id: "client-wf-timeout"
-      args: #(10000)
+      args: #(2000)
       taskQueue: "default"
       options: #{}
     // SlowWorkflow sleeps for 10s; we give 500ms timeout
