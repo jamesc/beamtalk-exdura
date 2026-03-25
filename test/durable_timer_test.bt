@@ -30,8 +30,7 @@ TestCase subclass: DurableTimerTest
     self
 
   tearDown =>
-    self.engine isNil
-      ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
+    self.engine isNil ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
     self.store isNil
       ifFalse: [
         [self.store destroy] on: Error do: [:e | nil]
@@ -51,16 +50,20 @@ TestCase subclass: DurableTimerTest
   /// Polls every 50ms up to the given timeout in milliseconds.
   awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
     deadline := Time nowMs + timeoutMs
-    [true] whileTrue: [
-      exec := self.store getExecution: workflowId
-      (exec isNil not and: [
-        exec status =:= #completed or: [
-          exec status =:= #failed or: [exec status =:= #cancelled]
+    [true]
+      whileTrue: [
+        exec := self.store getExecution: workflowId
+        (exec isNil not
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
         ]
-      ]) ifTrue: [^exec]
-      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
-      Timer sleep: 50
-    ]
+        Timer sleep: 50
+      ]
 
   // ── Tests ──
 
@@ -112,7 +115,10 @@ TestCase subclass: DurableTimerTest
     countBefore := self callCount
 
     // Step 1: Run workflow normally
-    inputDict := #{#input => "hello", #counterTableName => self.counterTableName}
+    inputDict := #{
+      #input => "hello",
+      #counterTableName => self.counterTableName
+    }
     self.engine
       startWorkflow: SleepWorkflow
       id: "wf-timer-2"
@@ -149,7 +155,10 @@ TestCase subclass: DurableTimerTest
     countBefore := self callCount
 
     // Step 1: Run workflow normally to get full history
-    inputDict := #{#input => "hello", #counterTableName => self.counterTableName}
+    inputDict := #{
+      #input => "hello",
+      #counterTableName => self.counterTableName
+    }
     self.engine
       startWorkflow: SleepWorkflow
       id: "wf-timer-3"

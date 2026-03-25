@@ -133,8 +133,9 @@ Actor subclass: ExduraClient
     // Non-supervised: clean up components individually
     self.engine isNil
       ifFalse: [
-        (Result tryDo: [self.engine activityPool])
-          andThen: [:pool | Result tryDo: [pool destroy]]
+        (Result tryDo: [
+          self.engine activityPool
+        ]) andThen: [:pool | Result tryDo: [pool destroy]]
         [self.engine stop] on: Error do: [:e | nil]
       ]
     self.eventStore isNil

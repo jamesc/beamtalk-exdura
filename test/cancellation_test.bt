@@ -12,14 +12,15 @@ TestCase subclass: CancellationTest
   field: engine = nil
 
   setUp =>
-    self.client := ExduraClient connect: #{#dataDir => "target/bt-test-tmp/cancellation"}
+    self.client := ExduraClient connect: #{
+      #dataDir => "target/bt-test-tmp/cancellation"
+    }
     self.engine := self.client engine
     self.store := self.client eventStore
     self
 
   tearDown =>
-    self.engine isNil
-      ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
+    self.engine isNil ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
     self.client isNil
       ifFalse: [
         [self.client destroy] on: Error do: [:e | nil]

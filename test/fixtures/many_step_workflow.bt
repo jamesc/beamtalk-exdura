@@ -24,7 +24,9 @@ Workflow subclass: ManyStepWorkflow
   /// Input may be an Integer (legacy) or a Dictionary with #input key.
   /// Uses class helper to avoid block mutation gotcha with activity calls.
   class run: input ctx: ctx -> Integer =>
-    args := (input isKindOf: Dictionary) ifTrue: [input] ifFalse: [#{#input => input}]
+    args := (input isKindOf: Dictionary) ifTrue: [
+      input
+    ] ifFalse: [#{#input => input}]
     count := args at: #input
     ManyStepWorkflow
       runSteps: count

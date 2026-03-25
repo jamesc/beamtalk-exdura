@@ -6,8 +6,7 @@
 TestCase subclass: ExduraSupervisorTest
   field: client = nil
 
-  setUp =>
-    self
+  setUp => self
 
   tearDown =>
     self.client isNil
@@ -23,16 +22,20 @@ TestCase subclass: ExduraSupervisorTest
   /// Polls every 50ms up to the given timeout in milliseconds.
   awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
     deadline := Time nowMs + timeoutMs
-    [true] whileTrue: [
-      exec := self.client eventStore getExecution: workflowId
-      (exec isNil not and: [
-        exec status =:= #completed or: [
-          exec status =:= #failed or: [exec status =:= #cancelled]
+    [true]
+      whileTrue: [
+        exec := self.client eventStore getExecution: workflowId
+        (exec isNil not
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
         ]
-      ]) ifTrue: [^exec]
-      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
-      Timer sleep: 50
-    ]
+        Timer sleep: 50
+      ]
 
   // === ExduraSupervisor class-side config ===
   testSupervisorStrategyIsRestForOne =>

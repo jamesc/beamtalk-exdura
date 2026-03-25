@@ -31,8 +31,7 @@ TestCase subclass: WorkflowOptionsTest
     self
 
   tearDown =>
-    self.engine isNil
-      ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
+    self.engine isNil ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
     self.store isNil
       ifFalse: [
         [self.store destroy] on: Error do: [:e | nil]
@@ -52,16 +51,20 @@ TestCase subclass: WorkflowOptionsTest
   /// Polls every 50ms up to the given timeout in milliseconds.
   awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
     deadline := Time nowMs + timeoutMs
-    [true] whileTrue: [
-      exec := self.store getExecution: workflowId
-      (exec isNil not and: [
-        exec status =:= #completed or: [
-          exec status =:= #failed or: [exec status =:= #cancelled]
+    [true]
+      whileTrue: [
+        exec := self.store getExecution: workflowId
+        (exec isNil not
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
         ]
-      ]) ifTrue: [^exec]
-      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
-      Timer sleep: 50
-    ]
+        Timer sleep: 50
+      ]
 
   // ── Retry Tests ──
 
@@ -283,7 +286,10 @@ TestCase subclass: WorkflowOptionsTest
         #workflow => workflow,
         #engine => self.engine,
         #workflowId => "wf-sleep-replay-1",
-        #input => #{#input => "world", #counterTableName => self.counterTableName},
+        #input => #{
+          #input => "world",
+          #counterTableName => self.counterTableName
+        },
         #history => replayHistory
       }
 

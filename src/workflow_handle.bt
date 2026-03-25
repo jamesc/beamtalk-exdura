@@ -11,7 +11,6 @@ Protocol define: Awaitable
   result -> Object
   /// Block until the result is available or the timeout (ms) expires.
   result: timeout :: Integer -> Object
-
 /// Handle to a running workflow execution, returned by ExduraClient start:.
 ///
 /// Provides methods to wait for the workflow result, either indefinitely

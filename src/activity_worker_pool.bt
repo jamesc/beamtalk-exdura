@@ -96,5 +96,4 @@ Actor subclass: ActivityWorkerPool
   /// singleton since other pools may still reference it.
   ///
   ///   pool destroy
-  destroy =>
-    self.supervisor := nil
+  destroy => self.supervisor := nil

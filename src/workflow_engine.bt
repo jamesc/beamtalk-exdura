@@ -601,11 +601,12 @@ Actor subclass: WorkflowEngine
   ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
   ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
   startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary =>
-    Erlang beamtalk_actor set_trace_context: #{
-      #workflowId => childWorkflowId,
-      #parentWorkflowId => parentId,
-      #workflowType => workflowClass name asString
-    }
+    Erlang beamtalk_actor
+      set_trace_context: #{
+        #workflowId => childWorkflowId,
+        #parentWorkflowId => parentId,
+        #workflowType => workflowClass name asString
+      }
     now := Time nowMs div: 1000
     wfType := workflowClass name asString
     policy := options at: #parentClosePolicy ifAbsent: [#terminate]
