@@ -199,10 +199,10 @@ Actor subclass: EventStore
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).
   destroy =>
-    self.executions isNil ifFalse: [
+    self.executions ifNotNil: [
       [self.executions delete] on: Error do: [:e | nil]
     ]
-    self.events isNil ifFalse: [[self.events delete] on: Error do: [:e | nil]]
+    self.events ifNotNil: [[self.events delete] on: Error do: [:e | nil]]
 
   /// Delete ETS tables and on-disk data directory.
   destroyWithFiles =>

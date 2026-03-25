@@ -390,7 +390,7 @@ Actor subclass: WorkflowEngine
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     // Guard: don't overwrite cancelled status with completed
     existing := self.eventStore getExecution: workflowId
-    (existing isNil not and: [existing status =:= #cancelled]) ifTrue: [^nil]
+    (existing notNil and: [existing status =:= #cancelled]) ifTrue: [^nil]
     now := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
@@ -405,7 +405,7 @@ Actor subclass: WorkflowEngine
       result: result
     // Inline: if this is a child workflow, record completion in parent's history
     exec := self.eventStore getExecution: workflowId
-    (exec isNil not and: [exec parentWorkflowId isNil not])
+    (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
         parentId := exec parentWorkflowId
         childCompletedEvent := ExduraEvent
@@ -423,7 +423,7 @@ Actor subclass: WorkflowEngine
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
-        isRunning := childExec isNil not and: [childExec status =:= #running]
+        isRunning := childExec notNil and: [childExec status =:= #running]
         policy := policies at: childId ifAbsent: [#terminate]
         isRunning and: [policy =:= #terminate]
       ]
@@ -469,7 +469,7 @@ Actor subclass: WorkflowEngine
       result: reason
     // Inline: if this is a child workflow, record failure in parent's history
     exec := self.eventStore getExecution: workflowId
-    (exec isNil not and: [exec parentWorkflowId isNil not])
+    (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
         parentId := exec parentWorkflowId
         childFailedEvent := ExduraEvent
@@ -487,7 +487,7 @@ Actor subclass: WorkflowEngine
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
-        isRunning := childExec isNil not and: [childExec status =:= #running]
+        isRunning := childExec notNil and: [childExec status =:= #running]
         policy := policies at: childId ifAbsent: [#terminate]
         isRunning and: [policy =:= #terminate]
       ]
@@ -549,7 +549,7 @@ Actor subclass: WorkflowEngine
   captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String =>
     // Stop the previous snapshot Actor to avoid process leaks
     oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
-    oldSnap isNil ifFalse: [[oldSnap stop] on: Error do: [:e | nil]]
+    oldSnap ifNotNil: [[oldSnap stop] on: Error do: [:e | nil]]
     snap := ActorSnapshot spawnWith: #{#fields => stateDict}
     self.workflowSnapshots := self.workflowSnapshots at: workflowId put: snap
 
@@ -725,7 +725,7 @@ Actor subclass: WorkflowEngine
 
     // Clean up old query snapshot to prevent stale query results
     oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
-    oldSnap isNil ifFalse: [[oldSnap stop] on: Error do: [:e | nil]]
+    oldSnap ifNotNil: [[oldSnap stop] on: Error do: [:e | nil]]
     self.workflowSnapshots := self.workflowSnapshots removeKey: workflowId
 
     // Clean up old query handlers
@@ -818,7 +818,7 @@ Actor subclass: WorkflowEngine
     children
       do: [:childId |
         childExec := store getExecution: childId
-        isRunning := childExec isNil not and: [childExec status =:= #running]
+        isRunning := childExec notNil and: [childExec status =:= #running]
         isRunning
           ifTrue: [
             policy := policies at: childId ifAbsent: [#terminate]
@@ -849,7 +849,7 @@ Actor subclass: WorkflowEngine
 
     // If this workflow has a parent, record ChildWorkflowFailed in parent's history
     exec := self.eventStore getExecution: workflowId
-    (exec isNil not and: [exec parentWorkflowId isNil not])
+    (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
         parentId := exec parentWorkflowId
         childCancelledEvent := ExduraEvent

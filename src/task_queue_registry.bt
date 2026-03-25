@@ -34,7 +34,7 @@ Actor subclass: TaskQueueRegistry
   /// Return whether a queue with the given name exists.
   ///
   ///   registry hasQueue: "orders"   // => true
-  hasQueue: name :: String => (self.queues at: name ifAbsent: [nil]) isNil not
+  hasQueue: name :: String => (self.queues at: name ifAbsent: [nil]) notNil
 
   /// Destroy all managed queues and clean up.
   destroy =>

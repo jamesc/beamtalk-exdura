@@ -70,5 +70,5 @@ Actor subclass: TaskQueue
 
   /// Delete the ETS table and clean up resources.
   destroy =>
-    self.table isNil ifFalse: [[self.table delete] on: Error do: [:e | nil]]
+    self.table ifNotNil: [[self.table delete] on: Error do: [:e | nil]]
     self.table := nil

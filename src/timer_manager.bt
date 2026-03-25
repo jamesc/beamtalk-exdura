@@ -43,11 +43,7 @@ Actor subclass: TimerManager
     pendingCount := startedCount - firedCount
     pendingCount <= 0 ifTrue: [^#()]
     // Collect all TimerStarted events, take the last pendingCount
-    allStarted := events
-      inject: #()
-      into: [:acc :evt |
-        evt eventType =:= #TimerStarted ifTrue: [acc ++ #(evt)] ifFalse: [acc]
-      ]
+    allStarted := events select: [:evt | evt eventType =:= #TimerStarted]
     // Take the last pendingCount entries
     startIdx := allStarted size - pendingCount + 1
     startIdx < 1 ifTrue: [startIdx := 1]

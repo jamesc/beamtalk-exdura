@@ -77,11 +77,11 @@ Actor subclass: ActivityWorkerPool
     outcome := [worker execute]
       on: Exception
       do: [:e |
-        timer isNil ifFalse: [timer cancel]
+        timer ifNotNil: [timer cancel]
         self.activeCount := self.activeCount - 1
         // Distinguish timeout from crash: if timer was set and has fired,
         // the worker was killed by timeout
-        (timer isNil not and: [
+        (timer notNil and: [
           timer isActive not
         ]) ifTrue: [
           ^#{#status => #timedOut}
@@ -89,7 +89,7 @@ Actor subclass: ActivityWorkerPool
       ]
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
-    timer isNil ifFalse: [timer cancel]
+    timer ifNotNil: [timer cancel]
     #{#status => #completed, #result => outcome}
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
