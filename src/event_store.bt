@@ -43,9 +43,9 @@ Actor subclass: EventStore
       acc: (acc add: evt)
 
   initialize =>
-    uid := Erlang erlang unique_integer: #(#positive)
-    execName := Erlang erlang binary_to_atom: ("exdura_executions_" ++ uid asString)
-    eventsName := Erlang erlang binary_to_atom: ("exdura_events_" ++ uid asString)
+    uid := System uniqueId
+    execName := "exdura_executions_{uid}" asAtom
+    eventsName := "exdura_events_{uid}" asAtom
     self.executions := Ets new: execName type: #set
     self.events := Ets new: eventsName type: #set
     self ensureDirectories

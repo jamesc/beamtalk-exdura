@@ -398,7 +398,7 @@ Actor subclass: WorkflowContext
       ]
     // ── Live execution ──
     self.isReplaying := false
-    childId := self.workflowId ++ "-child-" ++ (self.replayCursor + 1) asString
+    childId := "{self.workflowId}-child-{self.replayCursor + 1}"
     handle := self.engine
       startChildWorkflow: workflowClass
       id: childId
