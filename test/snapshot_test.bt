@@ -23,6 +23,9 @@ TestCase subclass: SnapshotTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
+    (self.counterTable includesKey: #callCount) ifFalse: [
+      self.counterTable at: #callCount put: 0
+    ]
     self
 
   tearDown =>
@@ -190,7 +193,7 @@ TestCase subclass: SnapshotTest
 
   /// Replay from snapshot skips earlier events and produces correct result.
   testReplayFromSnapshotMatchesFullReplay =>
-    countBefore := self callCount
+    _countBefore := self callCount
     // Step 1: Run workflow with small snapshot interval.
     // 8 activities at interval 10 triggers 1 snapshot.
     runner := WorkflowRunner
@@ -258,7 +261,7 @@ TestCase subclass: SnapshotTest
 
   /// Replay without snapshot (full replay) still works correctly.
   testFullReplayWithoutSnapshot =>
-    countBefore := self callCount
+    _countBefore := self callCount
     // Run workflow without triggering snapshots (very large interval)
     runner := WorkflowRunner
       spawnWith: #{

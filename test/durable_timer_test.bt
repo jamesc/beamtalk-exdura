@@ -22,6 +22,9 @@ TestCase subclass: DurableTimerTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
+    (self.counterTable includesKey: #callCount) ifFalse: [
+      self.counterTable at: #callCount put: 0
+    ]
     self
 
   tearDown =>
