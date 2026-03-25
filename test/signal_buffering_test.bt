@@ -11,9 +11,12 @@ TestCase subclass: SignalBufferingTest
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
-    self.client := ExduraClient connect: #{
-      #dataDir => self.testDir,
-      #pool => false
+    // Construct directly to avoid ExduraClient class object contention
+    store := EventStore spawnWith: #{#dataDir => self.testDir}
+    eng := WorkflowEngine withStore: store
+    self.client := ExduraClient spawnWith: #{
+      #engine => eng,
+      #eventStore => store
     }
     self
 
