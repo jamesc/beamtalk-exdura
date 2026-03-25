@@ -12,12 +12,6 @@ TestCase subclass: WorkflowOptionsTest
   field: flakyTable = nil
 
   setUp =>
-    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [
-      (Ets named: #counting_activity_calls) delete
-    ]
-    (Erlang ets whereis: #flaky_activity_state) =:= #undefined ifFalse: [
-      (Ets named: #flaky_activity_state) delete
-    ]
     // Clean on-disk event/snapshot files from previous runs
     (File isDirectory: "data") ifTrue: [
       [File deleteAll: "data"] on: Error do: [:e | nil]
@@ -40,20 +34,14 @@ TestCase subclass: WorkflowOptionsTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
-    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [
-      (Ets named: #counting_activity_calls) delete
-    ]
-    (Erlang ets whereis: #flaky_activity_state) =:= #undefined ifFalse: [
-      (Ets named: #flaky_activity_state) delete
-    ]
 
   // ── Helpers ──
 
   /// Read the current call count from the ETS counter table.
-  callCount => (Ets named: #counting_activity_calls) at: #callCount
+  callCount => self.counterTable at: #callCount
 
   /// Reset the call count to zero.
-  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+  resetCallCount => self.counterTable at: #callCount put: 0
 
   /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
   /// Polls every 50ms up to the given timeout in milliseconds.

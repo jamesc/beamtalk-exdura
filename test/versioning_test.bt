@@ -13,9 +13,6 @@ TestCase subclass: VersioningTest
   field: testDir = "target/bt-test-tmp/versioning"
 
   setUp =>
-    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [
-      (Ets named: #counting_activity_calls) delete
-    ]
     // Clean data dir if needed
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
@@ -36,17 +33,14 @@ TestCase subclass: VersioningTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
-    (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [
-      (Ets named: #counting_activity_calls) delete
-    ]
 
   // ── Helpers ──
 
   /// Read the current call count from the ETS counter table.
-  callCount => (Ets named: #counting_activity_calls) at: #callCount
+  callCount => self.counterTable at: #callCount
 
   /// Reset the call count to zero.
-  resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
+  resetCallCount => self.counterTable at: #callCount put: 0
 
   // ── Tests ──
 
