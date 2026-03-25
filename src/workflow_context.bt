@@ -259,6 +259,7 @@ Actor subclass: WorkflowContext
       options: options
     self.replayCursor := self.replayCursor + 2
     // Safe point: drain signals, snapshot, check cancellation
+    self.engine isAlive ifFalse: [^result]
     signals := self.engine drainSignals: self.workflowId
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals
@@ -320,6 +321,7 @@ Actor subclass: WorkflowContext
               fireAt: fireAt
               workflowId: self.workflowId
             remaining > 0 ifTrue: [Timer sleep: remaining]
+            self.engine isAlive ifFalse: [^nil]
             self.engine recordTimerFired: storedDuration workflowId: self.workflowId
             self.replayCursor := firstIdx + 1
             signals := self.engine drainSignals: self.workflowId
@@ -334,6 +336,8 @@ Actor subclass: WorkflowContext
     self.isReplaying := false
     self.engine scheduleTimer: duration workflowId: self.workflowId
     Timer sleep: duration
+    // After waking, the engine may have been stopped by tearDown — bail if dead
+    self.engine isAlive ifFalse: [^nil]
     self.engine recordTimerFired: duration workflowId: self.workflowId
     self.replayCursor := self.replayCursor + 2
     // Safe point: drain signals, snapshot, check cancellation
@@ -407,6 +411,7 @@ Actor subclass: WorkflowContext
       options: options
     self.replayCursor := self.replayCursor + 1
     // Safe point: drain signals, snapshot, check cancellation
+    self.engine isAlive ifFalse: [^handle]
     signals := self.engine drainSignals: self.workflowId
     signals size > 0 ifTrue: [
       self.deliveredSignals := self.deliveredSignals ++ signals

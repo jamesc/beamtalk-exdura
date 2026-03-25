@@ -100,22 +100,27 @@ Actor subclass: WorkflowRunner
       on: CancellationError
       do: [:_e |
         // Engine already recorded WorkflowCancelled and updated status.
-        self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-        self.engine clearCancellation: self.workflowId
+        self.engine isAlive
+          ifTrue: [
+            self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+            self.engine clearCancellation: self.workflowId
+          ]
         (AtomicCounter named: self.doneSemName) increment
         ^nil
       ]
-    (result isKindOf: ContinueAsNewRequest)
+    // Engine may have been stopped by tearDown — skip post-workflow calls if dead
+    self.engine isAlive
       ifTrue: [
-        // Continue-as-new: delegate to engine to start fresh execution
-        self.engine
-          continueAsNewWorkflow: self.workflowId
-          workflowClass: self.workflow
-          args: result args
-      ]
-      ifFalse: [
-        // Normal completion
-        self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-        self.engine completeWorkflow: self.workflowId result: result
+        (result isKindOf: ContinueAsNewRequest)
+          ifTrue: [
+            self.engine
+              continueAsNewWorkflow: self.workflowId
+              workflowClass: self.workflow
+              args: result args
+          ]
+          ifFalse: [
+            self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+            self.engine completeWorkflow: self.workflowId result: result
+          ]
       ]
     (AtomicCounter named: self.doneSemName) increment
