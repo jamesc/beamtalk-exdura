@@ -35,24 +35,20 @@ Actor subclass: WorkflowContext
   // ═══════════════════════════════════════════════════════════════════
 
   /// Peek at the next event pair in the history, skipping StateSnapshot/
-  /// SignalReceived metadata events. Returns an Erlang tuple:
-  ///   {firstType, secondType, firstIdx, secondIdx}
+  /// SignalReceived metadata events. Returns a List:
+  ///   #(firstType, secondType, firstIdx, secondIdx)
   /// If no event exists at a position, its type is #none and idx is 0.
   ///
-  ///   {ft, st, fi, si} := WorkflowContext peekEventPair: 1 history: events
-  class peekEventPair: cursor :: Integer history: eventHistory :: List =>
+  ///   #[ft, st, fi, si] := WorkflowContext peekEventPair: 1 history: events
+  class peekEventPair: cursor :: Integer history: eventHistory :: List -> List =>
     skippable := self countSkippableEventsFrom: cursor + 1 history: eventHistory
     firstIdx := cursor + skippable + 1
-    firstIdx > eventHistory size ifTrue: [
-      ^Erlang erlang list_to_tuple: #(#none, #none, 0, 0)
-    ]
+    firstIdx > eventHistory size ifTrue: [^#(#none, #none, 0, 0)]
     firstType := (eventHistory at: firstIdx) eventType
     secondIdx := firstIdx + 1
-    secondIdx > eventHistory size ifTrue: [
-      ^Erlang erlang list_to_tuple: #(firstType, #none, firstIdx, 0)
-    ]
+    secondIdx > eventHistory size ifTrue: [^#(firstType, #none, firstIdx, 0)]
     secondType := (eventHistory at: secondIdx) eventType
-    Erlang erlang list_to_tuple: #(firstType, secondType, firstIdx, secondIdx)
+    #(firstType, secondType, firstIdx, secondIdx)
 
   /// Collect consecutive SignalReceived events from a history starting at fromIdx.
   ///
@@ -238,7 +234,7 @@ Actor subclass: WorkflowContext
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
-        {firstType, secondType, _firstIdx, secondIdx} := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
+        #[firstType, secondType, _firstIdx, secondIdx] := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
         (firstType =:= #ActivityScheduled and: [
           secondType =:= #ActivityCompleted
         ])
@@ -297,7 +293,7 @@ Actor subclass: WorkflowContext
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
-        {firstType, secondType, firstIdx, secondIdx} := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
+        #[firstType, secondType, firstIdx, secondIdx] := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
         // Full replay: both TimerStarted + TimerFired present — skip immediately
         (firstType =:= #TimerStarted and: [secondType =:= #TimerFired])
           ifTrue: [
@@ -382,7 +378,7 @@ Actor subclass: WorkflowContext
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
-        {firstType, secondType, firstIdx, secondIdx} := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
+        #[firstType, secondType, firstIdx, secondIdx] := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
         (firstType =:= #ChildWorkflowStarted and: [
           secondType =:= #ChildWorkflowCompleted
         ])
@@ -432,7 +428,7 @@ Actor subclass: WorkflowContext
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
-        {firstType, _secondType, firstIdx, _secondIdx} := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
+        #[firstType, _secondType, firstIdx, _secondIdx] := WorkflowContext peekEventPair: self.replayCursor history: self.eventHistory
         firstType =:= #VersionMarker
           ifTrue: [
             markerEvent := self.eventHistory at: firstIdx
