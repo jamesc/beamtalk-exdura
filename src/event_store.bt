@@ -44,8 +44,11 @@ Actor subclass: EventStore
       acc: (acc add: evt)
 
   initialize =>
-    self.executions := Ets newOrExisting: #exdura_executions type: #set
-    self.events := Ets newOrExisting: #exdura_events type: #set
+    uid := Erlang erlang unique_integer: #(#positive)
+    execName := Erlang erlang binary_to_atom: ("exdura_executions_" ++ uid asString)
+    eventsName := Erlang erlang binary_to_atom: ("exdura_events_" ++ uid asString)
+    self.executions := Ets new: execName type: #set
+    self.events := Ets new: eventsName type: #set
     self ensureDirectories
     self reloadFromDisk
 

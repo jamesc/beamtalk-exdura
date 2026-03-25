@@ -5,13 +5,6 @@ TestCase subclass: EventStoreTest
   field: testDir = "target/bt-test-tmp/event-store-unit"
 
   setUp =>
-    // Clean ETS tables if they exist
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
-      (Ets named: #exdura_executions) delete
-    ]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
-      (Ets named: #exdura_events) delete
-    ]
     // Clean data dir if needed
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]

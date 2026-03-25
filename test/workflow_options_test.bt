@@ -12,13 +12,6 @@ TestCase subclass: WorkflowOptionsTest
   field: flakyTable = nil
 
   setUp =>
-    // Clean ETS tables if they exist
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
-      (Ets named: #exdura_executions) delete
-    ]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
-      (Ets named: #exdura_events) delete
-    ]
     (Erlang ets whereis: #counting_activity_calls) =:= #undefined ifFalse: [
       (Ets named: #counting_activity_calls) delete
     ]

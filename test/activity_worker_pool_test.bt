@@ -12,13 +12,6 @@ TestCase subclass: ActivityWorkerPoolTest
   field: engine = nil
 
   setUp =>
-    // Clean ETS tables if they exist
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
-      (Ets named: #exdura_executions) delete
-    ]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
-      (Ets named: #exdura_events) delete
-    ]
     // Create fresh actors
     self.store := EventStore spawn
     self.pool := ActivityWorkerPool spawn

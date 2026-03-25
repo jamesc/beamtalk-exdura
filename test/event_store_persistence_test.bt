@@ -15,13 +15,7 @@ TestCase subclass: EventStorePersistenceTest
   field: testDir = "target/bt-test-tmp/event-store-persist"
 
   setUp =>
-    // Clean up any leftover ETS tables and test directory
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
-      (Ets named: #exdura_executions) delete
-    ]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
-      (Ets named: #exdura_events) delete
-    ]
+    // Clean up test directory
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
@@ -35,12 +29,6 @@ TestCase subclass: EventStorePersistenceTest
         [self.store stop] on: Error do: [:e | nil]
       ]
     self.store := nil
-    (Erlang ets whereis: #exdura_executions) =:= #undefined ifFalse: [
-      (Ets named: #exdura_executions) delete
-    ]
-    (Erlang ets whereis: #exdura_events) =:= #undefined ifFalse: [
-      (Ets named: #exdura_events) delete
-    ]
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
