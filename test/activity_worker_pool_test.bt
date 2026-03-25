@@ -66,7 +66,6 @@ TestCase subclass: ActivityWorkerPoolTest
       args: #(7)
     result := worker execute
     self assert: result equals: 14
-    [sup stop] on: Error do: [:e | nil]
 
   // === ActivityWorkerPool: successful execution ===
   testPoolExecutesActivitySuccessfully =>

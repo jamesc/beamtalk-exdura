@@ -92,10 +92,9 @@ Actor subclass: ActivityWorkerPool
     timer isNil ifFalse: [timer cancel]
     #{#status => #completed, #result => outcome}
 
-  /// Stop the pool and its supervisor.
+  /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
+  /// singleton since other pools may still reference it.
   ///
   ///   pool destroy
   destroy =>
-    self.supervisor isNil ifFalse: [
-      [self.supervisor stop] on: Error do: [:e | nil]
-    ]
+    self.supervisor := nil
