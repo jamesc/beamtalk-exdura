@@ -231,8 +231,14 @@ Actor subclass: WorkflowEngine
           timeout: timeout
         outcome match: [
           #{#status => #completed, #result => result} -> self recordActivityCompleted: result workflowId: workflowId;
-          #{#status => #timedOut} -> self recordActivityTimedOut: workflowId;
-          #{#status => #failed, #error => reason} -> self recordActivityFailed: reason workflowId: workflowId;
+          #{#status => #timedOut} -> [
+            self recordActivityTimedOut: workflowId
+            self error: "Activity timed out"
+          ] value;
+          #{#status => #failed, #error => reason} -> [
+            self recordActivityFailed: reason workflowId: workflowId
+            self error: "Activity failed: {reason}"
+          ] value;
           _ -> self error: "Activity failed: unknown error"
         ]
       ]
@@ -249,7 +255,7 @@ Actor subclass: WorkflowEngine
     self.eventStore appendEvents: workflowId events: #(completedEvent)
     result
 
-  /// Record an ActivityFailed event and raise.
+  /// Record an ActivityFailed event.
   recordActivityFailed: reason workflowId: workflowId =>
     failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent
@@ -259,9 +265,8 @@ Actor subclass: WorkflowEngine
         #payload => #{#error => reason}
       }
     self.eventStore appendEvents: workflowId events: #(failedEvent)
-    self error: "Activity failed: {reason}"
 
-  /// Record an ActivityTimedOut event and raise.
+  /// Record an ActivityTimedOut event.
   recordActivityTimedOut: workflowId =>
     timedOutNow := Time nowMs div: 1000
     timedOutEvent := ExduraEvent new: #{
@@ -270,7 +275,6 @@ Actor subclass: WorkflowEngine
       #payload => #{}
     }
     self.eventStore appendEvents: workflowId events: #(timedOutEvent)
-    self error: "Activity timed out"
 
   /// Record a TimerStarted event and sleep for the given duration (ms).
   ///
