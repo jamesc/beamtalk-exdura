@@ -33,31 +33,36 @@ TestCase subclass: CancellationTest
   /// Poll for a ChildWorkflowStarted event in the parent's history.
   awaitChildStarted: parentId timeout: timeoutMs :: Integer =>
     deadline := Time nowMs + timeoutMs
-    [true] whileTrue: [
-      events := self.store readEvents: parentId fromSeq: 1
-      childStarted := events select: [:e | e eventType =:= #ChildWorkflowStarted]
-      childStarted size > 0 ifTrue: [^childStarted at: 1]
-      Time nowMs >= deadline ifTrue: [
-        self error: "Timed out waiting for child of {parentId}"
+    [true]
+      whileTrue: [
+        events := self.store readEvents: parentId fromSeq: 1
+        childStarted := events select: [:e |
+          e eventType =:= #ChildWorkflowStarted
+        ]
+        childStarted size > 0 ifTrue: [^childStarted at: 1]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for child of {parentId}"
+        ]
+        Timer sleep: 50
       ]
-      Timer sleep: 50
-    ]
 
   /// Poll for a workflow to reach a terminal status.
   awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
     deadline := Time nowMs + timeoutMs
-    [true] whileTrue: [
-      exec := self.store getExecution: workflowId
-      (exec isNil not and: [
-        exec status =:= #completed or: [
-          exec status =:= #failed or: [exec status =:= #cancelled]
+    [true]
+      whileTrue: [
+        exec := self.store getExecution: workflowId
+        (exec isNil not
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
         ]
-      ]) ifTrue: [^exec]
-      Time nowMs >= deadline ifTrue: [
-        self error: "Timed out waiting for {workflowId}"
+        Timer sleep: 50
       ]
-      Timer sleep: 50
-    ]
 
   // === client cancel: cancels a running workflow ===
   testClientCancelCancelsRunningWorkflow =>
