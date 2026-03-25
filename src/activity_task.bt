@@ -17,7 +17,7 @@ Value subclass: ActivityTask
   field: activityType :: String = ""
   field: args :: List = #()
   field: taskQueue :: String = ""
-  field: retryPolicy :: Dictionary = #{}
-  field: timeoutConfig :: Dictionary = #{}
+  field: retryPolicy :: Dictionary(Symbol, Object) = #{}
+  field: timeoutConfig :: Dictionary(Symbol, Integer) = #{}
   field: heartbeatTimeout = nil
   field: attempt :: Integer = 1

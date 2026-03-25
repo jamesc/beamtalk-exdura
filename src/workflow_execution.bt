@@ -23,7 +23,7 @@ Value subclass: WorkflowExecution
   field: parentWorkflowId = nil
   field: startedAt :: Integer = 0
   field: closedAt = nil
-  field: searchAttributes :: Dictionary = #{}
+  field: searchAttributes :: Dictionary(String, Object) = #{}
 
   /// Display as WorkflowExecution(order-123 running)
   printString => "WorkflowExecution({self workflowId} {self status})"

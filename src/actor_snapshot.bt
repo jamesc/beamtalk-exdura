@@ -16,7 +16,7 @@
 ///   actor setStatus: "done"
 ///   snap status   // => "running" (unchanged)
 Actor subclass: ActorSnapshot
-  state: fields :: Dictionary = #{}
+  state: fields :: Dictionary(Symbol, Object) = #{}
 
   /// Capture a read-only snapshot of a live Actor's state fields.
   ///

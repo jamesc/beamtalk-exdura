@@ -21,13 +21,13 @@ Actor subclass: WorkflowContext
   state: eventHistory :: List = #()
   state: isReplaying :: Boolean = false
   state: deliveredSignals :: List = #()
-  state: signalHandlers :: Dictionary = #{}
-  state: workflowVars :: Dictionary = #{}
+  state: signalHandlers :: Dictionary(String, Block) = #{}
+  state: workflowVars :: Dictionary(Symbol, Object) = #{}
   state: receivedSignals :: List = #()
   state: snapshotInterval :: Integer = 100
   state: eventsSinceSnapshot :: Integer = 0
-  state: queryHandlers :: Dictionary = #{}
-  state: workflowState :: Dictionary = #{}
+  state: queryHandlers :: Dictionary(String, Block) = #{}
+  state: workflowState :: Dictionary(Symbol, Object) = #{}
 
   // ═══════════════════════════════════════════════════════════════════
   // Class helpers — safe from the self-send state snapshot gotcha

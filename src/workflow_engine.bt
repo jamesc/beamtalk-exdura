@@ -16,12 +16,12 @@
 Actor subclass: WorkflowEngine
   state: eventStore = nil
   state: activityPool = nil
-  state: signalBuffers :: Dictionary = #{}
-  state: workflowSnapshots :: Dictionary = #{}
-  state: workflowQueryHandlers :: Dictionary = #{}
-  state: childWorkflows :: Dictionary = #{}
-  state: parentClosePolicy :: Dictionary = #{}
-  state: cancelledWorkflows :: Dictionary = #{}
+  state: signalBuffers :: Dictionary(String, List) = #{}
+  state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
+  state: workflowQueryHandlers :: Dictionary(String, Dictionary) = #{}
+  state: childWorkflows :: Dictionary(String, List) = #{}
+  state: parentClosePolicy :: Dictionary(String, Symbol) = #{}
+  state: cancelledWorkflows :: Dictionary(String, Boolean) = #{}
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
