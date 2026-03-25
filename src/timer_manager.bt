@@ -26,15 +26,17 @@ Actor subclass: TimerManager
     counts := events
       inject: #{#started => 0, #fired => 0}
       into: [:acc :evt |
-        evt eventType =:= #TimerStarted
-          ifTrue: [
-            #{#started => (acc at: #started) + 1, #fired => (acc at: #fired)}
-          ]
-          ifFalse: [
-            evt eventType =:= #TimerFired ifTrue: [
-              #{#started => (acc at: #started), #fired => (acc at: #fired) + 1}
-            ] ifFalse: [acc]
-          ]
+        evt eventType match: [
+          #TimerStarted -> #{
+            #started => (acc at: #started) + 1,
+            #fired => (acc at: #fired)
+          };
+          #TimerFired -> #{
+            #started => (acc at: #started),
+            #fired => (acc at: #fired) + 1
+          };
+          _ -> acc
+        ]
       ]
     startedCount := counts at: #started
     firedCount := counts at: #fired

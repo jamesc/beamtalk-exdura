@@ -36,9 +36,6 @@ Value subclass: WorkflowHandle
 
   /// Block until the workflow completes and return the result.
   ///
-  /// Polls the execution status every 100ms. If the workflow fails
-  /// or is cancelled, raises an error with the reason.
-  ///
   ///   result := handle result   // blocks until done
   result =>
     [true]
@@ -46,22 +43,18 @@ Value subclass: WorkflowHandle
         exec := self client getExecution: self workflowId
         exec isNil
           ifFalse: [
-            exec status =:= #completed ifTrue: [^exec result]
-            exec status =:= #failed ifTrue: [
-              self error: "Workflow failed: {exec result}"
+            exec status match: [
+              #completed -> [^exec result] value;
+              #failed -> self error: "Workflow failed: {exec result}";
+              #cancelled -> self error: "Workflow cancelled: {self workflowId}";
+              #continued_as_new -> nil;
+              _ -> nil
             ]
-            exec status =:= #cancelled ifTrue: [
-              self error: "Workflow cancelled: {self workflowId}"
-            ]
-            exec status =:= #continued_as_new ifTrue: []
           ]
         Timer sleep: 100
       ]
 
   /// Block until the workflow completes or the timeout (ms) expires.
-  ///
-  /// Returns the workflow result on success. Raises an error if the
-  /// workflow fails, is cancelled, or if the timeout is exceeded.
   ///
   ///   result := handle result: 5000   // 5 second timeout
   result: timeout :: Integer =>
@@ -71,14 +64,13 @@ Value subclass: WorkflowHandle
         exec := self client getExecution: self workflowId
         exec isNil
           ifFalse: [
-            exec status =:= #completed ifTrue: [^exec result]
-            exec status =:= #failed ifTrue: [
-              self error: "Workflow failed: {exec result}"
+            exec status match: [
+              #completed -> [^exec result] value;
+              #failed -> self error: "Workflow failed: {exec result}";
+              #cancelled -> self error: "Workflow cancelled: {self workflowId}";
+              #continued_as_new -> nil;
+              _ -> nil
             ]
-            exec status =:= #cancelled ifTrue: [
-              self error: "Workflow cancelled: {self workflowId}"
-            ]
-            exec status =:= #continued_as_new ifTrue: []
           ]
         (Time nowMs) >= deadline ifTrue: [
           self error: "Workflow result timed out after {timeout}ms"

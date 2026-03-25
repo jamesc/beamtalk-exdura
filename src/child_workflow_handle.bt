@@ -43,9 +43,6 @@ Value subclass: ChildWorkflowHandle
 
   /// Block until the child workflow completes and return the result.
   ///
-  /// If the handle was created during replay with a cached result,
-  /// returns immediately. Otherwise polls the EventStore every 100ms.
-  ///
   ///   result := handle result
   result =>
     self hasCachedResult ifTrue: [^self cachedResult]
@@ -54,12 +51,11 @@ Value subclass: ChildWorkflowHandle
         exec := self eventStore getExecution: self childWorkflowId
         exec isNil
           ifFalse: [
-            exec status =:= #completed ifTrue: [^exec result]
-            exec status =:= #failed ifTrue: [
-              self error: "Child workflow failed: {exec result}"
-            ]
-            exec status =:= #cancelled ifTrue: [
-              self error: "Child workflow cancelled: {self childWorkflowId}"
+            exec status match: [
+              #completed -> [^exec result] value;
+              #failed -> self error: "Child workflow failed: {exec result}";
+              #cancelled -> self error: "Child workflow cancelled: {self childWorkflowId}";
+              _ -> nil
             ]
           ]
         Timer sleep: 100
@@ -76,12 +72,11 @@ Value subclass: ChildWorkflowHandle
         exec := self eventStore getExecution: self childWorkflowId
         exec isNil
           ifFalse: [
-            exec status =:= #completed ifTrue: [^exec result]
-            exec status =:= #failed ifTrue: [
-              self error: "Child workflow failed: {exec result}"
-            ]
-            exec status =:= #cancelled ifTrue: [
-              self error: "Child workflow cancelled: {self childWorkflowId}"
+            exec status match: [
+              #completed -> [^exec result] value;
+              #failed -> self error: "Child workflow failed: {exec result}";
+              #cancelled -> self error: "Child workflow cancelled: {self childWorkflowId}";
+              _ -> nil
             ]
           ]
         (Time nowMs) >= deadline ifTrue: [
