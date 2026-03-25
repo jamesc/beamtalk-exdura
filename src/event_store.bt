@@ -29,11 +29,10 @@ Actor subclass: EventStore
   /// Class method to avoid self-capture issues when called from blocks.
   class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List -> List =>
     offset >= totalSize ifTrue: [^acc]
-    // Extract remaining bytes
-    remaining := Erlang binary part: binary arg: (Tuple withAll: #(offset, totalSize - offset))
-    // Parse next term with 'used' option to know how many bytes were consumed
+    remaining := binary part: offset size: totalSize - offset
+    // Parse next ETF term and get bytes consumed
     parseResult := [
-      Erlang erlang binary_to_term: remaining with: #(#used)
+      Binary deserializeWithUsed: remaining
     ] on: Error do: [:e | ^acc]
     {dict, used} := parseResult
     evt := ExduraEvent new: dict
