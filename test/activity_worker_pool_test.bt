@@ -27,6 +27,23 @@ TestCase subclass: ActivityWorkerPoolTest
         [self.store stop] on: Error do: [:e | nil]
       ]
 
+  // ── Helpers ──
+
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === ActivityWorkerSupervisor ===
   testActivityWorkerSupervisorIsSupervisor =>
     self assert: ActivityWorkerSupervisor isSupervisor
@@ -238,7 +255,7 @@ TestCase subclass: ActivityWorkerPoolTest
       startWorkflow: TwoActivityWorkflow
       id: "wf-pool-full-1"
       args: #(5)
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-pool-full-1" timeout: 10000
     events := self.store readEvents: "wf-pool-full-1" fromSeq: 1
     self assert: events size equals: 6
     self assert: (events at: 1) eventType equals: #WorkflowStarted

@@ -27,6 +27,23 @@ TestCase subclass: WorkflowEngineTest
         [self.store stop] on: Error do: [:e | nil]
       ]
 
+  // ── Helpers ──
+
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === Activity base class ===
   testActivityIsObjectSubclass => self assert: (Activity inheritsFrom: Object)
 
@@ -104,7 +121,7 @@ TestCase subclass: WorkflowEngineTest
       startWorkflow: TwoActivityWorkflow
       id: "wf-two-1"
       args: #(5)
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-two-1" timeout: 10000
     events := self.store readEvents: "wf-two-1" fromSeq: 1
     // Expected: WorkflowStarted, ActivityScheduled, ActivityCompleted,
     //           ActivityScheduled, ActivityCompleted, WorkflowCompleted
@@ -132,7 +149,7 @@ TestCase subclass: WorkflowEngineTest
       startWorkflow: TwoActivityWorkflow
       id: "wf-replay-1"
       args: #(5)
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-replay-1" timeout: 10000
 
     // Verify normal run completed
     events := self.store readEvents: "wf-replay-1" fromSeq: 1

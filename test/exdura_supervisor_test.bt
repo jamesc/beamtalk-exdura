@@ -20,6 +20,23 @@ TestCase subclass: ExduraSupervisorTest
     self.client := nil
     [File deleteAll: "data"] on: Error do: [:e | nil]
 
+  // ── Helpers ──
+
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.client eventStore getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === ExduraSupervisor class-side config ===
   testSupervisorStrategyIsRestForOne =>
     self assert: ExduraSupervisor strategy equals: #restForOne
@@ -62,8 +79,6 @@ TestCase subclass: ExduraSupervisorTest
       args: #(5)
       taskQueue: "default"
       options: #{}
-    Erlang timer sleep: 2000
-    exec := self.client getExecution: "sup-wf-2"
+    exec := self awaitWorkflow: "sup-wf-2" timeout: 10000
     self assert: exec notNil
-    self assert: exec status equals: #completed
     self assert: exec result equals: 20

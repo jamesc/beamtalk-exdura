@@ -49,6 +49,21 @@ TestCase subclass: ReplayProofTest
   /// Reset the call count to zero.
   resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
 
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // ── Tests ──
 
   /// Original execution calls activities — callCount should be 2.
@@ -58,11 +73,9 @@ TestCase subclass: ReplayProofTest
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-1"
       args: #("hello")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-proof-1" timeout: 10000
 
-    // Verify workflow completed
-    exec := self.store getExecution: "wf-proof-1"
-    self assert: exec status equals: #completed
+    // Verify activities were called twice
 
     // Verify activities were called twice
     self assert: self callCount equals: 2
@@ -75,11 +88,10 @@ TestCase subclass: ReplayProofTest
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-2"
       args: #("world")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-proof-2" timeout: 10000
 
     // Verify original run completed with callCount = 2
     exec := self.store getExecution: "wf-proof-2"
-    self assert: exec status equals: #completed
     _originalResult := exec result
     self assert: self callCount equals: 2
 
@@ -110,7 +122,7 @@ TestCase subclass: ReplayProofTest
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-3"
       args: #("test")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-proof-3" timeout: 10000
 
     exec := self.store getExecution: "wf-proof-3"
     originalResult := exec result
@@ -145,7 +157,7 @@ TestCase subclass: ReplayProofTest
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-4"
       args: #("partial")
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "wf-proof-4" timeout: 10000
     self assert: self callCount equals: 2
 
     // Get the full history

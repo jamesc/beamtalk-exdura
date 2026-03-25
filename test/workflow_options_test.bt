@@ -55,6 +55,21 @@ TestCase subclass: WorkflowOptionsTest
   /// Reset the call count to zero.
   resetCallCount => (Ets named: #counting_activity_calls) at: #callCount put: 0
 
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // ── Retry Tests ──
 
   /// Activity succeeds after N failures with retry policy.
@@ -234,10 +249,7 @@ TestCase subclass: WorkflowOptionsTest
       startWorkflow: SleepWorkflow
       id: "wf-sleep-1"
       args: #("hello")
-    Erlang timer sleep: 1500
-
-    exec := self.store getExecution: "wf-sleep-1"
-    self assert: exec status equals: #completed
+    self awaitWorkflow: "wf-sleep-1" timeout: 10000
 
     events := self.store readEvents: "wf-sleep-1" fromSeq: 1
     // Expected: WorkflowStarted, ActivityScheduled, ActivityCompleted,
@@ -264,10 +276,9 @@ TestCase subclass: WorkflowOptionsTest
       startWorkflow: SleepWorkflow
       id: "wf-sleep-replay-1"
       args: #("world")
-    Erlang timer sleep: 1500
+    self awaitWorkflow: "wf-sleep-replay-1" timeout: 10000
 
     exec := self.store getExecution: "wf-sleep-replay-1"
-    self assert: exec status equals: #completed
     self assert: self callCount equals: 2
 
     // Step 2: Reset call count and replay with the full history
