@@ -94,10 +94,12 @@ Actor subclass: TimerManager
           do: [:timerInfo |
             dur := timerInfo at: #duration
             fireAt := timerInfo at: #fireAt
-            self.engine
+            remaining := self.engine
               reconstructTimer: dur
               fireAt: fireAt
               workflowId: wfId
+            remaining > 0 ifTrue: [Timer sleep: remaining]
+            self.engine recordTimerFired: dur workflowId: wfId
           ]
         acc + pending size
       ]

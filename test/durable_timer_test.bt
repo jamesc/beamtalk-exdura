@@ -83,6 +83,8 @@ TestCase subclass: DurableTimerTest
 
     // Schedule a short timer directly through the engine
     self.engine scheduleTimer: 50 workflowId: wfId
+    Timer sleep: 50
+    self.engine recordTimerFired: 50 workflowId: wfId
 
     // Verify TimerStarted event has fireAt in payload
     events := self.store readEvents: wfId fromSeq: 1
