@@ -173,6 +173,21 @@ TestCase subclass: SignalBufferingTest
     self assert: events size equals: 1
     self assert: (events at: 1) eventType equals: #SignalReceived
 
+  /// Wait for a workflow to reach a terminal status.
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.client eventStore getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === Signals sent during activity are buffered and delivered at safe point ===
   testSignalDuringActivityDeliveredAtSafePoint =>
     engine := self.client engine
@@ -194,8 +209,8 @@ TestCase subclass: SignalBufferingTest
       name: "interrupt"
       payload: #{#reason => "test"}
 
-    // Wait for workflow to complete
-    Erlang timer sleep: 3000
+    // Wait for workflow to complete (poll instead of fixed sleep)
+    self awaitWorkflow: "wf-sig-safe" timeout: 10000
 
     // Verify SignalReceived event is in history
     events := self.client eventStore readEvents: "wf-sig-safe" fromSeq: 1
