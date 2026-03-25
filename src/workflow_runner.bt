@@ -21,6 +21,24 @@ Actor subclass: WorkflowRunner
   state: history :: List = #()
   state: snapshot = nil
   state: snapshotInterval :: Integer = 100
+  state: completionSem = nil
+
+  /// Block until a runner's workflow completes, with timeout (ms).
+  /// Uses AtomicCounter as a semaphore — near-zero-sleep detection (1ms poll).
+  ///
+  ///   runner go!
+  ///   WorkflowRunner await: runner timeout: 10000
+  class await: runner timeout: timeoutMs :: Integer =>
+    sem := runner completionSem
+    sem isNil ifTrue: [self error: "Runner has no completion semaphore"]
+    deadline := Time nowMs + timeoutMs
+    [(sem value) == 0]
+      whileTrue: [
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for runner"
+        ]
+        Timer sleep: 1
+      ]
 
   /// Execute the workflow. Called as an async cast (go!).
   ///
@@ -32,6 +50,7 @@ Actor subclass: WorkflowRunner
       #workflowId => self.workflowId,
       #workflowType => self.workflow name asString
     }
+    self.completionSem := AtomicCounter new: ("wfr_{System uniqueId}" asAtom)
     ctx := WorkflowContext spawn
     ctx setSnapshotInterval: self.snapshotInterval
     self.snapshot isNil
@@ -57,14 +76,18 @@ Actor subclass: WorkflowRunner
     ]
     // Capture initial snapshot before execution starts
     self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-    // Run the workflow. CancellationError exits early via ^nil.
+    // Run the workflow in the runner's process (not the class object's).
+    // CancellationError exits early via ^nil.
     // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
-    result := [self.workflow run: self.input ctx: ctx]
+    result := [
+      self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)
+    ]
       on: CancellationError
       do: [:_e |
         // Engine already recorded WorkflowCancelled and updated status.
         self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
         self.engine clearCancellation: self.workflowId
+        self.completionSem increment
         ^nil
       ]
     (result isKindOf: ContinueAsNewRequest)
@@ -80,3 +103,4 @@ Actor subclass: WorkflowRunner
         self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
         self.engine completeWorkflow: self.workflowId result: result
       ]
+    self.completionSem increment

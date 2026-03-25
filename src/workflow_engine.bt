@@ -98,7 +98,7 @@ Actor subclass: WorkflowEngine
         #history => history
       }
     runner go!
-    workflowClass
+    runner
 
   /// Replay a workflow, using a snapshot if available for optimization.
   ///
@@ -130,10 +130,10 @@ Actor subclass: WorkflowEngine
     }
     history := self.eventStore readEvents: workflowId fromSeq: 1
     snapResult := self.eventStore readEventsFromSnapshot: workflowId
-    snapResult isNil
+    runner := snapResult isNil
       ifTrue: [
         // No snapshot — full replay from event history
-        runner := WorkflowRunner
+        WorkflowRunner
           spawnWith: #{
             #workflow => workflowClass,
             #engine => self,
@@ -142,24 +142,22 @@ Actor subclass: WorkflowEngine
             #history => history,
             #snapshotInterval => interval
           }
-        runner go!
       ]
       ifFalse: [
         // Snapshot found — use snapshot state with full history
-        snapshot := snapResult at: #snapshot
-        runner := WorkflowRunner
+        WorkflowRunner
           spawnWith: #{
             #workflow => workflowClass,
             #engine => self,
             #workflowId => workflowId,
             #input => input,
             #history => history,
-            #snapshot => (snapshot at: #state),
+            #snapshot => ((snapResult at: #snapshot) at: #state),
             #snapshotInterval => interval
           }
-        runner go!
       ]
-    workflowClass
+    runner go!
+    runner
 
   /// Execute an activity class method and record events (no options).
   ///
@@ -761,7 +759,7 @@ Actor subclass: WorkflowEngine
         #history => history
       }
     runner go!
-    workflowClass
+    runner
 
   /// Record a VersionMarker event for a workflow.
   ///
