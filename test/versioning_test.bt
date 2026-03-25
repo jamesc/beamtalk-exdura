@@ -89,8 +89,8 @@ TestCase subclass: VersioningTest
     // Step 2: Replay with VersionedWorkflowV2 (defaultVersion changed to 2)
     // The replay should still use version 1 from the recorded history
     replayHistory := self.store readEvents: "wf-ver-2" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => VersionedWorkflowV2,
         #engine => self.engine,
         #workflowId => "wf-ver-2",
@@ -98,7 +98,7 @@ TestCase subclass: VersioningTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // The replayed workflow should produce v1-result (original version)
     // because the VersionMarker in history recorded version 1
@@ -174,8 +174,8 @@ TestCase subclass: VersioningTest
     self assert: ((markers at: 1) payload at: #version) equals: 1
 
     // Step 3: Replay with V2 workflow (defaultVersion changed to 2)
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => VersionedWorkflowV2,
         #engine => self.engine,
         #workflowId => "wf-ver-replay",
@@ -183,7 +183,7 @@ TestCase subclass: VersioningTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // The replay should return v1-result because version 1 was recorded
     eventsAfter := self.store readEvents: "wf-ver-replay" fromSeq: 1

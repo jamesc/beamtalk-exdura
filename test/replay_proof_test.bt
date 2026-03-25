@@ -100,8 +100,8 @@ TestCase subclass: ReplayProofTest
 
     // Step 3: Replay — new WorkflowRunner with the SAME workflow ID's history
     replayHistory := self.store readEvents: "wf-proof-2" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-2",
@@ -112,7 +112,7 @@ TestCase subclass: ReplayProofTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // Step 4: Verify activities were NOT re-executed
     self assert: (self callCount - countBeforeReplay) equals: 0
@@ -130,8 +130,8 @@ TestCase subclass: ReplayProofTest
 
     // Replay
     replayHistory := self.store readEvents: "wf-proof-3" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-3",
@@ -142,7 +142,7 @@ TestCase subclass: ReplayProofTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // The replay records a new WorkflowCompleted event — get its result
     eventsAfter := self.store readEvents: "wf-proof-3" fromSeq: 1
@@ -181,8 +181,8 @@ TestCase subclass: ReplayProofTest
     // Step 3: Capture count before replay and replay with partial history
     countBeforeReplay := self callCount
 
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-4",
@@ -193,7 +193,7 @@ TestCase subclass: ReplayProofTest
         #history => partialHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // Step 4: Only the SECOND activity should have executed live
     self assert: (self callCount - countBeforeReplay) equals: 1

@@ -155,8 +155,8 @@ TestCase subclass: SnapshotTest
     // to trigger snapshot creation with fewer activities.
     // 8 activities at interval 10 triggers 1 snapshot (at event 10).
     inputDict := #{#input => 8, #counterTableName => self.counterTableName}
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-exec",
@@ -189,7 +189,8 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-exec" events: #(startEvent)
     runner go!
-    exec := self awaitWorkflow: "wf-snap-exec" timeout: 10000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    exec := self.store getExecution: "wf-snap-exec"
     self assert: exec status equals: #completed
 
     // Verify a snapshot was created
@@ -204,8 +205,8 @@ TestCase subclass: SnapshotTest
     // Step 1: Run workflow with small snapshot interval.
     // 8 activities at interval 10 triggers 1 snapshot.
     inputDict := #{#input => 8, #counterTableName => self.counterTableName}
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-replay",
@@ -237,7 +238,8 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-replay" events: #(startEvent)
     runner go!
-    exec := self awaitWorkflow: "wf-snap-replay" timeout: 10000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    exec := self.store getExecution: "wf-snap-replay"
     self assert: exec status equals: #completed
     originalResult := exec result
 
@@ -272,8 +274,8 @@ TestCase subclass: SnapshotTest
     _countBefore := self callCount
     // Run workflow without triggering snapshots (very large interval)
     inputDict := #{#input => 5, #counterTableName => self.counterTableName}
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-no-snap",
@@ -305,7 +307,8 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-no-snap" events: #(startEvent)
     runner go!
-    exec := self awaitWorkflow: "wf-no-snap" timeout: 10000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    exec := self.store getExecution: "wf-no-snap"
     self assert: exec status equals: #completed
     self assert: exec result equals: 5
 

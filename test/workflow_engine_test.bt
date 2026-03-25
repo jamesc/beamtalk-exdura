@@ -163,8 +163,8 @@ TestCase subclass: WorkflowEngineTest
 
     // Step 3: Run the workflow again in replay mode with existing history
     replayHistory := self.store readEvents: "wf-replay-1" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => TwoActivityWorkflow,
         #engine => self.engine,
         #workflowId => "wf-replay-1",
@@ -172,7 +172,7 @@ TestCase subclass: WorkflowEngineTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 1000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // Step 4: Check that replay did NOT add new ActivityScheduled events
     eventsAfter := self.store readEvents: "wf-replay-1" fromSeq: 1

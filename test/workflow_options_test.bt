@@ -281,8 +281,8 @@ TestCase subclass: WorkflowOptionsTest
 
     replayHistory := self.store readEvents: "wf-sleep-replay-1" fromSeq: 1
     workflow := SleepWorkflow
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => workflow,
         #engine => self.engine,
         #workflowId => "wf-sleep-replay-1",
@@ -296,7 +296,7 @@ TestCase subclass: WorkflowOptionsTest
     // Measure time — replay should be near-instant (no 50ms sleep)
     startTime := Time nowMs
     runner go!
-    Erlang timer sleep: 500
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
     endTime := Time nowMs
     _elapsed := endTime - startTime
 

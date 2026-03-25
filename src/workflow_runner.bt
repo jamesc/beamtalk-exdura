@@ -21,16 +21,31 @@ Actor subclass: WorkflowRunner
   state: history :: List = #()
   state: snapshot = nil
   state: snapshotInterval :: Integer = 100
-  state: completionSem = nil
+  state: doneSemName :: Symbol = #none
 
   /// Block until a runner's workflow completes, with timeout (ms).
   /// Uses AtomicCounter as a semaphore — near-zero-sleep detection (1ms poll).
+  /// The semaphore is created by go and stored as actor state.
+  /// Callers should use performLocally: to avoid class object contention:
   ///
   ///   runner go!
-  ///   WorkflowRunner await: runner timeout: 10000
-  class await: runner timeout: timeoutMs :: Integer =>
-    sem := runner completionSem
-    sem isNil ifTrue: [self error: "Runner has no completion semaphore"]
+  ///   WorkflowRunner performLocally: #await:timeout: withArguments: #(runner, 10000)
+  /// Create a runner with a completion semaphore for zero-sleep await.
+  ///
+  ///   {runner, semName} := WorkflowRunner spawnForAwait: #{#workflow => ..., #engine => ...}
+  ///   runner go!
+  ///   WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+  class spawnForAwait: config :: Dictionary =>
+    semName := "wfr_{System uniqueId}" asAtom
+    AtomicCounter new: semName
+    runner := self spawnWith: (config at: #doneSemName put: semName)
+    #(runner, semName)
+
+  /// Block until a runner's workflow completes, with timeout (ms).
+  /// Polls the AtomicCounter semaphore (1ms interval, near-zero overhead).
+  /// Must be called via performLocally: to avoid class object contention.
+  class await: semName :: Symbol timeout: timeoutMs :: Integer =>
+    sem := AtomicCounter named: semName
     deadline := Time nowMs + timeoutMs
     [(sem value) == 0]
       whileTrue: [
@@ -39,6 +54,7 @@ Actor subclass: WorkflowRunner
         ]
         Timer sleep: 1
       ]
+    sem delete
 
   /// Execute the workflow. Called as an async cast (go!).
   ///
@@ -50,7 +66,6 @@ Actor subclass: WorkflowRunner
       #workflowId => self.workflowId,
       #workflowType => self.workflow name asString
     }
-    self.completionSem := AtomicCounter new: ("wfr_{System uniqueId}" asAtom)
     ctx := WorkflowContext spawn
     ctx setSnapshotInterval: self.snapshotInterval
     self.snapshot isNil
@@ -87,7 +102,7 @@ Actor subclass: WorkflowRunner
         // Engine already recorded WorkflowCancelled and updated status.
         self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
         self.engine clearCancellation: self.workflowId
-        self.completionSem increment
+        (AtomicCounter named: self.doneSemName) increment
         ^nil
       ]
     (result isKindOf: ContinueAsNewRequest)
@@ -103,4 +118,4 @@ Actor subclass: WorkflowRunner
         self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
         self.engine completeWorkflow: self.workflowId result: result
       ]
-    self.completionSem increment
+    (AtomicCounter named: self.doneSemName) increment

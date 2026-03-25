@@ -130,8 +130,8 @@ TestCase subclass: DurableTimerTest
     // Step 2: Replay with full history — should NOT re-execute activities or sleep
     countBeforeReplay := self callCount
     replayHistory := self.store readEvents: "wf-timer-2" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-2",
@@ -139,8 +139,8 @@ TestCase subclass: DurableTimerTest
         #history => replayHistory
       }
     runner go!
-    // Wait for replay to complete — runner is async
-    Erlang timer sleep: 500
+    // Wait for runner to complete
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
     // Stop engine before assertions to drain in-flight actors
     [self.engine stop] on: Error do: [:e | nil]
     self.engine := nil
@@ -195,8 +195,8 @@ TestCase subclass: DurableTimerTest
     // Step 3: Replay with partial history — timer fire time has passed,
     // so it should fire immediately and continue to second activity.
     countBeforeReplay := self callCount
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-3",
@@ -204,7 +204,7 @@ TestCase subclass: DurableTimerTest
         #history => partialHistory
       }
     runner go!
-    Erlang timer sleep: 3000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // Only the second activity should execute (first was replayed from history)
     self assert: (self callCount - countBeforeReplay) equals: 1

@@ -101,7 +101,6 @@ TestCase subclass: ChildWorkflowTest
 
   // === BatchProcessor fan-out/fan-in ===
   testBatchProcessorFanOutFanIn =>
-    self skip: "SPOF: single WorkflowEngine Actor bottleneck causes gen_server timeout"
     engine := self.engine
     engine
       startWorkflow: BatchProcessor
@@ -191,8 +190,8 @@ TestCase subclass: ChildWorkflowTest
 
     // Step 3: Replay the parent workflow with existing history
     replayHistory := store readEvents: "replay-child-1" fromSeq: 1
-    runner := WorkflowRunner
-      spawnWith: #{
+    #[runner, semName] := WorkflowRunner
+      spawnForAwait: #{
         #workflow => SingleChildParent,
         #engine => engine,
         #workflowId => "replay-child-1",
@@ -200,7 +199,7 @@ TestCase subclass: ChildWorkflowTest
         #history => replayHistory
       }
     runner go!
-    Erlang timer sleep: 3000
+    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
 
     // Step 4: Verify replay didn't start a new child workflow
     // It should only add at most 1 new event (WorkflowCompleted from replay)
