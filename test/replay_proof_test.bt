@@ -12,7 +12,7 @@ TestCase subclass: ReplayProofTest
   field: engine = nil
   field: counterTable = nil
   field: counterTableName = nil
-  field: testDir = "target/bt-test-tmp/replay-proof"
+  field: testDir = "_build/bt-test-tmp/replay-proof"
 
   setUp =>
     // Clean data dir if needed

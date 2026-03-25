@@ -12,7 +12,7 @@ TestCase subclass: SnapshotTest
   field: engine = nil
   field: counterTable = nil
   field: counterTableName = nil
-  field: testDir = "target/bt-test-tmp/snapshot"
+  field: testDir = "_build/bt-test-tmp/snapshot"
 
   setUp =>
     // Clean data dir if needed

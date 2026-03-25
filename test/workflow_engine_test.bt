@@ -6,7 +6,7 @@
 TestCase subclass: WorkflowEngineTest
   field: store = nil
   field: engine = nil
-  field: testDir = "target/bt-test-tmp/wf-engine"
+  field: testDir = "_build/bt-test-tmp/wf-engine"
 
   setUp =>
     // Clean data dir if needed

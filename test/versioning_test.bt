@@ -11,7 +11,7 @@ TestCase subclass: VersioningTest
   field: engine = nil
   field: counterTable = nil
   field: counterTableName = nil
-  field: testDir = "target/bt-test-tmp/versioning"
+  field: testDir = "_build/bt-test-tmp/versioning"
 
   setUp =>
     // Clean data dir if needed

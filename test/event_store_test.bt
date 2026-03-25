@@ -2,7 +2,7 @@
 
 TestCase subclass: EventStoreTest
   field: store = nil
-  field: testDir = "target/bt-test-tmp/event-store-unit"
+  field: testDir = "_build/bt-test-tmp/event-store-unit"
 
   setUp =>
     // Clean data dir if needed

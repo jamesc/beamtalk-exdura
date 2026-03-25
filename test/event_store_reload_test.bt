@@ -1,7 +1,7 @@
 /// BT-1496: Tests that verify EventStore reloads events from pre-existing ETF files.
 TestCase subclass: EventStoreReloadTest
   field: store = nil
-  field: dataDir = "target/bt-test-tmp/es-reload"
+  field: dataDir = "_build/bt-test-tmp/es-reload"
 
   setUp =>
     (File isDirectory: self.dataDir) ifTrue: [

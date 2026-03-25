@@ -12,7 +12,7 @@
 
 TestCase subclass: EventStorePersistenceTest
   field: store = nil
-  field: testDir = "target/bt-test-tmp/event-store-persist"
+  field: testDir = "_build/bt-test-tmp/event-store-persist"
 
   setUp =>
     // Clean up test directory

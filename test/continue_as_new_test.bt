@@ -6,7 +6,7 @@
 /// Fixture: test/fixtures/poller_workflow.bt, test/fixtures/batch_activities.bt
 TestCase subclass: ContinueAsNewTest
   field: client = nil
-  field: testDir = "target/bt-test-tmp/continue-as-new"
+  field: testDir = "_build/bt-test-tmp/continue-as-new"
 
   setUp =>
     [File deleteAll: self.testDir] on: Error do: [:e | nil]

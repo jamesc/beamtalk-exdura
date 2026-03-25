@@ -13,7 +13,7 @@ TestCase subclass: CancellationTest
 
   setUp =>
     self.client := ExduraClient connect: #{
-      #dataDir => "target/bt-test-tmp/cancellation"
+      #dataDir => "_build/bt-test-tmp/cancellation"
     }
     self.engine := self.client engine
     self.store := self.client eventStore

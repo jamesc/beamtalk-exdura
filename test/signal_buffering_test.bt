@@ -5,7 +5,7 @@
 /// recorded in the event history and delivery order matches arrival order.
 TestCase subclass: SignalBufferingTest
   field: client = nil
-  field: testDir = "target/bt-test-tmp/signal-buffering"
+  field: testDir = "_build/bt-test-tmp/signal-buffering"
 
   setUp =>
     (File isDirectory: self.testDir) ifTrue: [
