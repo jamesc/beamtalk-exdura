@@ -22,7 +22,6 @@ TestCase subclass: VersioningTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -84,7 +83,6 @@ TestCase subclass: VersioningTest
 
     // Step 2: Replay with VersionedWorkflowV2 (defaultVersion changed to 2)
     // The replay should still use version 1 from the recorded history
-    self resetCallCount
     replayHistory := self.store readEvents: "wf-ver-2" fromSeq: 1
     runner := WorkflowRunner
       spawnWith: #{
@@ -171,7 +169,6 @@ TestCase subclass: VersioningTest
     self assert: ((markers at: 1) payload at: #version) equals: 1
 
     // Step 3: Replay with V2 workflow (defaultVersion changed to 2)
-    self resetCallCount
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => VersionedWorkflowV2,

@@ -23,7 +23,6 @@ TestCase subclass: ReplayProofTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -62,7 +61,7 @@ TestCase subclass: ReplayProofTest
 
   /// Original execution calls activities — callCount should be 2.
   testOriginalExecutionCallsActivities =>
-    self resetCallCount
+    countBefore := self callCount
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-1"
@@ -70,14 +69,12 @@ TestCase subclass: ReplayProofTest
     self awaitWorkflow: "wf-proof-1" timeout: 10000
 
     // Verify activities were called twice
-
-    // Verify activities were called twice
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
   /// Replayed execution does NOT re-execute activities — callCount stays 0.
   testReplayDoesNotReExecuteActivities =>
     // Step 1: Run workflow normally to build event history
-    self resetCallCount
+    countBefore := self callCount
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-2"
@@ -87,11 +84,10 @@ TestCase subclass: ReplayProofTest
     // Verify original run completed with callCount = 2
     exec := self.store getExecution: "wf-proof-2"
     _originalResult := exec result
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
-    // Step 2: Reset call count
-    self resetCallCount
-    self assert: self callCount equals: 0
+    // Step 2: Capture count before replay
+    countBeforeReplay := self callCount
 
     // Step 3: Replay — new WorkflowRunner with the SAME workflow ID's history
     replayHistory := self.store readEvents: "wf-proof-2" fromSeq: 1
@@ -107,11 +103,10 @@ TestCase subclass: ReplayProofTest
     Erlang timer sleep: 1000
 
     // Step 4: Verify activities were NOT re-executed
-    self assert: self callCount equals: 0
+    self assert: (self callCount - countBeforeReplay) equals: 0
 
   /// Replayed result equals original result.
   testReplayProducesSameResult =>
-    self resetCallCount
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-3"
@@ -122,7 +117,6 @@ TestCase subclass: ReplayProofTest
     originalResult := exec result
 
     // Replay
-    self resetCallCount
     replayHistory := self.store readEvents: "wf-proof-3" fromSeq: 1
     runner := WorkflowRunner
       spawnWith: #{
@@ -144,7 +138,7 @@ TestCase subclass: ReplayProofTest
 
   /// Partial replay: first activity from history, second executes live.
   testPartialReplayTransitionsToLiveExecution =>
-    self resetCallCount
+    countBefore := self callCount
 
     // Step 1: Run workflow normally to get the full event history
     self.engine
@@ -152,7 +146,7 @@ TestCase subclass: ReplayProofTest
       id: "wf-proof-4"
       args: #("partial")
     self awaitWorkflow: "wf-proof-4" timeout: 10000
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
     // Get the full history
     fullHistory := self.store readEvents: "wf-proof-4" fromSeq: 1
@@ -166,9 +160,8 @@ TestCase subclass: ReplayProofTest
     evt3 := fullHistory at: 3
     partialHistory := #(evt1, evt2, evt3)
 
-    // Step 3: Reset counter and replay with partial history
-    self resetCallCount
-    self assert: self callCount equals: 0
+    // Step 3: Capture count before replay and replay with partial history
+    countBeforeReplay := self callCount
 
     runner := WorkflowRunner
       spawnWith: #{
@@ -182,4 +175,4 @@ TestCase subclass: ReplayProofTest
     Erlang timer sleep: 1000
 
     // Step 4: Only the SECOND activity should have executed live
-    self assert: self callCount equals: 1
+    self assert: (self callCount - countBeforeReplay) equals: 1

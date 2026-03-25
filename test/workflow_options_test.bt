@@ -21,7 +21,6 @@ TestCase subclass: WorkflowOptionsTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    self.counterTable at: #callCount put: 0
     // Flaky table
     self.flakyTable := Ets newOrExisting: #flaky_activity_state type: #set
     self
@@ -232,7 +231,7 @@ TestCase subclass: WorkflowOptionsTest
 
   /// Sleep records TimerStarted and TimerFired events.
   testSleepRecordsTimerEvents =>
-    self resetCallCount
+    countBefore := self callCount
     self.engine
       startWorkflow: SleepWorkflow
       id: "wf-sleep-1"
@@ -254,11 +253,11 @@ TestCase subclass: WorkflowOptionsTest
     self assert: (events at: 8) eventType equals: #WorkflowCompleted
 
     // Verify activities were called twice
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
   /// Sleep during replay returns immediately if TimerFired in history.
   testSleepReplayReturnsImmediately =>
-    self resetCallCount
+    countBefore := self callCount
     // Step 1: Run workflow normally to build event history with timer events
     self.engine
       startWorkflow: SleepWorkflow
@@ -267,11 +266,10 @@ TestCase subclass: WorkflowOptionsTest
     self awaitWorkflow: "wf-sleep-replay-1" timeout: 10000
 
     exec := self.store getExecution: "wf-sleep-replay-1"
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
-    // Step 2: Reset call count and replay with the full history
-    self resetCallCount
-    self assert: self callCount equals: 0
+    // Step 2: Capture count before replay and replay with the full history
+    countBeforeReplay := self callCount
 
     replayHistory := self.store readEvents: "wf-sleep-replay-1" fromSeq: 1
     workflow := SleepWorkflow
@@ -292,7 +290,7 @@ TestCase subclass: WorkflowOptionsTest
     _elapsed := endTime - startTime
 
     // Activities should NOT have been re-executed
-    self assert: self callCount equals: 0
+    self assert: (self callCount - countBeforeReplay) equals: 0
 
   /// Options are passed through WorkflowContext to engine.
   testRunActivityWithOptionsThroughContext =>

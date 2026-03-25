@@ -23,7 +23,6 @@ TestCase subclass: SnapshotTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -142,7 +141,7 @@ TestCase subclass: SnapshotTest
 
   /// Workflow with many activities records a snapshot at the configured interval.
   testSnapshotRecordedDuringExecution =>
-    self resetCallCount
+    countBefore := self callCount
     // Use a small snapshot interval (every 10 events = 5 activities)
     // to trigger snapshot creation with fewer activities.
     // 8 activities at interval 10 triggers 1 snapshot (at event 10).
@@ -187,11 +186,11 @@ TestCase subclass: SnapshotTest
     self assert: (self.store hasSnapshot: "wf-snap-exec")
 
     // Verify all 8 activities were called
-    self assert: self callCount equals: 8
+    self assert: (self callCount - countBefore) equals: 8
 
   /// Replay from snapshot skips earlier events and produces correct result.
   testReplayFromSnapshotMatchesFullReplay =>
-    self resetCallCount
+    countBefore := self callCount
     // Step 1: Run workflow with small snapshot interval.
     // 8 activities at interval 10 triggers 1 snapshot.
     runner := WorkflowRunner
@@ -230,10 +229,9 @@ TestCase subclass: SnapshotTest
     exec := self awaitWorkflow: "wf-snap-replay" timeout: 10000
     self assert: exec status equals: #completed
     originalResult := exec result
-    _originalCallCount := self callCount
 
-    // Step 2: Reset counter and replay from snapshot
-    self resetCallCount
+    // Step 2: Capture count before replay and replay from snapshot
+    countBeforeReplay := self callCount
     self.engine
       replayWorkflow: ManyStepWorkflow
       id: "wf-snap-replay"
@@ -244,8 +242,8 @@ TestCase subclass: SnapshotTest
 
     // Step 3: Verify activities were NOT re-executed during replay
     // (all activities are replayed from history, not executed live)
-    replayCallCount := self callCount
-    self assert: replayCallCount equals: 0
+    replayDelta := self callCount - countBeforeReplay
+    self assert: replayDelta equals: 0
 
     // Step 4: Verify the replayed result matches
     // The replay records a new WorkflowCompleted event
@@ -260,7 +258,7 @@ TestCase subclass: SnapshotTest
 
   /// Replay without snapshot (full replay) still works correctly.
   testFullReplayWithoutSnapshot =>
-    self resetCallCount
+    countBefore := self callCount
     // Run workflow without triggering snapshots (very large interval)
     runner := WorkflowRunner
       spawnWith: #{
@@ -303,7 +301,7 @@ TestCase subclass: SnapshotTest
     self assert: (self.store hasSnapshot: "wf-no-snap") equals: false
 
     // Full replay
-    self resetCallCount
+    countBeforeReplay := self callCount
     self.engine
       replayWorkflow: ManyStepWorkflow
       id: "wf-no-snap"
@@ -312,7 +310,7 @@ TestCase subclass: SnapshotTest
     Erlang timer sleep: 3000
 
     // During full replay, activities should NOT be re-executed
-    self assert: self callCount equals: 0
+    self assert: (self callCount - countBeforeReplay) equals: 0
 
   /// Snapshot serialization handles permitted types correctly.
   testSnapshotSerializationHandlesPermittedTypes =>

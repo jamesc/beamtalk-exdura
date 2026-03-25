@@ -22,7 +22,6 @@ TestCase subclass: DurableTimerTest
     self.engine := WorkflowEngine withStore: self.store
     // Counter table
     self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -102,7 +101,7 @@ TestCase subclass: DurableTimerTest
 
   /// Full replay: TimerStarted + TimerFired both present — returns immediately.
   testFullReplaySkipsTimer =>
-    self resetCallCount
+    countBefore := self callCount
 
     // Step 1: Run workflow normally
     self.engine
@@ -111,10 +110,10 @@ TestCase subclass: DurableTimerTest
       args: #("hello")
     self awaitWorkflow: "wf-timer-2" timeout: 10000
 
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
     // Step 2: Replay with full history — should NOT re-execute activities or sleep
-    self resetCallCount
+    countBeforeReplay := self callCount
     replayHistory := self.store readEvents: "wf-timer-2" fromSeq: 1
     runner := WorkflowRunner
       spawnWith: #{
@@ -132,13 +131,13 @@ TestCase subclass: DurableTimerTest
     self.engine := nil
 
     // Activities should not have been called again
-    self assert: self callCount equals: 0
+    self assert: (self callCount - countBeforeReplay) equals: 0
 
   /// Partial replay with pending timer: TimerStarted but no TimerFired.
   /// The engine should reconstruct the timer and fire it (immediately,
   /// since the fire time will have passed by the time we replay).
   testPartialReplayReconstructsExpiredTimer =>
-    self resetCallCount
+    countBefore := self callCount
 
     // Step 1: Run workflow normally to get full history
     self.engine
@@ -148,7 +147,7 @@ TestCase subclass: DurableTimerTest
     self awaitWorkflow: "wf-timer-3" timeout: 10000
 
     fullHistory := self.store readEvents: "wf-timer-3" fromSeq: 1
-    self assert: self callCount equals: 2
+    self assert: (self callCount - countBefore) equals: 2
 
     // Step 2: Build partial history — up to TimerStarted but NOT TimerFired.
     // History: WorkflowStarted(1), ActivityScheduled(2), ActivityCompleted(3),
@@ -176,7 +175,7 @@ TestCase subclass: DurableTimerTest
 
     // Step 3: Replay with partial history — timer fire time has passed,
     // so it should fire immediately and continue to second activity.
-    self resetCallCount
+    countBeforeReplay := self callCount
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => SleepWorkflow,
@@ -189,7 +188,7 @@ TestCase subclass: DurableTimerTest
     Erlang timer sleep: 3000
 
     // Only the second activity should execute (first was replayed from history)
-    self assert: self callCount equals: 1
+    self assert: (self callCount - countBeforeReplay) equals: 1
 
   /// TimerManager: findPendingTimers identifies unresolved timers.
   testTimerManagerFindsPendingTimers =>
