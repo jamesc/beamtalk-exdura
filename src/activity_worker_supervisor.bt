@@ -11,3 +11,7 @@
 DynamicSupervisor subclass: ActivityWorkerSupervisor
 
   class childClass => ActivityWorker
+
+  /// High restart limit since all pools share this singleton supervisor
+  /// and worker crash tests accumulate restarts across parallel test runs.
+  class maxRestarts -> Integer => 1000

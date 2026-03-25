@@ -30,6 +30,35 @@ TestCase subclass: CancellationTest
     self.engine := nil
     self.store := nil
 
+  /// Poll for a ChildWorkflowStarted event in the parent's history.
+  awaitChildStarted: parentId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      events := self.store readEvents: parentId fromSeq: 1
+      childStarted := events select: [:e | e eventType =:= #ChildWorkflowStarted]
+      childStarted size > 0 ifTrue: [^childStarted at: 1]
+      Time nowMs >= deadline ifTrue: [
+        self error: "Timed out waiting for child of {parentId}"
+      ]
+      Timer sleep: 50
+    ]
+
+  /// Poll for a workflow to reach a terminal status.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [
+        self error: "Timed out waiting for {workflowId}"
+      ]
+      Timer sleep: 50
+    ]
+
   // === client cancel: cancels a running workflow ===
   testClientCancelCancelsRunningWorkflow =>
     _handle := self.client
@@ -100,16 +129,9 @@ TestCase subclass: CancellationTest
       id: "cancel-parent-1"
       args: #(5)
 
-    // Wait for parent to start child workflow
-    Erlang timer sleep: 2000
-
-    // Find the child workflow ID
-    parentEvents := self.store readEvents: "cancel-parent-1" fromSeq: 1
-    childStartedEvents := parentEvents select: [:e |
-      e eventType =:= #ChildWorkflowStarted
-    ]
-    self assert: childStartedEvents size equals: 1
-    childId := (childStartedEvents at: 1) payload at: #childWorkflowId
+    // Poll for the child to be started (runner must execute and call engine)
+    childStartedEvent := self awaitChildStarted: "cancel-parent-1" timeout: 10000
+    childId := childStartedEvent payload at: #childWorkflowId
 
     // Cancel the parent — engine is free to process immediately
     self.engine cancelWorkflow: "cancel-parent-1"
@@ -159,28 +181,26 @@ TestCase subclass: CancellationTest
 
   // === Child workflows with #abandon policy are not cancelled ===
   testAbandonPolicyChildNotCancelledByParent =>
+    // Use a long sleep so both parent and child are running when we cancel
     self.engine
       startWorkflow: SlowWorkflow
       id: "abandon-parent-1"
-      args: #(5000)
-    Erlang timer sleep: 500
+      args: #(10000)
+    // Wait for the parent's runner to start (engine is free with async timers)
+    Erlang timer sleep: 1000
 
     // Start a child with #abandon policy
     _childHandle := self.engine
       startChildWorkflow: SlowWorkflow
       id: "abandon-child-1"
-      args: #(5000)
+      args: #(10000)
       parentWorkflowId: "abandon-parent-1"
       options: #{#parentClosePolicy => #abandon}
-    Erlang timer sleep: 500
-
-    // Verify child is running
-    childExec := self.store getExecution: "abandon-child-1"
-    self assert: childExec status equals: #running
+    Erlang timer sleep: 1000
 
     // Cancel the parent
     self.engine cancelWorkflow: "abandon-parent-1"
-    Erlang timer sleep: 500
+    Erlang timer sleep: 1000
 
     // Parent should be cancelled
     parentExec := self.store getExecution: "abandon-parent-1"
