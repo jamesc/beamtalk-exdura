@@ -4,19 +4,20 @@
 /// doWork: increments the ETS call counter, so replayed runs can be
 /// distinguished from fresh runs by checking the counter.
 ///
-///   engine startWorkflow: TwoStepWorkflow id: "wf-1" args: #("hello")
+///   engine startWorkflow: TwoStepWorkflow id: "wf-1" args: #(#{#input => "hello"})
 Workflow subclass: TwoStepWorkflow
 
   /// Run two sequential activities: first processes the input,
   /// second processes the first result.
   class run: input ctx: ctx -> Dictionary =>
+    args := (input isKindOf: Dictionary) ifTrue: [input] ifFalse: [#{#input => input}]
     a := ctx
       runActivity: CountingActivity
       method: #doWork:
-      with: #(#{#input => input})
+      with: #(args)
     aResult := a at: #result
     b := ctx
       runActivity: CountingActivity
       method: #doWork:
-      with: #(#{#input => aResult})
+      with: #(args merge: #{#input => aResult})
     #{#first => a, #second => b}

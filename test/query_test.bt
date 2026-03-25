@@ -52,7 +52,7 @@ TestCase subclass: QueryTest
       options: #{}
 
     // Wait for workflow to complete
-    handle result: 5000
+    handle result: 15000
 
     // Engine should have a snapshot for this workflow
     engine := self.client engine

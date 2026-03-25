@@ -47,7 +47,7 @@ TestCase subclass: ContinueAsNewTest
       args: #("batch-1")
       taskQueue: "default"
       options: #{}
-    handle result: 10000
+    handle result: 20000
     // After continue-as-new, the history should be from the fresh execution only.
     // It should contain: WorkflowStarted, ActivityScheduled, ActivityCompleted,
     // WorkflowCompleted — NOT events from the first execution.

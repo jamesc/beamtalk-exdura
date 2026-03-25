@@ -1,7 +1,8 @@
 /// Activity that tracks how many times it has been called (BT-1493).
 ///
-/// Uses an ETS table (#counting_activity_calls) to count invocations.
-/// The test setUp creates the table and resets it between tests.
+/// Uses an ETS table to count invocations. The table name defaults to
+/// #counting_activity_calls but can be overridden via #counterTableName
+/// in the args dict, allowing parallel tests to use isolated counters.
 ///
 ///   CountingActivity doWork: #(#{#input => "hello"})
 ///   // => #{#result => "done", #input => "hello"}
@@ -13,7 +14,8 @@ Activity subclass: CountingActivity
   ///   // => #{#result => "done", #input => "hello"}
   class doWork: args :: List -> Dictionary =>
     dict := args at: 1
-    counter := Ets named: #counting_activity_calls
+    tableName := dict at: #counterTableName ifAbsent: [#counting_activity_calls]
+    counter := Ets named: tableName
     current := counter at: #callCount
     counter at: #callCount put: current + 1
     inputVal := dict at: #input

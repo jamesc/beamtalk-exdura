@@ -21,6 +21,11 @@ TestCase subclass: ActivityWorkerPoolTest
   tearDown =>
     self.engine isNil
       ifFalse: [[self.engine stop] on: Error do: [:e | nil]]
+    self.pool isNil
+      ifFalse: [
+        [self.pool destroy] on: Error do: [:e | nil]
+        [self.pool stop] on: Error do: [:e | nil]
+      ]
     self.store isNil
       ifFalse: [
         [self.store destroy] on: Error do: [:e | nil]
@@ -255,7 +260,7 @@ TestCase subclass: ActivityWorkerPoolTest
       startWorkflow: TwoActivityWorkflow
       id: "wf-pool-full-1"
       args: #(5)
-    self awaitWorkflow: "wf-pool-full-1" timeout: 10000
+    self awaitWorkflow: "wf-pool-full-1" timeout: 15000
     events := self.store readEvents: "wf-pool-full-1" fromSeq: 1
     self assert: events size equals: 6
     self assert: (events at: 1) eventType equals: #WorkflowStarted

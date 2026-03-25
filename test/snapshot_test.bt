@@ -11,6 +11,7 @@ TestCase subclass: SnapshotTest
   field: store = nil
   field: engine = nil
   field: counterTable = nil
+  field: counterTableName = nil
   field: testDir = "target/bt-test-tmp/snapshot"
 
   setUp =>
@@ -21,11 +22,12 @@ TestCase subclass: SnapshotTest
     // Create fresh actors
     self.store := EventStore spawnWith: #{#dataDir => self.testDir}
     self.engine := WorkflowEngine withStore: self.store
-    // Counter table
-    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    (self.counterTable includesKey: #callCount) ifFalse: [
-      self.counterTable at: #callCount put: 0
-    ]
+    // Counter table — unique per test to avoid parallel interference
+    uid := Erlang erlang unique_integer: #(#positive)
+    counterName := Erlang erlang binary_to_atom: ("counting_calls_" ++ uid asString)
+    self.counterTableName := counterName
+    self.counterTable := Ets new: counterName type: #set
+    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -36,6 +38,7 @@ TestCase subclass: SnapshotTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
+    [self.counterTable delete] on: Error do: [:e | nil]
 
   // ── Helpers ──
 
@@ -148,12 +151,13 @@ TestCase subclass: SnapshotTest
     // Use a small snapshot interval (every 10 events = 5 activities)
     // to trigger snapshot creation with fewer activities.
     // 8 activities at interval 10 triggers 1 snapshot (at event 10).
+    inputDict := #{#input => 8, #counterTableName => self.counterTableName}
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-exec",
-        #input => 8,
+        #input => inputDict,
         #history => #(),
         #snapshotInterval => 10
       }
@@ -165,7 +169,7 @@ TestCase subclass: SnapshotTest
         #runId => "wf-snap-exec",
         #workflowType => "ManyStepWorkflow",
         #taskQueue => "default",
-        #args => #(8),
+        #args => #(inputDict),
         #status => #running,
         #startedAt => now
       }
@@ -177,7 +181,7 @@ TestCase subclass: SnapshotTest
         #payload => #{
           #workflowId => "wf-snap-exec",
           #workflowType => "ManyStepWorkflow",
-          #args => #(8)
+          #args => #(inputDict)
         }
       }
     self.store appendEvents: "wf-snap-exec" events: #(startEvent)
@@ -196,12 +200,13 @@ TestCase subclass: SnapshotTest
     _countBefore := self callCount
     // Step 1: Run workflow with small snapshot interval.
     // 8 activities at interval 10 triggers 1 snapshot.
+    inputDict := #{#input => 8, #counterTableName => self.counterTableName}
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-snap-replay",
-        #input => 8,
+        #input => inputDict,
         #history => #(),
         #snapshotInterval => 10
       }
@@ -212,7 +217,7 @@ TestCase subclass: SnapshotTest
         #runId => "wf-snap-replay",
         #workflowType => "ManyStepWorkflow",
         #taskQueue => "default",
-        #args => #(8),
+        #args => #(inputDict),
         #status => #running,
         #startedAt => now
       }
@@ -224,7 +229,7 @@ TestCase subclass: SnapshotTest
         #payload => #{
           #workflowId => "wf-snap-replay",
           #workflowType => "ManyStepWorkflow",
-          #args => #(8)
+          #args => #(inputDict)
         }
       }
     self.store appendEvents: "wf-snap-replay" events: #(startEvent)
@@ -238,7 +243,7 @@ TestCase subclass: SnapshotTest
     self.engine
       replayWorkflow: ManyStepWorkflow
       id: "wf-snap-replay"
-      input: 8
+      input: inputDict
       snapshotInterval: 10
     // Replay is near-instant (no live activity execution)
     Erlang timer sleep: 3000
@@ -263,12 +268,13 @@ TestCase subclass: SnapshotTest
   testFullReplayWithoutSnapshot =>
     _countBefore := self callCount
     // Run workflow without triggering snapshots (very large interval)
+    inputDict := #{#input => 5, #counterTableName => self.counterTableName}
     runner := WorkflowRunner
       spawnWith: #{
         #workflow => ManyStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-no-snap",
-        #input => 5,
+        #input => inputDict,
         #history => #(),
         #snapshotInterval => 9999
       }
@@ -279,7 +285,7 @@ TestCase subclass: SnapshotTest
         #runId => "wf-no-snap",
         #workflowType => "ManyStepWorkflow",
         #taskQueue => "default",
-        #args => #(5),
+        #args => #(inputDict),
         #status => #running,
         #startedAt => now
       }
@@ -291,7 +297,7 @@ TestCase subclass: SnapshotTest
         #payload => #{
           #workflowId => "wf-no-snap",
           #workflowType => "ManyStepWorkflow",
-          #args => #(5)
+          #args => #(inputDict)
         }
       }
     self.store appendEvents: "wf-no-snap" events: #(startEvent)
@@ -308,7 +314,7 @@ TestCase subclass: SnapshotTest
     self.engine
       replayWorkflow: ManyStepWorkflow
       id: "wf-no-snap"
-      input: 5
+      input: inputDict
     // Replay is near-instant (no live activity execution)
     Erlang timer sleep: 3000
 

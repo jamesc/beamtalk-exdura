@@ -11,6 +11,7 @@ TestCase subclass: ReplayProofTest
   field: store = nil
   field: engine = nil
   field: counterTable = nil
+  field: counterTableName = nil
   field: testDir = "target/bt-test-tmp/replay-proof"
 
   setUp =>
@@ -21,11 +22,12 @@ TestCase subclass: ReplayProofTest
     // Create fresh actors
     self.store := EventStore spawnWith: #{#dataDir => self.testDir}
     self.engine := WorkflowEngine withStore: self.store
-    // Counter table
-    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    (self.counterTable includesKey: #callCount) ifFalse: [
-      self.counterTable at: #callCount put: 0
-    ]
+    // Counter table — unique per test to avoid parallel interference
+    uid := Erlang erlang unique_integer: #(#positive)
+    counterName := Erlang erlang binary_to_atom: ("counting_calls_" ++ uid asString)
+    self.counterTableName := counterName
+    self.counterTable := Ets new: counterName type: #set
+    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -36,6 +38,7 @@ TestCase subclass: ReplayProofTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
+    [self.counterTable delete] on: Error do: [:e | nil]
 
   // ── Helpers ──
 
@@ -68,7 +71,7 @@ TestCase subclass: ReplayProofTest
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-1"
-      args: #("hello")
+      args: #(#{#input => "hello", #counterTableName => self.counterTableName})
     self awaitWorkflow: "wf-proof-1" timeout: 10000
 
     // Verify activities were called twice
@@ -81,7 +84,7 @@ TestCase subclass: ReplayProofTest
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-2"
-      args: #("world")
+      args: #(#{#input => "world", #counterTableName => self.counterTableName})
     self awaitWorkflow: "wf-proof-2" timeout: 10000
 
     // Verify original run completed with callCount = 2
@@ -99,7 +102,7 @@ TestCase subclass: ReplayProofTest
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-2",
-        #input => "world",
+        #input => #{#input => "world", #counterTableName => self.counterTableName},
         #history => replayHistory
       }
     runner go!
@@ -113,7 +116,7 @@ TestCase subclass: ReplayProofTest
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-3"
-      args: #("test")
+      args: #(#{#input => "test", #counterTableName => self.counterTableName})
     self awaitWorkflow: "wf-proof-3" timeout: 10000
 
     exec := self.store getExecution: "wf-proof-3"
@@ -126,7 +129,7 @@ TestCase subclass: ReplayProofTest
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-3",
-        #input => "test",
+        #input => #{#input => "test", #counterTableName => self.counterTableName},
         #history => replayHistory
       }
     runner go!
@@ -147,7 +150,7 @@ TestCase subclass: ReplayProofTest
     self.engine
       startWorkflow: TwoStepWorkflow
       id: "wf-proof-4"
-      args: #("partial")
+      args: #(#{#input => "partial", #counterTableName => self.counterTableName})
     self awaitWorkflow: "wf-proof-4" timeout: 10000
     self assert: (self callCount - countBefore) equals: 2
 
@@ -171,7 +174,7 @@ TestCase subclass: ReplayProofTest
         #workflow => TwoStepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-proof-4",
-        #input => "partial",
+        #input => #{#input => "partial", #counterTableName => self.counterTableName},
         #history => partialHistory
       }
     runner go!

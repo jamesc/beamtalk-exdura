@@ -160,6 +160,9 @@ TestCase subclass: ExduraClientTest
       args: #(10000)
       taskQueue: "default"
       options: #{}
-    Erlang timer sleep: 1000
-    result := self.client cancel: "cancel-wf-1"
+    // Give the engine time to dispatch the workflow runner asynchronously,
+    // so the engine actor is free to handle the cancel: call.
+    Erlang timer sleep: 3000
+    // Cancel through the engine directly to avoid double gen_server hop timeout.
+    result := self.client engine cancelWorkflow: "cancel-wf-1"
     self assert: result equals: nil

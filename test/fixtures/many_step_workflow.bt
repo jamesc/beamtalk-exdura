@@ -3,28 +3,32 @@
 /// Used by SnapshotTest to verify snapshot creation and replay optimization.
 /// Runs N activities (configurable via input), accumulating results.
 ///
-///   engine startWorkflow: ManyStepWorkflow id: "wf-1" args: #(120)
+///   engine startWorkflow: ManyStepWorkflow id: "wf-1" args: #(#{#input => 120})
 Workflow subclass: ManyStepWorkflow
 
   /// Recursive helper: run activities from `from` to `count`, accumulating total.
-  class runSteps: count :: Integer from: idx :: Integer total: acc :: Integer ctx: ctx -> Integer =>
+  class runSteps: count :: Integer from: idx :: Integer total: acc :: Integer ctx: ctx args: args :: Dictionary -> Integer =>
     idx > count ifTrue: [^acc]
     ctx
       runActivity: CountingActivity
       method: #doWork:
-      with: #(#{#input => idx asString})
+      with: #(args merge: #{#input => idx asString})
     self
       runSteps: count
       from: idx + 1
       total: acc + 1
       ctx: ctx
+      args: args
 
   /// Run N sequential activities, accumulating a running total.
-  /// Input is the number of activities to run.
+  /// Input may be an Integer (legacy) or a Dictionary with #input key.
   /// Uses class helper to avoid block mutation gotcha with activity calls.
-  class run: count ctx: ctx -> Integer =>
+  class run: input ctx: ctx -> Integer =>
+    args := (input isKindOf: Dictionary) ifTrue: [input] ifFalse: [#{#input => input}]
+    count := args at: #input
     ManyStepWorkflow
       runSteps: count
       from: 1
       total: 0
       ctx: ctx
+      args: args

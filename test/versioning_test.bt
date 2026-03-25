@@ -10,6 +10,7 @@ TestCase subclass: VersioningTest
   field: store = nil
   field: engine = nil
   field: counterTable = nil
+  field: counterTableName = nil
   field: testDir = "target/bt-test-tmp/versioning"
 
   setUp =>
@@ -20,11 +21,12 @@ TestCase subclass: VersioningTest
     // Create fresh actors
     self.store := EventStore spawnWith: #{#dataDir => self.testDir}
     self.engine := WorkflowEngine withStore: self.store
-    // Counter table
-    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    (self.counterTable includesKey: #callCount) ifFalse: [
-      self.counterTable at: #callCount put: 0
-    ]
+    // Counter table — unique per test to avoid parallel interference
+    uid := Erlang erlang unique_integer: #(#positive)
+    counterName := Erlang erlang binary_to_atom: ("counting_calls_" ++ uid asString)
+    self.counterTableName := counterName
+    self.counterTable := Ets new: counterName type: #set
+    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -35,6 +37,7 @@ TestCase subclass: VersioningTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
+    [self.counterTable delete] on: Error do: [:e | nil]
 
   // ── Helpers ──
 

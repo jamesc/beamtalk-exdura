@@ -10,6 +10,7 @@ TestCase subclass: DurableTimerTest
   field: store = nil
   field: engine = nil
   field: counterTable = nil
+  field: counterTableName = nil
   field: testDir = "target/bt-test-tmp/durable-timer"
 
   setUp =>
@@ -20,11 +21,12 @@ TestCase subclass: DurableTimerTest
     // Create fresh actors
     self.store := EventStore spawnWith: #{#dataDir => self.testDir}
     self.engine := WorkflowEngine withStore: self.store
-    // Counter table
-    self.counterTable := Ets newOrExisting: #counting_activity_calls type: #set
-    (self.counterTable includesKey: #callCount) ifFalse: [
-      self.counterTable at: #callCount put: 0
-    ]
+    // Counter table — unique per test to avoid parallel interference
+    uid := Erlang erlang unique_integer: #(#positive)
+    counterName := Erlang erlang binary_to_atom: ("counting_calls_" ++ uid asString)
+    self.counterTableName := counterName
+    self.counterTable := Ets new: counterName type: #set
+    self.counterTable at: #callCount put: 0
     self
 
   tearDown =>
@@ -35,6 +37,7 @@ TestCase subclass: DurableTimerTest
         [self.store destroy] on: Error do: [:e | nil]
         [self.store stop] on: Error do: [:e | nil]
       ]
+    [self.counterTable delete] on: Error do: [:e | nil]
 
   // ── Helpers ──
 
@@ -107,10 +110,11 @@ TestCase subclass: DurableTimerTest
     countBefore := self callCount
 
     // Step 1: Run workflow normally
+    inputDict := #{#input => "hello", #counterTableName => self.counterTableName}
     self.engine
       startWorkflow: SleepWorkflow
       id: "wf-timer-2"
-      args: #("hello")
+      args: #(inputDict)
     self awaitWorkflow: "wf-timer-2" timeout: 10000
 
     self assert: (self callCount - countBefore) equals: 2
@@ -123,7 +127,7 @@ TestCase subclass: DurableTimerTest
         #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-2",
-        #input => "hello",
+        #input => inputDict,
         #history => replayHistory
       }
     runner go!
@@ -143,10 +147,11 @@ TestCase subclass: DurableTimerTest
     countBefore := self callCount
 
     // Step 1: Run workflow normally to get full history
+    inputDict := #{#input => "hello", #counterTableName => self.counterTableName}
     self.engine
       startWorkflow: SleepWorkflow
       id: "wf-timer-3"
-      args: #("hello")
+      args: #(inputDict)
     self awaitWorkflow: "wf-timer-3" timeout: 10000
 
     fullHistory := self.store readEvents: "wf-timer-3" fromSeq: 1
@@ -184,7 +189,7 @@ TestCase subclass: DurableTimerTest
         #workflow => SleepWorkflow,
         #engine => self.engine,
         #workflowId => "wf-timer-3",
-        #input => "hello",
+        #input => inputDict,
         #history => partialHistory
       }
     runner go!

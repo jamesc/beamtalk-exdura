@@ -8,13 +8,14 @@ Workflow subclass: SleepWorkflow
 
   /// Run two activities with a sleep in between.
   class run: input ctx: ctx -> Dictionary =>
+    args := (input isKindOf: Dictionary) ifTrue: [input] ifFalse: [#{#input => input}]
     a := ctx
       runActivity: CountingActivity
       method: #doWork:
-      with: #(#{#input => input})
+      with: #(args)
     ctx sleep: 50
     b := ctx
       runActivity: CountingActivity
       method: #doWork:
-      with: #(#{#input => (a at: #result)})
+      with: #(args merge: #{#input => (a at: #result)})
     #{#first => a, #second => b}
