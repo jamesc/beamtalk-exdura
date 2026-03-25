@@ -195,7 +195,7 @@ TestCase subclass: CancellationTest
     Erlang timer sleep: 1000
 
     // Start a child with #abandon policy
-    _childHandle := self.engine
+    _childHandle := (self.engine withTimeout: 15000)
       startChildWorkflow: SlowWorkflow
       id: "abandon-child-1"
       args: #(10000)

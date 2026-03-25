@@ -203,7 +203,7 @@ TestCase subclass: SignalBufferingTest
     engine := self.client engine
 
     // Start a workflow with a sleep (gives us time to send signals)
-    _handle := self.client
+    _handle := (self.client withTimeout: 15000)
       start: SlowWorkflow
       id: "wf-sig-safe"
       args: #(2000)
