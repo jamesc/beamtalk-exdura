@@ -403,6 +403,9 @@ Actor subclass: WorkflowEngine
   ///   engine completeWorkflow: "wf-1" result: 42
   completeWorkflow: workflowId result: result =>
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
+    // Guard: don't overwrite cancelled status with completed
+    existing := self.eventStore getExecution: workflowId
+    (existing isNil not and: [existing status =:= #cancelled]) ifTrue: [^nil]
     now := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
