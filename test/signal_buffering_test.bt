@@ -11,7 +11,7 @@ TestCase subclass: SignalBufferingTest
     (File isDirectory: self.testDir) ifTrue: [
       [File deleteAll: self.testDir] on: Error do: [:e | nil]
     ]
-    self.client := ExduraClient connect: #{#dataDir => self.testDir}
+    self.client := ExduraClient connect: #{#dataDir => self.testDir, #pool => false}
     self
 
   tearDown =>

@@ -29,7 +29,8 @@ Actor subclass: ExduraClient
   class connect: options :: Dictionary =>
     dataDir := options at: #dataDir ifAbsent: ["data"]
     store := EventStore spawnWith: #{#dataDir => dataDir}
-    pool := ActivityWorkerPool spawn
+    usePool := options at: #pool ifAbsent: [true]
+    pool := usePool ifTrue: [ActivityWorkerPool spawn] ifFalse: [nil]
     eng := WorkflowEngine withStore: store pool: pool
     self spawnWith: #{#engine => eng, #eventStore => store}
 
