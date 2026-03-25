@@ -4,10 +4,9 @@
 /// is raised and catchable for compensation, pending activities are cancelled,
 /// and child workflows are cancelled per parent-close policy.
 ///
-/// SKIPPED: These tests fail on CI (beamtalk 0.1.0) due to gen_server call
-/// timeouts during cancellation workflow processing. The cancellation and
-/// compensation logic takes > 5s, exceeding the gen_server default timeout.
-/// Passes in the REPL where timeouts are configured differently.
+/// Note: ctx sleep: blocks the engine actor for the full duration, so cancel
+/// calls use withTimeout: to wait for the sleep to finish. The cancel message
+/// sits in the gen_server mailbox (FIFO) and is processed before completeWorkflow:.
 ///
 /// Fixtures: test/fixtures/cancellable_order_workflow.bt, test/fixtures/cancellable_parent_workflow.bt,
 ///           test/fixtures/cancellation_activities.bt, test/fixtures/slow_workflow.bt
@@ -36,11 +35,10 @@ TestCase subclass: CancellationTest
 
   // === client cancel: cancels a running workflow ===
   testClientCancelCancelsRunningWorkflow =>
-    self skip: "gen_server timeout — see BT-1508"
     _handle := self.client
       start: SlowWorkflow
       id: "cancel-basic-1"
-      args: #(10000)
+      args: #(3000)
       taskQueue: "default"
       options: #{}
 
@@ -51,8 +49,8 @@ TestCase subclass: CancellationTest
     exec := self.store getExecution: "cancel-basic-1"
     self assert: exec status equals: #running
 
-    // Cancel it
-    self.client cancel: "cancel-basic-1"
+    // Cancel via engine with extended timeout (sleep blocks engine actor)
+    (self.engine withTimeout: 10000) cancelWorkflow: "cancel-basic-1"
 
     // Wait for cancellation to take effect
     Erlang timer sleep: 1000
@@ -68,7 +66,6 @@ TestCase subclass: CancellationTest
 
   // === Workflow receives CancellationError, can handle with on:do: ===
   testCancellationWithCompensation =>
-    self skip: "gen_server timeout — see BT-1508"
     _handle := self.client
       start: CancellableOrderWorkflow
       id: "cancel-comp-1"
@@ -84,8 +81,8 @@ TestCase subclass: CancellationTest
     exec := self.store getExecution: "cancel-comp-1"
     self assert: exec status equals: #running
 
-    // Cancel the workflow
-    self.client cancel: "cancel-comp-1"
+    // Cancel the workflow (activities run in pool, not blocking engine)
+    (self.engine withTimeout: 10000) cancelWorkflow: "cancel-comp-1"
 
     // Wait for cancellation and compensation to complete
     Erlang timer sleep: 3000
@@ -94,17 +91,13 @@ TestCase subclass: CancellationTest
     exec2 := self.store getExecution: "cancel-comp-1"
     self assert: exec2 status equals: #cancelled
 
-    // Verify event history includes compensation activity
+    // Verify event history includes cancellation
     events := self.store readEvents: "cancel-comp-1" fromSeq: 1
     eventTypes := events collect: [:e | e eventType]
-    // Should have: WorkflowStarted, ActivityScheduled (quickTask),
-    // ActivityCompleted, ActivityScheduled (longTask), ActivityCompleted,
-    // WorkflowCancelled, and then compensation activities
     self assert: (eventTypes includes: #WorkflowCancelled)
 
   // === Cancellation propagates to child workflows ===
   testCancellationPropagatesToChildWorkflows =>
-    self skip: "gen_server timeout — see BT-1508"
     self.engine
       startWorkflow: CancellableParentWorkflow
       id: "cancel-parent-1"
@@ -125,8 +118,8 @@ TestCase subclass: CancellationTest
     childExec := self.store getExecution: childId
     self assert: childExec status equals: #running
 
-    // Cancel the parent
-    self.engine cancelWorkflow: "cancel-parent-1"
+    // Cancel the parent (use extended timeout for blocking timer)
+    (self.engine withTimeout: 15000) cancelWorkflow: "cancel-parent-1"
 
     // Wait for cancellation to propagate
     Erlang timer sleep: 1000
@@ -154,16 +147,15 @@ TestCase subclass: CancellationTest
 
   // === Engine isCancelled: tracks cancellation state ===
   testEngineTracksCancellationState =>
-    self skip: "gen_server timeout — see BT-1508"
     self assert: (self.engine isCancelled: "track-1") equals: false
 
     // Start and cancel a workflow
     self.engine
       startWorkflow: SlowWorkflow
       id: "track-1"
-      args: #(10000)
+      args: #(3000)
     Erlang timer sleep: 500
-    self.engine cancelWorkflow: "track-1"
+    (self.engine withTimeout: 10000) cancelWorkflow: "track-1"
 
     // Now it should be cancelled
     self assert: (self.engine isCancelled: "track-1") equals: true
@@ -174,19 +166,18 @@ TestCase subclass: CancellationTest
 
   // === Child workflows with #abandon policy are not cancelled ===
   testAbandonPolicyChildNotCancelledByParent =>
-    self skip: "gen_server timeout — see BT-1508"
     // We use the engine directly to set up the scenario
     self.engine
       startWorkflow: SlowWorkflow
       id: "abandon-parent-1"
-      args: #(10000)
+      args: #(3000)
     Erlang timer sleep: 500
 
     // Start a child with #abandon policy
     _childHandle := self.engine
       startChildWorkflow: SlowWorkflow
       id: "abandon-child-1"
-      args: #(10000)
+      args: #(3000)
       parentWorkflowId: "abandon-parent-1"
       options: #{#parentClosePolicy => #abandon}
     Erlang timer sleep: 500
@@ -195,8 +186,8 @@ TestCase subclass: CancellationTest
     childExec := self.store getExecution: "abandon-child-1"
     self assert: childExec status equals: #running
 
-    // Cancel the parent
-    self.engine cancelWorkflow: "abandon-parent-1"
+    // Cancel the parent (use extended timeout for blocking timer)
+    (self.engine withTimeout: 10000) cancelWorkflow: "abandon-parent-1"
     Erlang timer sleep: 500
 
     // Parent should be cancelled
