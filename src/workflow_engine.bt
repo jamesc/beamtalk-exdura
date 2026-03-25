@@ -26,7 +26,7 @@ Actor subclass: WorkflowEngine
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
   ///   engine := WorkflowEngine withStore: (EventStore spawn) pool: (ActivityWorkerPool spawn)
-  class withStore: anEventStore pool: aPool =>
+  class withStore: anEventStore :: EventStore pool: aPool :: ActivityWorkerPool -> WorkflowEngine =>
     eng := self spawn
     eng initWithStore: anEventStore pool: aPool
     eng
@@ -34,7 +34,7 @@ Actor subclass: WorkflowEngine
   /// Create a new WorkflowEngine with an EventStore (no pool — legacy Phase 0).
   ///
   ///   engine := WorkflowEngine withStore: (EventStore spawn)
-  class withStore: anEventStore =>
+  class withStore: anEventStore :: EventStore -> WorkflowEngine =>
     eng := self spawn
     eng initWithStore: anEventStore pool: nil
     eng
@@ -42,7 +42,7 @@ Actor subclass: WorkflowEngine
   /// Initialize engine with an EventStore and optional ActivityWorkerPool.
   /// Called by withStore: for standalone use, or by ExduraWorker after
   /// the supervisor finishes starting all children.
-  initWithStore: aStore pool: aPool =>
+  initWithStore: aStore :: EventStore pool: aPool =>
     self.eventStore := aStore
     self.activityPool := aPool
 
@@ -52,7 +52,7 @@ Actor subclass: WorkflowEngine
   /// spawns the Workflow Actor, and kicks off its run: method.
   ///
   ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
-  startWorkflow: workflowClass id: workflowId args: args =>
+  startWorkflow: workflowClass id: workflowId :: String args: args :: List =>
     wfType := workflowClass name asString
     Erlang beamtalk_actor set_trace_context: #{
       #workflowId => workflowId,
@@ -111,7 +111,7 @@ Actor subclass: WorkflowEngine
   /// during replay (default: 100 events).
   ///
   ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello"
-  replayWorkflow: workflowClass id: workflowId input: input =>
+  replayWorkflow: workflowClass id: workflowId :: String input: input =>
     self
       replayWorkflow: workflowClass
       id: workflowId
@@ -168,7 +168,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
-  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId =>
+  scheduleActivity: activityClass selector: selector :: Symbol args: args :: List workflowId: workflowId :: String =>
     self
       scheduleActivity: activityClass
       selector: selector
@@ -185,7 +185,7 @@ Actor subclass: WorkflowEngine
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
   ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  scheduleActivity: activityClass selector: selector args: args workflowId: workflowId options: options =>
+  scheduleActivity: activityClass selector: selector :: Symbol args: args :: List workflowId: workflowId :: String options: options :: Dictionary =>
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
 
@@ -244,7 +244,7 @@ Actor subclass: WorkflowEngine
       ]
 
   /// Record an ActivityCompleted event.
-  recordActivityCompleted: result workflowId: workflowId =>
+  recordActivityCompleted: result workflowId: workflowId :: String =>
     completedNow := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
@@ -256,7 +256,7 @@ Actor subclass: WorkflowEngine
     result
 
   /// Record an ActivityFailed event.
-  recordActivityFailed: reason workflowId: workflowId =>
+  recordActivityFailed: reason workflowId: workflowId :: String =>
     failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{
@@ -267,7 +267,7 @@ Actor subclass: WorkflowEngine
     self.eventStore appendEvents: workflowId events: #(failedEvent)
 
   /// Record an ActivityTimedOut event.
-  recordActivityTimedOut: workflowId =>
+  recordActivityTimedOut: workflowId :: String =>
     timedOutNow := Time nowMs div: 1000
     timedOutEvent := ExduraEvent new: #{
       #eventType => #ActivityTimedOut,
@@ -329,7 +329,7 @@ Actor subclass: WorkflowEngine
   /// Return the event history for a workflow.
   ///
   ///   engine getEventHistory: "wf-1"
-  getEventHistory: workflowId =>
+  getEventHistory: workflowId :: String -> List =>
     self.eventStore readEvents: workflowId fromSeq: 1
 
   /// Buffer a signal for a workflow and record a SignalReceived event.
@@ -365,7 +365,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   signals := engine drainSignals: "wf-1"
   ///   // => #(#{#name => "approve", #payload => #{#user => "alice"}})
-  drainSignals: workflowId :: String =>
+  drainSignals: workflowId :: String -> List =>
     signals := self.signalBuffers at: workflowId ifAbsent: [#()]
     self.signalBuffers := self.signalBuffers at: workflowId put: #()
     signals
@@ -373,7 +373,7 @@ Actor subclass: WorkflowEngine
   /// Return buffered signals for a workflow (without clearing).
   ///
   ///   engine getBufferedSignals: "wf-1"
-  getBufferedSignals: workflowId :: String =>
+  getBufferedSignals: workflowId :: String -> List =>
     self.signalBuffers at: workflowId ifAbsent: [#()]
 
   /// Record a WorkflowCompleted event and update execution status.
@@ -386,7 +386,7 @@ Actor subclass: WorkflowEngine
   /// re-enter the mailbox and deadlock while processing the current message).
   ///
   ///   engine completeWorkflow: "wf-1" result: 42
-  completeWorkflow: workflowId result: result =>
+  completeWorkflow: workflowId :: String result: result =>
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     // Guard: don't overwrite cancelled status with completed
     existing := self.eventStore getExecution: workflowId
@@ -453,7 +453,7 @@ Actor subclass: WorkflowEngine
   /// All logic is inlined to avoid self-send deadlock.
   ///
   ///   engine failWorkflow: "wf-1" reason: "something went wrong"
-  failWorkflow: workflowId reason: reason =>
+  failWorkflow: workflowId :: String reason: reason :: String =>
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
     failedEvent := ExduraEvent
@@ -594,7 +594,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
   ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
-  startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary =>
+  startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary -> ChildWorkflowHandle =>
     Erlang beamtalk_actor
       set_trace_context: #{
         #workflowId => childWorkflowId,
@@ -673,13 +673,13 @@ Actor subclass: WorkflowEngine
   /// Return the list of child workflow IDs for a parent (for testing).
   ///
   ///   engine getChildWorkflows: "parent-1"
-  getChildWorkflows: parentId :: String =>
+  getChildWorkflows: parentId :: String -> List =>
     self.childWorkflows at: parentId ifAbsent: [#()]
 
   /// Return the parent-close policy for a child workflow (for testing).
   ///
   ///   engine getParentClosePolicy: "child-1"
-  getParentClosePolicy: childWorkflowId :: String =>
+  getParentClosePolicy: childWorkflowId :: String -> Symbol =>
     self.parentClosePolicy at: childWorkflowId ifAbsent: [#terminate]
 
   /// Record a WorkflowContinuedAsNew event in the history.
@@ -871,7 +871,7 @@ Actor subclass: WorkflowEngine
   /// Used by WorkflowContext to check at safe points.
   ///
   ///   engine isCancelled: "wf-1"   // => true or false
-  isCancelled: workflowId :: String =>
+  isCancelled: workflowId :: String -> Boolean =>
     self.cancelledWorkflows at: workflowId ifAbsent: [false]
 
   /// Clear the cancellation flag for a workflow (after it has been handled).
@@ -881,7 +881,7 @@ Actor subclass: WorkflowEngine
     self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 
   /// Return the underlying EventStore (for testing/inspection).
-  eventStore => self.eventStore
+  eventStore -> EventStore => self.eventStore
 
   /// Return the ActivityWorkerPool (for testing/inspection).
-  activityPool => self.activityPool
+  activityPool -> ActivityWorkerPool => self.activityPool

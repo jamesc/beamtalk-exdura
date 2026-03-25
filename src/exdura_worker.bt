@@ -12,7 +12,7 @@ Object subclass: ExduraWorker
   /// Boot the supervision tree and return a connected ExduraClient.
   ///
   ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
-  class start: config :: Dictionary =>
+  class start: config :: Dictionary -> ExduraClient =>
     sup := ExduraSupervisor supervise
 
     // Wire engine to its supervised siblings

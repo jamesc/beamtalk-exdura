@@ -69,7 +69,7 @@ Actor subclass: TimerManager
   /// Initialize the timer manager with an engine and event store.
   ///
   ///   manager initWith: engine eventStore: store
-  initWith: anEngine eventStore: aStore =>
+  initWith: anEngine :: WorkflowEngine eventStore: aStore :: EventStore =>
     self.engine := anEngine
     self.eventStore := aStore
 

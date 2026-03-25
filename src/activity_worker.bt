@@ -18,7 +18,7 @@ Actor subclass: ActivityWorker
   /// Initialize the worker with activity details.
   ///
   ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
-  initWith: anActivityClass selector: aSelector args: someArgs =>
+  initWith: anActivityClass selector: aSelector :: Symbol args: someArgs :: List =>
     self.activityClass := anActivityClass
     self.selector := aSelector
     self.args := someArgs

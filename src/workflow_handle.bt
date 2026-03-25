@@ -28,11 +28,11 @@ Value subclass: WorkflowHandle
   /// Create a new WorkflowHandle for the given workflow and client.
   ///
   ///   WorkflowHandle for: "wf-1" client: aClient
-  class for: workflowId :: String client: aClient =>
+  class for: workflowId :: String client: aClient :: ExduraClient -> WorkflowHandle =>
     self new: #{#workflowId => workflowId, #client => aClient}
 
   /// Display as WorkflowHandle(wf-1)
-  printString => "WorkflowHandle({self workflowId})"
+  printString -> String => "WorkflowHandle({self workflowId})"
 
   /// Block until the workflow completes and return the result.
   ///

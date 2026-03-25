@@ -9,7 +9,7 @@ Object subclass: ActivityRetryHelper
   ///   ActivityRetryHelper
   ///     recordFailedAndRaise: store workflowId: "wf-1"
   ///     payload: #{#error => "boom", #attempt => 1, #nonRetryable => true}
-  class recordFailedAndRaise: eventStore workflowId: workflowId payload: payload =>
+  class recordFailedAndRaise: eventStore :: EventStore workflowId: workflowId :: String payload: payload :: Dictionary =>
     failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent new: #{
       #eventType => #ActivityFailed,

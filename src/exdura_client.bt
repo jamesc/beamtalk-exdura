@@ -26,7 +26,7 @@ Actor subclass: ExduraClient
   /// remote connections.
   ///
   ///   client := ExduraClient connect: #{#host => "localhost"}
-  class connect: options :: Dictionary =>
+  class connect: options :: Dictionary -> ExduraClient =>
     dataDir := options at: #dataDir ifAbsent: ["data"]
     store := EventStore spawnWith: #{#dataDir => dataDir}
     usePool := options at: #pool ifAbsent: [true]
@@ -42,7 +42,7 @@ Actor subclass: ExduraClient
   ///   handle := client start: OrderWorkflow id: "order-1"
   ///     args: #("data") taskQueue: "orders" options: #{}
   ///   result := handle result
-  start: workflowClass id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary =>
+  start: workflowClass id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
     self.engine
       startWorkflow: workflowClass
       id: workflowId
@@ -91,7 +91,7 @@ Actor subclass: ExduraClient
   ///
   ///   client list: #{#status => #running}
   ///   client list: #{}   // all executions
-  list: filter :: Dictionary => self.eventStore listExecutions: filter
+  list: filter :: Dictionary -> List => self.eventStore listExecutions: filter
 
   /// Retrieve a workflow execution by ID (used by WorkflowHandle).
   ///
@@ -99,10 +99,10 @@ Actor subclass: ExduraClient
   getExecution: workflowId :: String => self.eventStore getExecution: workflowId
 
   /// Return the underlying WorkflowEngine (for testing/inspection).
-  engine => self.engine
+  engine -> WorkflowEngine => self.engine
 
   /// Return the underlying EventStore (for testing/inspection).
-  eventStore => self.eventStore
+  eventStore -> EventStore => self.eventStore
 
   /// Return the underlying Supervisor (for testing/lifecycle management).
   supervisor => self.supervisor

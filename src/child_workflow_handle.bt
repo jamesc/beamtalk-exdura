@@ -22,7 +22,7 @@ Value subclass: ChildWorkflowHandle
   /// Create a new ChildWorkflowHandle for the given child workflow.
   ///
   ///   ChildWorkflowHandle for: "child-1" engine: eng eventStore: store
-  class for: childWorkflowId :: String engine: anEngine eventStore: aStore =>
+  class for: childWorkflowId :: String engine: anEngine :: WorkflowEngine eventStore: aStore :: EventStore -> ChildWorkflowHandle =>
     self
       new: #{
         #childWorkflowId => childWorkflowId,
@@ -33,7 +33,7 @@ Value subclass: ChildWorkflowHandle
   /// Create a handle with a pre-cached result (used during replay).
   ///
   ///   ChildWorkflowHandle forReplay: "child-1" result: 42
-  class forReplay: childWorkflowId :: String result: aResult =>
+  class forReplay: childWorkflowId :: String result: aResult -> ChildWorkflowHandle =>
     self
       new: #{
         #childWorkflowId => childWorkflowId,

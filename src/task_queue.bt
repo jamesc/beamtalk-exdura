@@ -52,7 +52,7 @@ Actor subclass: TaskQueue
   /// Return the number of pending tasks in the queue.
   ///
   ///   q depth   // => 0
-  depth => self.table size
+  depth -> Integer => self.table size
 
   /// View the next task without removing it. Returns nil if empty.
   ///

@@ -144,7 +144,7 @@ Actor subclass: WorkflowContext
   /// Initialize with engine, workflow ID, and event history.
   ///
   ///   ctx initWith: engine workflowId: "wf-1" history: events
-  initWith: anEngine workflowId: anId history: aHistory =>
+  initWith: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List =>
     self.engine := anEngine
     self.workflowId := anId
     self.eventHistory := aHistory
@@ -154,7 +154,7 @@ Actor subclass: WorkflowContext
   /// Initialize from a snapshot for optimized replay.
   ///
   ///   ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
-  initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine workflowId: anId history: aHistory =>
+  initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List =>
     self.engine := anEngine
     self.workflowId := anId
     self.eventHistory := aHistory
@@ -167,7 +167,7 @@ Actor subclass: WorkflowContext
   setSnapshotInterval: interval :: Integer => self.snapshotInterval := interval
 
   /// Get the engine reference (for testing).
-  getEngine => self.engine
+  getEngine -> WorkflowEngine => self.engine
 
   // ═══════════════════════════════════════════════════════════════════
   // Workflow variables and handlers
@@ -176,16 +176,16 @@ Actor subclass: WorkflowContext
   /// Set a workflow variable.
   ///
   ///   ctx setVar: #approved to: false
-  setVar: name to: value =>
+  setVar: name :: Symbol to: value =>
     self.workflowVars := self.workflowVars at: name put: value
 
   /// Get a workflow variable value.
   ///
   ///   ctx getVar: #approved   // => false
-  getVar: name => self.workflowVars at: name ifAbsent: [nil]
+  getVar: name :: Symbol => self.workflowVars at: name ifAbsent: [nil]
 
   /// Return all workflow variables (for testing).
-  getVars => self.workflowVars
+  getVars -> Dictionary => self.workflowVars
 
   /// Register a signal handler block.
   ///
@@ -200,16 +200,16 @@ Actor subclass: WorkflowContext
     self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
 
   /// Return all registered query handlers.
-  queryHandlers => self.queryHandlers
+  queryHandlers -> Dictionary => self.queryHandlers
 
   /// Set a workflow state field visible in query snapshots.
   ///
   ///   ctx setState: #status to: "processing"
-  setState: fieldName to: value =>
+  setState: fieldName :: Symbol to: value =>
     self.workflowState := self.workflowState at: fieldName put: value
 
   /// Return the current workflow state as a Dictionary.
-  workflowState => self.workflowState
+  workflowState -> Dictionary => self.workflowState
 
   // ═══════════════════════════════════════════════════════════════════
   // Command dispatch — runActivity, sleep, startChildWorkflow, version
@@ -223,7 +223,7 @@ Actor subclass: WorkflowContext
   /// Execute an activity or return its cached result during replay.
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
-  runActivity: activityClass method: selector with: args =>
+  runActivity: activityClass method: selector :: Symbol with: args :: List =>
     self
       runActivity: activityClass
       method: selector
@@ -234,7 +234,7 @@ Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt:
   ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  runActivity: activityClass method: selector with: args options: options =>
+  runActivity: activityClass method: selector :: Symbol with: args :: List options: options :: Dictionary =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -367,7 +367,7 @@ Actor subclass: WorkflowContext
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
-  startChildWorkflow: workflowClass method: selector with: args =>
+  startChildWorkflow: workflowClass method: selector :: Symbol with: args :: List -> ChildWorkflowHandle =>
     self
       startChildWorkflow: workflowClass
       method: selector
@@ -378,7 +378,7 @@ Actor subclass: WorkflowContext
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
   ///     options: #{#parentClosePolicy => #abandon}
-  startChildWorkflow: workflowClass method: _selector with: args options: options =>
+  startChildWorkflow: workflowClass method: _selector :: Symbol with: args :: List options: options :: Dictionary -> ChildWorkflowHandle =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -428,7 +428,7 @@ Actor subclass: WorkflowContext
   /// workflows per SPEC §6.4.
   ///
   ///   v := ctx version: "payment-flow" defaultVersion: 1 maxVersion: 2
-  version: name :: String defaultVersion: defaultVer :: Integer maxVersion: _maxVer :: Integer =>
+  version: name :: String defaultVersion: defaultVer :: Integer maxVersion: _maxVer :: Integer -> Integer =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -543,19 +543,19 @@ Actor subclass: WorkflowContext
   // ═══════════════════════════════════════════════════════════════════
 
   /// Return the list of signals delivered at safe points.
-  deliveredSignals => self.deliveredSignals
+  deliveredSignals -> List => self.deliveredSignals
 
   /// Return all signals that have been received and processed.
-  receivedSignals => self.receivedSignals
+  receivedSignals -> List => self.receivedSignals
 
   /// Drain and return all delivered signals, clearing the internal list.
-  drainAndClearSignals =>
+  drainAndClearSignals -> List =>
     signals := self.deliveredSignals
     self.deliveredSignals := #()
     signals
 
   /// Actively drain signals from the engine (live) and return them.
-  pollSignals =>
+  pollSignals -> List =>
     self.isReplaying ifTrue: [^self drainAndClearSignals]
     signals := self.engine drainSignals: self.workflowId
     signals size > 0 ifTrue: [
@@ -566,9 +566,9 @@ Actor subclass: WorkflowContext
   /// Request continue-as-new: record the event and return a ContinueAsNewRequest.
   ///
   ///   ctx continueAsNew: #("nextCursor")
-  continueAsNew: args :: List =>
+  continueAsNew: args :: List -> ContinueAsNewRequest =>
     self.engine recordContinueAsNew: self.workflowId args: args
     ContinueAsNewRequest new: #{#args => args}
 
   /// Return the current replay cursor position (for testing/inspection).
-  getReplayCursor => self.replayCursor
+  getReplayCursor -> Integer => self.replayCursor

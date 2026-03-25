@@ -16,7 +16,7 @@ Actor subclass: TaskQueueRegistry
   /// Return the TaskQueue for the given name, creating it if needed.
   ///
   ///   registry queueNamed: "orders"   // => TaskQueue actor
-  queueNamed: name :: String =>
+  queueNamed: name :: String -> TaskQueue =>
     existing := self.queues at: name ifAbsent: [nil]
     existing isNil
       ifTrue: [
@@ -29,12 +29,13 @@ Actor subclass: TaskQueueRegistry
   /// Return all registered queue names.
   ///
   ///   registry queueNames   // => #("orders", "emails")
-  queueNames => self.queues keys
+  queueNames -> List => self.queues keys
 
   /// Return whether a queue with the given name exists.
   ///
   ///   registry hasQueue: "orders"   // => true
-  hasQueue: name :: String => (self.queues at: name ifAbsent: [nil]) notNil
+  hasQueue: name :: String -> Boolean =>
+    (self.queues at: name ifAbsent: [nil]) notNil
 
   /// Destroy all managed queues and clean up.
   destroy =>

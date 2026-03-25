@@ -11,7 +11,7 @@
 Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
-  class execute: activityClass selector: selector args: args eventStore: eventStore workflowId: workflowId retryPolicy: rp =>
+  class execute: activityClass selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy =>
     config := #{
       #activity => activityClass,
       #selector => selector,
@@ -31,7 +31,7 @@ Object subclass: ActivityRetryExecutor
   /// On success, records ActivityCompleted and returns the result.
   /// On non-retryable error or exhausted retries, records ActivityFailed
   /// and raises. Otherwise, sleeps with backoff and recurses.
-  class tryAttempt: attempt config: config =>
+  class tryAttempt: attempt config: config :: Dictionary =>
     activityClass := config at: #activity
     selector := config at: #selector
     args := config at: #args

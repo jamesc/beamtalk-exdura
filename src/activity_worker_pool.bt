@@ -52,7 +52,7 @@ Actor subclass: ActivityWorkerPool
   ///
   ///   pool executeActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) timeout: nil
-  executeActivity: activityClass selector: selector args: args timeout: timeout =>
+  executeActivity: activityClass selector: selector :: Symbol args: args :: List timeout: timeout -> Dictionary =>
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^#{#status => #rejected}]
     self.activeCount := self.activeCount + 1

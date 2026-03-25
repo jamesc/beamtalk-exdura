@@ -25,7 +25,7 @@ Actor subclass: ActorSnapshot
   ///
   ///   snap := ActorSnapshot of: someActor
   ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
-  class of: actor :: Actor =>
+  class of: actor :: Actor -> ActorSnapshot =>
     data := actor fieldNames inject: #{} into: [:acc :name |
       acc at: name put: (actor fieldAt: name)
     ]
@@ -45,7 +45,7 @@ Actor subclass: ActorSnapshot
   ///   snap := ActorSnapshot of: actor
   ///   snap status       // => "running" (if actor had a #status field)
   ///   snap bogusField   // => Error: "ActorSnapshot: no field 'bogusField'"
-  doesNotUnderstand: selector args: _arguments =>
+  doesNotUnderstand: selector :: Symbol args: _arguments :: List =>
     self.fields at: selector ifAbsent: [
       self error: "ActorSnapshot: no field '{selector}'"
     ]

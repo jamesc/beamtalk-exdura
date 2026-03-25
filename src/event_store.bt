@@ -27,7 +27,7 @@ Actor subclass: EventStore
 
   /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
   /// Class method to avoid self-capture issues when called from blocks.
-  class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List =>
+  class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List -> List =>
     offset >= totalSize ifTrue: [^acc]
     // Extract remaining bytes
     remaining := Erlang binary part: binary arg: (Tuple withAll: #(offset, totalSize - offset))
@@ -57,7 +57,7 @@ Actor subclass: EventStore
   /// Store a new workflow execution. Raises if workflowId already exists.
   ///
   ///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"})
-  createExecution: execution :: WorkflowExecution =>
+  createExecution: execution :: WorkflowExecution -> WorkflowExecution =>
     wfId := execution workflowId
     (self.executions includesKey: wfId) ifTrue: [
       self error: "Execution already exists: {wfId}"
@@ -73,7 +73,7 @@ Actor subclass: EventStore
   /// Update an execution's status and result. Raises if not found.
   ///
   ///   store updateExecution: "wf-1" status: #completed result: 42
-  updateExecution: workflowId :: String status: status :: Symbol result: result =>
+  updateExecution: workflowId :: String status: status :: Symbol result: result -> WorkflowExecution =>
     existing := self.executions at: workflowId
     existing isNil ifTrue: [self error: "Execution not found: {workflowId}"]
     updated := (existing withStatus: status) withResult: result
@@ -85,7 +85,7 @@ Actor subclass: EventStore
   ///
   ///   store listExecutions: #{#status => #running}
   ///   store listExecutions: #{}   // all executions
-  listExecutions: filter :: Dictionary =>
+  listExecutions: filter :: Dictionary -> List =>
     allKeys := self.executions keys
     allExecs := allKeys collect: [:k | self.executions at: k]
     filterStatus := filter at: #status ifAbsent: [nil]
@@ -105,7 +105,7 @@ Actor subclass: EventStore
   ///
   ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
   ///   // => #(ExduraEvent(eventId: 1, ...))
-  appendEvents: workflowId :: String events: newEvents :: List =>
+  appendEvents: workflowId :: String events: newEvents :: List -> List =>
     existing := self.events at: workflowId ifAbsent: [#()]
     startId := existing size + 1
     stamped := newEvents
@@ -126,7 +126,7 @@ Actor subclass: EventStore
   ///
   ///   store readEvents: "wf-1" fromSeq: 1   // all events
   ///   store readEvents: "wf-1" fromSeq: 5   // events with eventId >= 5
-  readEvents: workflowId :: String fromSeq: fromSeq :: Integer =>
+  readEvents: workflowId :: String fromSeq: fromSeq :: Integer -> List =>
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
 
@@ -192,7 +192,7 @@ Actor subclass: EventStore
   /// Check whether a snapshot file exists for a workflow.
   ///
   ///   store hasSnapshot: "wf-1"   // => true or false
-  hasSnapshot: workflowId :: String =>
+  hasSnapshot: workflowId :: String -> Boolean =>
     path := self snapshotFilePath: workflowId
     File isFile: path
 
@@ -220,11 +220,11 @@ Actor subclass: EventStore
     File mkdirAll: self.dataDir ++ "/snapshots"
 
   /// Path to the ETF event file for a given workflow.
-  eventFilePath: workflowId :: String =>
+  eventFilePath: workflowId :: String -> String =>
     self.dataDir ++ "/events/{workflowId}.etf"
 
   /// Path to the ETF snapshot file for a given workflow.
-  snapshotFilePath: workflowId :: String =>
+  snapshotFilePath: workflowId :: String -> String =>
     self.dataDir ++ "/snapshots/{workflowId}.etf"
 
   // --- Private: File I/O ---
