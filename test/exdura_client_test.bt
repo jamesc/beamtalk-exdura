@@ -18,6 +18,23 @@ TestCase subclass: ExduraClientTest
       ]
     self.client := nil
 
+  // ── Helpers ──
+
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.client eventStore getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === ExduraClient connect: ===
   testConnectCreatesClient =>
     self assert: self.client notNil
@@ -66,11 +83,10 @@ TestCase subclass: ExduraClientTest
       args: #(5)
       taskQueue: "default"
       options: #{}
-    // Allow workflow to complete
-    Erlang timer sleep: 2000
+    // Wait for workflow to complete
+    exec := self awaitWorkflow: "client-wf-full" timeout: 10000
 
     // Verify execution completed with correct result
-    exec := self.client getExecution: "client-wf-full"
     self assert: exec notNil
     self assert: exec status equals: #completed
     self assert: exec result equals: 20
@@ -90,7 +106,8 @@ TestCase subclass: ExduraClientTest
       taskQueue: "default"
       options: #{}
     // Wait for workflows to complete
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "client-list-1" timeout: 10000
+    self awaitWorkflow: "client-list-2" timeout: 10000
     all := self.client list: #{}
     self assert: all size >= 2
 
@@ -102,7 +119,7 @@ TestCase subclass: ExduraClientTest
       taskQueue: "default"
       options: #{}
     // Wait for completion
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "client-filter-1" timeout: 10000
     completed := self.client list: #{#status => #completed}
     self assert: completed size >= 1
     completed do: [:e | self assert: e status equals: #completed]
@@ -114,7 +131,7 @@ TestCase subclass: ExduraClientTest
       args: #("x")
       taskQueue: "default"
       options: #{}
-    Erlang timer sleep: 1000
+    self awaitWorkflow: "client-type-1" timeout: 10000
     filtered := self.client list: #{#workflowType => "PassthroughWorkflow"}
     self assert: filtered size >= 1
     filtered do: [:e |
@@ -143,6 +160,6 @@ TestCase subclass: ExduraClientTest
       args: #(10000)
       taskQueue: "default"
       options: #{}
-    Erlang timer sleep: 500
+    Erlang timer sleep: 1000
     result := self.client cancel: "cancel-wf-1"
     self assert: result equals: nil

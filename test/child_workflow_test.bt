@@ -31,6 +31,23 @@ TestCase subclass: ChildWorkflowTest
         [self.store stop] on: Error do: [:e | nil]
       ]
 
+  // ── Helpers ──
+
+  /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
+  /// Polls every 50ms up to the given timeout in milliseconds.
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+    deadline := Time nowMs + timeoutMs
+    [true] whileTrue: [
+      exec := self.store getExecution: workflowId
+      (exec isNil not and: [
+        exec status =:= #completed or: [
+          exec status =:= #failed or: [exec status =:= #cancelled]
+        ]
+      ]) ifTrue: [^exec]
+      Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+      Timer sleep: 50
+    ]
+
   // === Parent starts child and waits for result ===
   testParentStartsChildAndGetsResult =>
     engine := self.engine
@@ -38,10 +55,9 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: SingleChildParent
       id: "parent-1"
       args: #(5)
-    Erlang timer sleep: 5000
+    exec := self awaitWorkflow: "parent-1" timeout: 10000
 
     // Parent should have completed with child's result (5 * 2 = 10)
-    exec := self.store getExecution: "parent-1"
     self assert: exec notNil
     self assert: exec status equals: #completed
     self assert: exec result equals: 10
@@ -53,7 +69,7 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: SingleChildParent
       id: "parent-2"
       args: #(7)
-    Erlang timer sleep: 3000
+    self awaitWorkflow: "parent-2" timeout: 10000
 
     // Find the child workflow ID from parent's events
     parentEvents := self.store readEvents: "parent-2" fromSeq: 1
@@ -88,10 +104,9 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: BatchProcessor
       id: "batch-1"
       args: #(#(3, 5, 7))
-    Erlang timer sleep: 5000
+    exec := self awaitWorkflow: "batch-1" timeout: 10000
 
     // Parent should complete with all doubled results
-    exec := self.store getExecution: "batch-1"
     self assert: exec notNil
     self assert: exec status equals: #completed
     self assert: exec result equals: #(6, 10, 14)
@@ -112,10 +127,9 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: TerminatePolicyParent
       id: "term-parent-1"
       args: #(5)
-    Erlang timer sleep: 3000
+    parentExec := self awaitWorkflow: "term-parent-1" timeout: 10000
 
     // Verify parent completed
-    parentExec := store getExecution: "term-parent-1"
     self assert: parentExec status equals: #completed
 
     // Check that the engine tracked the child with #terminate policy
@@ -133,7 +147,7 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: AbandonPolicyParent
       id: "abandon-parent-1"
       args: #(5)
-    Erlang timer sleep: 3000
+    self awaitWorkflow: "abandon-parent-1" timeout: 10000
 
     // Parent should have completed
     parentExec := store getExecution: "abandon-parent-1"
@@ -161,10 +175,9 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: SingleChildParent
       id: "replay-child-1"
       args: #(5)
-    Erlang timer sleep: 3000
+    exec := self awaitWorkflow: "replay-child-1" timeout: 10000
 
     // Verify normal run completed
-    exec := store getExecution: "replay-child-1"
     self assert: exec status equals: #completed
     self assert: exec result equals: 10
 
@@ -198,7 +211,7 @@ TestCase subclass: ChildWorkflowTest
       startWorkflow: SingleChildParent
       id: "parent-events-1"
       args: #(3)
-    Erlang timer sleep: 3000
+    self awaitWorkflow: "parent-events-1" timeout: 10000
 
     parentEvents := self.store readEvents: "parent-events-1" fromSeq: 1
     eventTypes := parentEvents collect: [:e | e eventType]
