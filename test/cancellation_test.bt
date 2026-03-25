@@ -17,8 +17,7 @@ TestCase subclass: CancellationTest
   field: engine = nil
 
   setUp =>
-    Erlang timer sleep: 200
-    self.client := ExduraClient connect: #{}
+    self.client := ExduraClient connect: #{#dataDir => "target/bt-test-tmp/cancellation"}
     self.engine := self.client engine
     self.store := self.client eventStore
     self
@@ -147,7 +146,6 @@ TestCase subclass: CancellationTest
 
   // === CancellationError is an Error subclass ===
   testCancellationErrorIsErrorSubclass =>
-    self skip: "gen_server timeout — see BT-1508"
     // Verify CancellationError can be caught with on:do:
     result := [
       CancellationError signal: "test cancel"
