@@ -376,10 +376,12 @@ Actor subclass: WorkflowContext
                 ]
                 storedDuration := payload at: #duration ifAbsent: [duration]
                 self.isReplaying := false
-                self.engine
+                remaining := self.engine
                   reconstructTimer: storedDuration
                   fireAt: fireAt
                   workflowId: self.workflowId
+                remaining > 0 ifTrue: [Timer sleep: remaining]
+                self.engine recordTimerFired: storedDuration workflowId: self.workflowId
                 self.replayCursor := startedIdx + 1
                 // Safe point: drain buffered signals from the engine
                 signals := self.engine drainSignals: self.workflowId
@@ -395,6 +397,9 @@ Actor subclass: WorkflowContext
     // No replay match — transition to live execution
     self.isReplaying := false
     self.engine scheduleTimer: duration workflowId: self.workflowId
+    // Sleep in the context's process, not the engine's
+    Timer sleep: duration
+    self.engine recordTimerFired: duration workflowId: self.workflowId
     self.replayCursor := self.replayCursor + 2
     // Safe point: drain buffered signals from the engine
     signals := self.engine drainSignals: self.workflowId

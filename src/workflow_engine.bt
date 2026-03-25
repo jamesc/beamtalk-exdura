@@ -301,11 +301,13 @@ Actor subclass: WorkflowEngine
         #payload => #{#duration => duration, #fireAt => fireAt}
       }
     self.eventStore appendEvents: workflowId events: #(startedEvent)
+    // Return fireAt — the context handles the actual sleep
+    fireAt
 
-    // Sleep for the requested duration
-    Timer sleep: duration
-
-    // Record TimerFired event
+  /// Record a TimerFired event after the context has slept.
+  ///
+  ///   engine recordTimerFired: 5000 workflowId: "wf-1"
+  recordTimerFired: duration :: Integer workflowId: workflowId :: String =>
     firedNow := Time nowMs
     firedEvent := ExduraEvent
       new: #{
@@ -322,24 +324,13 @@ Actor subclass: WorkflowEngine
   /// the TimerFired event. Otherwise sleeps for the remainder.
   ///
   ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
-  reconstructTimer: duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
+  reconstructTimer: _duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
     Erlang beamtalk_actor set_trace_context: #{#workflowId => workflowId}
     nowMs := Time nowMs
     remaining := fireAt - nowMs
-
-    // If fire time has passed, fire immediately; otherwise wait for remainder
-    remaining > 0 ifTrue: [Timer sleep: remaining]
-
-    // Record TimerFired event
-    firedNow := Time nowMs
-    firedEvent := ExduraEvent
-      new: #{
-        #eventType => #TimerFired,
-        #timestamp => firedNow,
-        #payload => #{#duration => duration}
-      }
-    self.eventStore appendEvents: workflowId events: #(firedEvent)
-    nil
+    // Return remaining duration — the context handles sleeping and calls
+    // recordTimerFired: when done. Negative/zero means fire immediately.
+    remaining > 0 ifTrue: [remaining] ifFalse: [0]
 
   /// Return the event history for a workflow.
   ///
