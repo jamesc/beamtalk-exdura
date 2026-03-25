@@ -98,7 +98,6 @@ TestCase subclass: CancellationTest
 
   // === Cancellation propagates to child workflows ===
   testCancellationPropagatesToChildWorkflows =>
-    self skip: "Cascading blocking timers (parent+child) exceed call timeout — needs async timers"
     self.engine
       startWorkflow: CancellableParentWorkflow
       id: "cancel-parent-1"
