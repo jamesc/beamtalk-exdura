@@ -1,16 +1,3 @@
-/// Contract for objects that block until a result is available.
-///
-/// Implementors provide polling-based waiting for an asynchronous result,
-/// with an optional timeout. Both WorkflowHandle and ChildWorkflowHandle
-/// conform to this protocol.
-///
-///   (WorkflowHandle conformsTo: #Awaitable)       // => true
-///   (ChildWorkflowHandle conformsTo: #Awaitable)   // => true
-Protocol define: Awaitable
-  /// Block until the result is available and return it.
-  result -> Object
-  /// Block until the result is available or the timeout (ms) expires.
-  result: timeout :: Integer -> Object
 /// Handle to a running workflow execution, returned by ExduraClient start:.
 ///
 /// Provides methods to wait for the workflow result, either indefinitely
