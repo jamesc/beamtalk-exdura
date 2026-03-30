@@ -9,3 +9,4 @@ version = "0.1.0"
 supervisor = "ExduraSupervisor"
 
 [dependencies]
+http = { path = "../beamtalk/packages/http" }

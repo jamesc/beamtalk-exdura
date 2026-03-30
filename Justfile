@@ -21,6 +21,5 @@ test: build
 
 # Remove build artifacts and test data
 clean:
-    rm -rf _build/bt-test-tmp data
+    rm -rf _build
     rm -rf src/build test/build test/fixtures/build
-    rm -rf target
