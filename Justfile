@@ -1,25 +1,44 @@
-# Exdura workflow engine
+# Copyright 2026 exdura authors
+# SPDX-License-Identifier: Apache-2.0
 
-# Run all checks then tests
-default: build test
+# Standard Beamtalk project targets.
+# See: https://beamtalk.dev/docs/tooling
 
-# Format all .bt source files
-fmt:
-    beamtalk fmt
-
-# Run linter on source files
-lint:
-    beamtalk lint
-
-# Build (format + lint first)
-build: fmt lint
+# Build the project
+build:
     beamtalk build
 
 # Run the test suite
-test: build
+test:
     beamtalk test
 
-# Remove build artifacts and test data
+# Check formatting
+fmt:
+    beamtalk fmt-check
+
+# Format in place
+fmt-fix:
+    beamtalk fmt
+
+# Lint source files
+lint:
+    beamtalk lint
+
+# Remove build artifacts
 clean:
     rm -rf _build
-    rm -rf src/build test/build test/fixtures/build
+
+# Full CI check (fmt + lint + build + test)
+ci: fmt lint build test
+
+# Tag a release from beamtalk.toml version
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(grep '^version' beamtalk.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+    git tag "v${version}"
+    echo "Tagged v${version}"
+
+# Push release tags to origin
+publish:
+    git push origin --tags

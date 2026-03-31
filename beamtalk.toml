@@ -9,4 +9,4 @@ version = "0.1.0"
 supervisor = "ExduraSupervisor"
 
 [dependencies]
-http = { path = "../beamtalk/packages/http" }
+http = { git = "https://github.com/jamesc/beamtalk-http", tag="v0.1.1" }
