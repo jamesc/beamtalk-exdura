@@ -63,9 +63,10 @@ TestCase subclass: ExduraSupervisorTest
     self assert: pool maxConcurrent equals: 25
 
     // Run a simple passthrough workflow through the supervised engine
+    wfId1 := "sup-wf-1-" ++ Time nowMs asString
     handle := self.client
       start: PassthroughWorkflow
-      id: "sup-wf-1"
+      id: wfId1
       args: #("supervised")
       taskQueue: "default"
       options: #{}
@@ -73,12 +74,13 @@ TestCase subclass: ExduraSupervisorTest
     self assert: result equals: "supervised"
 
     // Run a two-activity workflow through the supervised engine
+    wfId2 := "sup-wf-2-" ++ Time nowMs asString
     self.client
       start: TwoActivityWorkflow
-      id: "sup-wf-2"
+      id: wfId2
       args: #(5)
       taskQueue: "default"
       options: #{}
-    exec := self awaitWorkflow: "sup-wf-2" timeout: 10000
+    exec := self awaitWorkflow: wfId2 timeout: 10000
     self assert: exec notNil
     self assert: exec result equals: 20
