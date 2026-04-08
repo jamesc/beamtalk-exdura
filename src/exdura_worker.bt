@@ -15,11 +15,10 @@ Object subclass: ExduraWorker
   class start: config :: Dictionary -> ExduraClient =>
     sup := ExduraSupervisor supervise
 
-    // Wire engine to its supervised siblings
+    // Sibling wiring is handled by ExduraSupervisor class initialize:
     engine := sup which: WorkflowEngine
     store := sup which: EventStore
     pool := sup which: ActivityWorkerPool
-    engine initWithStore: store pool: pool
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]

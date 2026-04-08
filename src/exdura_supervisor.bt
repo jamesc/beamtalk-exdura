@@ -24,3 +24,13 @@ Supervisor subclass: ExduraSupervisor
     timerSpec := TimerManager supervisionSpec withRestart: #permanent
 
     #(storeSpec, poolSpec, engineSpec, timerSpec)
+
+  /// Wire children together after all are started.
+  /// Re-runs on restart (rest_for_one), so restarted children get fresh refs.
+  class initialize: sup =>
+    store := sup which: EventStore
+    pool := sup which: ActivityWorkerPool
+    engine := sup which: WorkflowEngine
+    timer := sup which: TimerManager
+    engine initWithStore: store pool: pool
+    timer initWith: engine eventStore: store
