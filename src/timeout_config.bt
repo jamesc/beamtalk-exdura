@@ -9,10 +9,10 @@
 ///     #startToCloseTimeout => 30000,
 ///     #heartbeatTimeout => 10000
 ///   }
-Value subclass: TimeoutConfig
-  field: workflowExecutionTimeout = nil
-  field: workflowRunTimeout = nil
-  field: scheduleToCloseTimeout = nil
-  field: startToCloseTimeout = nil
-  field: scheduleToStartTimeout = nil
-  field: heartbeatTimeout = nil
+typed Value subclass: TimeoutConfig
+  field: workflowExecutionTimeout :: Integer | Nil = nil
+  field: workflowRunTimeout :: Integer | Nil = nil
+  field: scheduleToCloseTimeout :: Integer | Nil = nil
+  field: startToCloseTimeout :: Integer | Nil = nil
+  field: scheduleToStartTimeout :: Integer | Nil = nil
+  field: heartbeatTimeout :: Integer | Nil = nil

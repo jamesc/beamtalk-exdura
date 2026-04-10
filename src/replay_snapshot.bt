@@ -7,6 +7,6 @@
 ///     #replayCursor => 50,
 ///     #deliveredSignals => #("sig-1", "sig-2")
 ///   }
-Value subclass: ReplaySnapshot
+typed Value subclass: ReplaySnapshot
   field: replayCursor :: Integer = 0
   field: deliveredSignals :: List = #()

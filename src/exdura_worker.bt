@@ -7,7 +7,7 @@
 ///   handle := client start: OrderWorkflow id: "order-1"
 ///     args: #("data") taskQueue: "orders" options: #{}
 ///   result := handle result
-Object subclass: ExduraWorker
+typed Object subclass: ExduraWorker
 
   /// Boot the supervision tree and return a connected ExduraClient.
   ///

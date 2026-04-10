@@ -11,7 +11,7 @@
 ///     #args => #(#{#to => "user@example.com"}),
 ///     #taskQueue => "email-queue"
 ///   }
-Value subclass: ActivityTask
+typed Value subclass: ActivityTask
   field: taskId :: String = ""
   field: workflowId :: String = ""
   field: activityType :: String = ""
@@ -19,5 +19,5 @@ Value subclass: ActivityTask
   field: taskQueue :: String = ""
   field: retryPolicy :: Dictionary(Symbol, Object) = #{}
   field: timeoutConfig :: Dictionary(Symbol, Integer) = #{}
-  field: heartbeatTimeout = nil
+  field: heartbeatTimeout :: Integer | Nil = nil
   field: attempt :: Integer = 1

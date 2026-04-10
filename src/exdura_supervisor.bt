@@ -11,13 +11,13 @@
 ///
 ///   beamtalk run                          // starts via beamtalk.toml
 ///   sup := ExduraSupervisor supervise     // or start manually
-Supervisor subclass: ExduraSupervisor
+typed Supervisor subclass: ExduraSupervisor
 
   /// rest_for_one: if a child crashes, all children after it restart.
   class strategy -> Symbol => #restForOne
 
   /// Child specs in dependency order.
-  class children -> List =>
+  class children -> List(Actor) =>
     storeSpec := EventStore supervisionSpec withRestart: #permanent
     poolSpec := ActivityWorkerPool supervisionSpec withRestart: #permanent
     engineSpec := WorkflowEngine supervisionSpec withRestart: #permanent
@@ -27,10 +27,11 @@ Supervisor subclass: ExduraSupervisor
 
   /// Wire children together after all are started.
   /// Re-runs on restart (rest_for_one), so restarted children get fresh refs.
-  class initialize: sup =>
+  class initialize: sup :: Supervisor -> nil =>
     store := sup which: EventStore
     pool := sup which: ActivityWorkerPool
     engine := sup which: WorkflowEngine
     timer := sup which: TimerManager
     engine initWithStore: store pool: pool
     timer initWith: engine eventStore: store
+    nil
