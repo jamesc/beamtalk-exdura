@@ -13,13 +13,13 @@
 ///     #history => #()
 ///   }
 ///   runner go!
-Actor subclass: WorkflowRunner
-  state: workflow = nil
-  state: engine = nil
+typed Actor subclass: WorkflowRunner
+  state: workflow :: Class | Nil = nil
+  state: engine :: WorkflowEngine | Nil = nil
   state: workflowId :: String = ""
-  state: input = nil
+  state: input :: Object | Nil = nil
   state: history :: List = #()
-  state: snapshot = nil
+  state: snapshot :: ReplaySnapshot | Nil = nil
   state: snapshotInterval :: Integer = 100
   state: doneSemName :: Symbol = #none
 
@@ -35,7 +35,7 @@ Actor subclass: WorkflowRunner
   ///   {runner, semName} := WorkflowRunner spawnForAwait: #{#workflow => ..., #engine => ...}
   ///   runner go!
   ///   WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
-  class spawnForAwait: config :: Dictionary =>
+  class spawnForAwait: config :: Dictionary -> List =>
     semName := "wfr_{System uniqueId}" asAtom
     AtomicCounter new: semName
     runner := self spawnWith: (config at: #doneSemName put: semName)
@@ -44,13 +44,13 @@ Actor subclass: WorkflowRunner
   /// Block until a runner's workflow completes, with timeout (ms).
   /// Polls the AtomicCounter semaphore (1ms interval, near-zero overhead).
   /// Must be called via performLocally: to avoid class object contention.
-  class await: semName :: Symbol timeout: timeoutMs :: Integer =>
+  class await: semName :: Symbol timeout: timeoutMs :: Integer -> Nil =>
     sem := AtomicCounter named: semName
     deadline := Time nowMs + timeoutMs
     [(sem value) == 0]
       whileTrue: [
         Time nowMs >= deadline ifTrue: [
-          self error: "Timed out waiting for runner"
+          Error signal: "Timed out waiting for runner"
         ]
         Timer sleep: 1
       ]
@@ -61,7 +61,7 @@ Actor subclass: WorkflowRunner
   /// Creates a WorkflowContext, lets the workflow register query handlers,
   /// registers them with the engine, captures an initial snapshot, runs
   /// the workflow, captures a final snapshot, and records completion.
-  go =>
+  go -> Nil =>
     Tracing setContext: #{
       #workflowId => self.workflowId,
       #workflowType => self.workflow name asString
@@ -83,6 +83,8 @@ Actor subclass: WorkflowRunner
           history: self.history
       ]
     // Let the workflow register query handlers via the context
+    // Nil-safe: set via spawnWith: before go is called
+    @expect type
     self.workflow registerQueries: ctx
     // Register query handlers with the engine for query evaluation
     handlers := ctx queryHandlers
@@ -94,6 +96,8 @@ Actor subclass: WorkflowRunner
     // Run the workflow in the runner's process (not the class object's).
     // CancellationError exits early via ^nil.
     // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
+    // Nil-safe: set via spawnWith: before go is called
+    @expect type
     result := [
       self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)
     ]
@@ -124,3 +128,4 @@ Actor subclass: WorkflowRunner
           ]
       ]
     (AtomicCounter named: self.doneSemName) increment
+    nil

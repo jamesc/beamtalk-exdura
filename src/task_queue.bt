@@ -12,22 +12,23 @@
 ///   q peek        // => #{#taskId => "t-1", #type => "activity"}
 ///   q dequeue     // => #{#taskId => "t-1", #type => "activity"}
 ///   q depth       // => 0
-Actor subclass: TaskQueue
-  state: table = nil
+typed Actor subclass: TaskQueue
+  state: table :: Ets | Nil = nil
   state: nextSeq :: Integer = 1
 
   /// Initialize the ETS ordered_set table for FIFO ordering.
-  initialize =>
+  initialize -> Nil =>
     id := System uniqueId
     tableName := "exdura_tq_{id}" asAtom
     self.table := Ets new: tableName type: #orderedSet
     self.nextSeq := 1
+    nil
 
   /// Add a task to the end of the queue.
   ///
   ///   q enqueue: #{#taskId => "t-1"}
   ///   q depth   // => 1
-  enqueue: task =>
+  enqueue: task :: Object -> Object =>
     self.table at: self.nextSeq put: task
     self.nextSeq := self.nextSeq + 1
     task
@@ -38,7 +39,7 @@ Actor subclass: TaskQueue
   ///   q enqueue: #{#taskId => "t-1"}
   ///   q dequeue   // => #{#taskId => "t-1"}
   ///   q dequeue   // => nil
-  dequeue =>
+  dequeue -> Object | Nil =>
     self.table size == 0
       ifTrue: [nil]
       ifFalse: [
@@ -59,7 +60,7 @@ Actor subclass: TaskQueue
   ///   q enqueue: "task-1"
   ///   q peek      // => "task-1"
   ///   q depth     // => 1 (unchanged)
-  peek =>
+  peek -> Object | Nil =>
     self.table size == 0
       ifTrue: [nil]
       ifFalse: [
@@ -69,6 +70,8 @@ Actor subclass: TaskQueue
       ]
 
   /// Delete the ETS table and clean up resources.
-  destroy =>
+  destroy -> Nil =>
+    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
+    @expect type
     self.table ifNotNil: [[self.table delete] on: Error do: [:e | nil]]
     self.table := nil

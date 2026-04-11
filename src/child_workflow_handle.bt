@@ -12,11 +12,11 @@
 ///     for: "child-wf-1" engine: engine eventStore: store
 ///   result := handle result          // blocks until child completes
 ///   result := handle result: 5000    // blocks with 5s timeout
-Value subclass: ChildWorkflowHandle
+typed Value subclass: ChildWorkflowHandle
   field: childWorkflowId :: String = ""
-  field: engine = nil
-  field: eventStore = nil
-  field: cachedResult = nil
+  field: engine :: WorkflowEngine | Nil = nil
+  field: eventStore :: EventStore | Nil = nil
+  field: cachedResult :: Object | Nil = nil
   field: hasCachedResult :: Boolean = false
 
   /// Create a new ChildWorkflowHandle for the given child workflow.
@@ -33,7 +33,7 @@ Value subclass: ChildWorkflowHandle
   /// Create a handle with a pre-cached result (used during replay).
   ///
   ///   ChildWorkflowHandle forReplay: "child-1" result: 42
-  class forReplay: childWorkflowId :: String result: aResult -> ChildWorkflowHandle =>
+  class forReplay: childWorkflowId :: String result: aResult :: Object -> ChildWorkflowHandle =>
     self
       new: #{
         #childWorkflowId => childWorkflowId,
@@ -44,8 +44,10 @@ Value subclass: ChildWorkflowHandle
   /// Block until the child workflow completes and return the result.
   ///
   ///   result := handle result
-  result =>
+  result -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
+    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
+    @expect type
     [true]
       whileTrue: [
         exec := self eventStore getExecution: self childWorkflowId
@@ -64,9 +66,11 @@ Value subclass: ChildWorkflowHandle
   /// Block until the child workflow completes or the timeout (ms) expires.
   ///
   ///   result := handle result: 5000
-  result: timeout :: Integer =>
+  result: timeout :: Integer -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
     deadline := (Time nowMs) + timeout
+    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
+    @expect type
     [true]
       whileTrue: [
         exec := self eventStore getExecution: self childWorkflowId

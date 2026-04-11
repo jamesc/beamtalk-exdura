@@ -10,9 +10,9 @@
 ///     #maximumAttempts => 5,
 ///     #nonRetryableErrors => #("InvalidInput")
 ///   }
-Value subclass: RetryPolicy
+typed Value subclass: RetryPolicy
   field: initialInterval :: Integer = 1000
   field: backoffCoefficient :: Float = 2.0
-  field: maximumInterval = nil
-  field: maximumAttempts = nil
+  field: maximumInterval :: Integer | Nil = nil
+  field: maximumAttempts :: Integer | Nil = nil
   field: nonRetryableErrors :: List = #()

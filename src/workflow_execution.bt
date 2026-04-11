@@ -11,19 +11,19 @@
 ///     #taskQueue => "default",
 ///     #startedAt => 1710000000
 ///   }
-Value subclass: WorkflowExecution
+typed Value subclass: WorkflowExecution
   field: workflowId :: String = ""
   field: runId :: String = ""
   field: workflowType :: String = ""
   field: taskQueue :: String = ""
   field: args :: List = #()
   field: status :: Symbol = #running
-  field: result = nil
-  field: error = nil
-  field: parentWorkflowId = nil
+  field: result :: Object | Nil = nil
+  field: error :: String | Nil = nil
+  field: parentWorkflowId :: String | Nil = nil
   field: startedAt :: Integer = 0
-  field: closedAt = nil
+  field: closedAt :: Integer | Nil = nil
   field: searchAttributes :: Dictionary(String, Object) = #{}
 
   /// Display as WorkflowExecution(order-123 running)
-  printString => "WorkflowExecution({self workflowId} {self status})"
+  printString -> String => "WorkflowExecution({self workflowId} {self status})"

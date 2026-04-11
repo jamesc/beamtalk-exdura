@@ -14,18 +14,22 @@
 ///   result := pool executeActivity: TestActivities selector: #doubleIt:
 ///     args: #(5) timeout: nil
 ///   // => #{#status => #completed, #result => 10}
-Actor subclass: ActivityWorkerPool
+typed Actor subclass: ActivityWorkerPool
   state: maxConcurrent :: Integer = 10
   state: activeCount :: Integer = 0
-  state: supervisor = nil
+  state: supervisor :: ActivityWorkerSupervisor | Nil = nil
 
   /// Initialize the pool by starting the underlying DynamicSupervisor.
-  initialize => self.supervisor := ActivityWorkerSupervisor supervise
+  initialize -> Nil =>
+    self.supervisor := ActivityWorkerSupervisor supervise
+    nil
 
   /// Set the maximum number of concurrent activity workers.
   ///
   ///   pool setMaxConcurrent: 20
-  setMaxConcurrent: max :: Integer => self.maxConcurrent := max
+  setMaxConcurrent: max :: Integer -> Nil =>
+    self.maxConcurrent := max
+    nil
 
   /// Return the maximum concurrent activities allowed.
   ///
@@ -52,7 +56,7 @@ Actor subclass: ActivityWorkerPool
   ///
   ///   pool executeActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) timeout: nil
-  executeActivity: activityClass selector: selector :: Symbol args: args :: List timeout: timeout -> Dictionary =>
+  executeActivity: activityClass :: Class selector: selector :: Symbol args: args :: List timeout: timeout -> Dictionary =>
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^#{#status => #rejected}]
     self.activeCount := self.activeCount + 1
@@ -65,6 +69,8 @@ Actor subclass: ActivityWorkerPool
     // Set up timeout: kill worker process after timeout ms.
     // Uses Pid kill to force immediate process termination,
     // which causes the pending gen_server call to fail instantly.
+    // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
+    @expect type
     timer := timeout isNil ifTrue: [
       nil
     ] ifFalse: [Timer after: timeout do: [worker kill]]
@@ -74,6 +80,8 @@ Actor subclass: ActivityWorkerPool
     // previous bug where an activity returning a Dictionary with a #status
     // key (e.g. #{#status => "reserved"}) was misidentified as a pool
     // error outcome.
+    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
+    @expect type
     outcome := [worker execute]
       on: Exception
       do: [:e |
@@ -96,4 +104,4 @@ Actor subclass: ActivityWorkerPool
   /// singleton since other pools may still reference it.
   ///
   ///   pool destroy
-  destroy => self.supervisor := nil
+  destroy -> Nil => self.supervisor := nil

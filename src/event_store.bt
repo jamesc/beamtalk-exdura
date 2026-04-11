@@ -20,14 +20,14 @@
 ///   store readEvents: "wf-1" fromSeq: 1
 ///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
 ///   store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
-Actor subclass: EventStore
-  state: executions = nil
-  state: events = nil
+typed Actor subclass: EventStore
+  state: executions :: Ets | Nil = nil
+  state: events :: Ets | Nil = nil
   state: dataDir :: String = "data"
 
   /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
   /// Class method to avoid self-capture issues when called from blocks.
-  class parseEtfBinary: binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List -> List =>
+  class parseEtfBinary: binary :: Binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List -> List =>
     offset >= totalSize ifTrue: [^acc]
     remaining := binary part: offset size: totalSize - offset
     // Parse next ETF term and get bytes consumed
@@ -42,7 +42,7 @@ Actor subclass: EventStore
       size: totalSize
       acc: (acc add: evt)
 
-  initialize =>
+  initialize -> Nil =>
     uid := System uniqueId
     execName := "exdura_executions_{uid}" asAtom
     eventsName := "exdura_events_{uid}" asAtom
@@ -67,12 +67,13 @@ Actor subclass: EventStore
   /// Retrieve a workflow execution by ID. Returns nil if not found.
   ///
   ///   store getExecution: "wf-1"   // => WorkflowExecution(...)
-  getExecution: workflowId :: String => self.executions at: workflowId
+  getExecution: workflowId :: String -> WorkflowExecution | Nil =>
+    self.executions at: workflowId
 
   /// Update an execution's status and result. Raises if not found.
   ///
   ///   store updateExecution: "wf-1" status: #completed result: 42
-  updateExecution: workflowId :: String status: status :: Symbol result: result -> WorkflowExecution =>
+  updateExecution: workflowId :: String status: status :: Symbol result: result :: Object -> WorkflowExecution =>
     existing := self.executions at: workflowId
     existing isNil ifTrue: [self error: "Execution not found: {workflowId}"]
     updated := (existing withStatus: status) withResult: result
@@ -86,9 +87,13 @@ Actor subclass: EventStore
   ///   store listExecutions: #{}   // all executions
   listExecutions: filter :: Dictionary -> List =>
     allKeys := self.executions keys
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     allExecs := allKeys collect: [:k | self.executions at: k]
     filterStatus := filter at: #status ifAbsent: [nil]
     filterType := filter at: #workflowType ifAbsent: [nil]
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     allExecs
       select: [:e |
         statusOk := filterStatus isNil or: [e status =:= filterStatus]
@@ -107,6 +112,8 @@ Actor subclass: EventStore
   appendEvents: workflowId :: String events: newEvents :: List -> List =>
     existing := self.events at: workflowId ifAbsent: [#()]
     startId := existing size + 1
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     stamped := newEvents
       inject: #{#id => startId, #list => #()}
       into: [:acc :evt |
@@ -127,6 +134,8 @@ Actor subclass: EventStore
   ///   store readEvents: "wf-1" fromSeq: 5   // events with eventId >= 5
   readEvents: workflowId :: String fromSeq: fromSeq :: Integer -> List =>
     existing := self.events at: workflowId ifAbsent: [#()]
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     existing select: [:evt | evt eventId >= fromSeq]
 
   /// Clear the event history for a workflow (ETS only, preserves disk files).
@@ -135,7 +144,8 @@ Actor subclass: EventStore
   /// starting a fresh execution. The old events remain on disk for auditing.
   ///
   ///   store clearEvents: "wf-1"
-  clearEvents: workflowId :: String => self.events at: workflowId put: #()
+  clearEvents: workflowId :: String -> Nil =>
+    self.events at: workflowId put: #()
 
   // --- Snapshot persistence ---
 
@@ -146,7 +156,7 @@ Actor subclass: EventStore
   /// `data/snapshots/{workflowId}.etf`, overwriting any previous snapshot.
   ///
   ///   store saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
-  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer =>
+  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer -> Nil =>
     path := self snapshotFilePath: workflowId
     data := #{#state => state, #eventId => eventId}
     binary := Binary serialize: data
@@ -168,7 +178,7 @@ Actor subclass: EventStore
   ///     snap := result at: #snapshot
   ///     events := result at: #events
   ///   ]
-  readEventsFromSnapshot: workflowId :: String =>
+  readEventsFromSnapshot: workflowId :: String -> Dictionary | Nil =>
     path := self snapshotFilePath: workflowId
     readResult := File readBinary: path
     readResult isError ifTrue: [^nil]
@@ -176,12 +186,16 @@ Actor subclass: EventStore
     contentSize := content byteSize
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := Binary deserialize: content
+    // Dictionary access: per-key types not tracked by checker
     @expect type
     snapEventId := snapshot at: #eventId
+    // Dictionary access: per-key types not tracked by checker
     @expect type
     snapState := snapshot at: #state
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     laterEvents := allEvents select: [:evt | evt eventId > snapEventId]
     #{
       #snapshot => #{#state => snapState, #eventId => snapEventId},
@@ -197,14 +211,19 @@ Actor subclass: EventStore
 
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).
-  destroy =>
+  destroy -> Nil =>
+    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
+    @expect type
     self.executions ifNotNil: [
       [self.executions delete] on: Error do: [:e | nil]
     ]
+    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
+    @expect type
     self.events ifNotNil: [[self.events delete] on: Error do: [:e | nil]]
+    nil
 
   /// Delete ETS tables and on-disk data directory.
-  destroyWithFiles =>
+  destroyWithFiles -> Nil =>
     self destroy
     dataDir := self.dataDir
     (File isDirectory: dataDir) ifTrue: [
@@ -214,9 +233,10 @@ Actor subclass: EventStore
   // --- Private: Directory management ---
 
   /// Ensure data/events/ and data/snapshots/ directories exist.
-  ensureDirectories =>
+  ensureDirectories -> Nil =>
     File mkdirAll: self.dataDir ++ "/events"
     File mkdirAll: self.dataDir ++ "/snapshots"
+    nil
 
   /// Path to the ETF event file for a given workflow.
   eventFilePath: workflowId :: String -> String =>
@@ -230,10 +250,12 @@ Actor subclass: EventStore
 
   /// Append ETF-encoded events to the workflow's event file.
   /// Each event is written as a consecutive ETF term in the file.
-  persistEvents: workflowId :: String events: evts :: List =>
+  persistEvents: workflowId :: String events: evts :: List -> Nil =>
     evts isEmpty ifTrue: [^nil]
     path := self eventFilePath: workflowId
     // Serialize all events — inline to avoid self-capture in block
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     bins := evts
       collect: [:evt |
         Binary
@@ -253,7 +275,7 @@ Actor subclass: EventStore
       ]
 
   /// Scan the events directory and reload all event histories into ETS.
-  reloadFromDisk =>
+  reloadFromDisk -> Nil =>
     evDir := self.dataDir ++ "/events"
     eventsTable := self.events
     (File isDirectory: evDir) ifFalse: [^nil]
@@ -261,10 +283,16 @@ Actor subclass: EventStore
     result isError ifTrue: [^nil]
     files := result unwrap
     // Collect workflow IDs from .etf filenames
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     etfFiles := files select: [:f | f endsWith: ".etf"]
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     wfIds := etfFiles collect: [:f | f take: f size - 4]
     // Load each workflow's events from disk into ETS
     // Bind evDir and eventsTable locally to avoid self-capture in do: block
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     wfIds
       do: [:wfId |
         path := evDir ++ "/{wfId}.etf"
@@ -280,6 +308,8 @@ Actor subclass: EventStore
                   offset: 0
                   size: contentSize
                   acc: #()
+                // Recursive call: checker can't resolve return type through recursion
+                @expect type
                 events isEmpty ifFalse: [eventsTable at: wfId put: events]
               ]
           ]

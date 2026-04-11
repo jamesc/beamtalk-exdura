@@ -14,10 +14,10 @@
 ///
 ///   // List running workflows
 ///   running := client list: #{#status => #running}
-Actor subclass: ExduraClient
-  state: engine = nil
-  state: eventStore = nil
-  state: supervisor = nil
+typed Actor subclass: ExduraClient
+  state: engine :: WorkflowEngine | Nil = nil
+  state: eventStore :: EventStore | Nil = nil
+  state: supervisor :: Supervisor | Nil = nil
 
   /// Create a client connected to an in-process workflow engine.
   ///
@@ -42,7 +42,7 @@ Actor subclass: ExduraClient
   ///   handle := client start: OrderWorkflow id: "order-1"
   ///     args: #("data") taskQueue: "orders" options: #{}
   ///   result := handle result
-  start: workflowClass id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
+  start: workflowClass :: Class id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
     self.engine
       startWorkflow: workflowClass
       id: workflowId
@@ -56,7 +56,7 @@ Actor subclass: ExduraClient
   /// at the next safe point (after the current command completes).
   ///
   ///   client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
-  signal: workflowId :: String name: signalName :: String payload: data =>
+  signal: workflowId :: String name: signalName :: String payload: data :: Object -> Nil =>
     self.engine
       bufferSignal: workflowId
       name: signalName
@@ -69,7 +69,7 @@ Actor subclass: ExduraClient
   /// result. Raises an error if no handler or snapshot exists.
   ///
   ///   status := client query: "wf-1" name: "getStatus"
-  query: workflowId :: String name: queryName :: String =>
+  query: workflowId :: String name: queryName :: String -> Object =>
     self.engine handleQuery: workflowId name: queryName
 
   /// Cancel a running workflow.
@@ -82,7 +82,7 @@ Actor subclass: ExduraClient
   /// Workflows can catch CancellationError with `on:do:` for cleanup.
   ///
   ///   client cancel: "wf-1"
-  cancel: workflowId :: String => self.engine cancelWorkflow: workflowId
+  cancel: workflowId :: String -> Nil => self.engine cancelWorkflow: workflowId
 
   /// List workflow executions matching a filter.
   ///
@@ -96,7 +96,8 @@ Actor subclass: ExduraClient
   /// Retrieve a workflow execution by ID (used by WorkflowHandle).
   ///
   ///   client getExecution: "wf-1"
-  getExecution: workflowId :: String => self.eventStore getExecution: workflowId
+  getExecution: workflowId :: String -> WorkflowExecution | Nil =>
+    self.eventStore getExecution: workflowId
 
   /// Return the underlying WorkflowEngine (for testing/inspection).
   engine -> WorkflowEngine => self.engine
@@ -105,7 +106,7 @@ Actor subclass: ExduraClient
   eventStore -> EventStore => self.eventStore
 
   /// Return the underlying Supervisor (for testing/lifecycle management).
-  supervisor => self.supervisor
+  supervisor -> Supervisor | Nil => self.supervisor
 
   /// Set the supervisor that manages this client's components.
   ///
@@ -113,7 +114,9 @@ Actor subclass: ExduraClient
   /// enabling proper cleanup via destroy.
   ///
   ///   client setSupervisor: sup
-  setSupervisor: sup => self.supervisor := sup
+  setSupervisor: sup :: Supervisor -> Nil =>
+    self.supervisor := sup
+    nil
 
   /// Clean up resources (EventStore ETS tables, worker pool, supervisor).
   ///
@@ -122,7 +125,7 @@ Actor subclass: ExduraClient
   /// individually (ExduraClient connect:-managed).
   ///
   ///   client destroy
-  destroy =>
+  destroy -> Nil =>
     self.supervisor isNil
       ifFalse: [
         // Supervisor-managed: stop supervisor first (terminates all children),
@@ -134,9 +137,14 @@ Actor subclass: ExduraClient
     // Non-supervised: clean up components individually
     self.engine isNil
       ifFalse: [
-        (Result tryDo: [
-          self.engine activityPool
-        ]) andThen: [:pool | Result tryDo: [pool destroy]]
+        poolResult := Result tryDo: [self.engine activityPool]
+        poolResult isOk
+          ifTrue: [
+            // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
+            @expect type
+            p := poolResult unwrap
+            Result tryDo: [p destroy]
+          ]
         [self.engine stop] on: Error do: [:e | nil]
       ]
     self.eventStore isNil

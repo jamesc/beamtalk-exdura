@@ -10,11 +10,11 @@
 ///     #timestamp => 1710000000,
 ///     #payload => #{#workflowId => "wf-1"}
 ///   }
-Value subclass: ExduraEvent
+typed Value subclass: ExduraEvent
   field: eventId :: Integer = 0
   field: eventType :: Symbol = #unknown
   field: timestamp :: Integer = 0
   field: payload :: Dictionary(Symbol, Object) = #{}
 
   /// Display as ExduraEvent(1: WorkflowStarted)
-  printString => "ExduraEvent({self eventId}: {self eventType})"
+  printString -> String => "ExduraEvent({self eventId}: {self eventType})"

@@ -15,7 +15,7 @@
 ///   snap status   // => "running"
 ///   actor setStatus: "done"
 ///   snap status   // => "running" (unchanged)
-Actor subclass: ActorSnapshot
+typed Actor subclass: ActorSnapshot
   state: fields :: Dictionary(Symbol, Object) = #{}
 
   /// Capture a read-only snapshot of a live Actor's state fields.
@@ -26,6 +26,8 @@ Actor subclass: ActorSnapshot
   ///   snap := ActorSnapshot of: someActor
   ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
   class of: actor :: Actor -> ActorSnapshot =>
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     data := actor fieldNames inject: #{} into: [:acc :name |
       acc at: name put: (actor fieldAt: name)
     ]
@@ -45,7 +47,7 @@ Actor subclass: ActorSnapshot
   ///   snap := ActorSnapshot of: actor
   ///   snap status       // => "running" (if actor had a #status field)
   ///   snap bogusField   // => Error: "ActorSnapshot: no field 'bogusField'"
-  doesNotUnderstand: selector :: Symbol args: _arguments :: List =>
+  doesNotUnderstand: selector :: Symbol args: _arguments :: List -> Object =>
     self.fields at: selector ifAbsent: [
       self error: "ActorSnapshot: no field '{selector}'"
     ]

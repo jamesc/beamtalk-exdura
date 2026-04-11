@@ -5,5 +5,5 @@
 /// delegates to the engine to create a new execution.
 ///
 ///   ContinueAsNewRequest new: #{#args => #("nextCursor")}
-Value subclass: ContinueAsNewRequest
+typed Value subclass: ContinueAsNewRequest
   field: args :: List = #()

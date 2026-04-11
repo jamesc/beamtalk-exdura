@@ -10,18 +10,19 @@
 ///   worker := supervisor startChild
 ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
 ///   result := worker execute   // => 10
-Actor subclass: ActivityWorker
-  state: activityClass = nil
-  state: selector = nil
+typed Actor subclass: ActivityWorker
+  state: activityClass :: Class | Nil = nil
+  state: selector :: Symbol | Nil = nil
   state: args :: List = #()
 
   /// Initialize the worker with activity details.
   ///
   ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
-  initWith: anActivityClass selector: aSelector :: Symbol args: someArgs :: List =>
+  initWith: anActivityClass :: Class selector: aSelector :: Symbol args: someArgs :: List -> Nil =>
     self.activityClass := anActivityClass
     self.selector := aSelector
     self.args := someArgs
+    nil
 
   /// Execute the activity class method and return the result.
   ///
@@ -29,5 +30,7 @@ Actor subclass: ActivityWorker
   /// Exceptions propagate to the caller (caught by the pool).
   ///
   ///   worker execute   // => 10
-  execute =>
+  execute -> Object =>
+    // Ambiguous branches: perform:withArguments: returns Dynamic (reflective dispatch)
+    @expect type
     self.activityClass perform: self.selector withArguments: #(self.args)

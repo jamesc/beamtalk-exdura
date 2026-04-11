@@ -8,14 +8,15 @@
 ///   saga addCompensation: [account credit: 100]
 ///   saga addCompensation: [inventory restock: item]
 ///   saga compensate  // restocks first, then credits
-Actor subclass: Saga
+typed Actor subclass: Saga
   state: compensations :: List = #()
 
   /// Append a compensation block to the list.
   ///
   ///   saga addCompensation: [account credit: amount]
-  addCompensation: block :: Block =>
+  addCompensation: block :: Block -> Nil =>
     self.compensations := self.compensations add: block
+    nil
 
   /// Return the list of registered compensation blocks.
   ///
@@ -28,7 +29,9 @@ Actor subclass: Saga
   /// compensation does not prevent remaining compensations from running.
   ///
   ///   saga compensate
-  compensate =>
+  compensate -> Nil =>
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     self.compensations reversed do: [:block |
       [block value] on: Exception do: [:e | nil]
     ]

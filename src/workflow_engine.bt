@@ -13,9 +13,9 @@
 ///   pool := ActivityWorkerPool spawn
 ///   engine := WorkflowEngine withStore: store pool: pool
 ///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
-Actor subclass: WorkflowEngine
-  state: eventStore = nil
-  state: activityPool = nil
+typed Actor subclass: WorkflowEngine
+  state: eventStore :: EventStore | Nil = nil
+  state: activityPool :: ActivityWorkerPool | Nil = nil
   state: signalBuffers :: Dictionary(String, List) = #{}
   state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
   state: workflowQueryHandlers :: Dictionary(String, Dictionary) = #{}
@@ -42,9 +42,10 @@ Actor subclass: WorkflowEngine
   /// Initialize engine with an EventStore and optional ActivityWorkerPool.
   /// Called by withStore: for standalone use, or by ExduraWorker after
   /// the supervisor finishes starting all children.
-  initWithStore: aStore :: EventStore pool: aPool =>
+  initWithStore: aStore :: EventStore pool: aPool :: ActivityWorkerPool | Nil -> Nil =>
     self.eventStore := aStore
     self.activityPool := aPool
+    nil
 
   /// Start a new workflow execution.
   ///
@@ -52,7 +53,7 @@ Actor subclass: WorkflowEngine
   /// spawns the Workflow Actor, and kicks off its run: method.
   ///
   ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
-  startWorkflow: workflowClass id: workflowId :: String args: args :: List =>
+  startWorkflow: workflowClass :: Class id: workflowId :: String args: args :: List -> WorkflowRunner =>
     wfType := workflowClass name asString
     Tracing setContext: #{#workflowId => workflowId, #workflowType => wfType}
     now := Time nowMs div: 1000
@@ -108,7 +109,7 @@ Actor subclass: WorkflowEngine
   /// during replay (default: 100 events).
   ///
   ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello"
-  replayWorkflow: workflowClass id: workflowId :: String input: input =>
+  replayWorkflow: workflowClass :: Class id: workflowId :: String input: input :: Object | Nil -> WorkflowRunner =>
     self
       replayWorkflow: workflowClass
       id: workflowId
@@ -123,7 +124,7 @@ Actor subclass: WorkflowEngine
   /// execution), while only truly new activities execute live.
   ///
   ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
-  replayWorkflow: workflowClass id: workflowId input: input snapshotInterval: interval :: Integer =>
+  replayWorkflow: workflowClass :: Class id: workflowId :: String input: input :: Object | Nil snapshotInterval: interval :: Integer -> WorkflowRunner =>
     Tracing setContext: #{
       #workflowId => workflowId,
       #workflowType => workflowClass name asString
@@ -163,7 +164,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
-  scheduleActivity: activityClass selector: selector :: Symbol args: args :: List workflowId: workflowId :: String =>
+  scheduleActivity: activityClass :: Class selector: selector :: Symbol args: args :: List workflowId: workflowId :: String -> Object =>
     self
       scheduleActivity: activityClass
       selector: selector
@@ -180,7 +181,7 @@ Actor subclass: WorkflowEngine
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
   ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  scheduleActivity: activityClass selector: selector :: Symbol args: args :: List workflowId: workflowId :: String options: options :: Dictionary =>
+  scheduleActivity: activityClass :: Class selector: selector :: Symbol args: args :: List workflowId: workflowId :: String options: options :: Dictionary -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
 
@@ -208,6 +209,8 @@ Actor subclass: WorkflowEngine
     self.activityPool isNil
       ifTrue: [
         // No pool — use retry executor with direct execution
+        // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
+        @expect type
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
@@ -219,11 +222,15 @@ Actor subclass: WorkflowEngine
       ifFalse: [
         // Pool available — supervised worker execution with timeout
         timeout := options at: #startToCloseTimeout ifAbsent: [nil]
+        // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
+        @expect type
         outcome := self.activityPool
           executeActivity: activityClass
           selector: selector
           args: args
           timeout: timeout
+        // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
+        @expect type
         outcome match: [
           #{#status => #completed, #result => result} -> self recordActivityCompleted: result workflowId: workflowId;
           #{#status => #timedOut} -> [
@@ -239,7 +246,7 @@ Actor subclass: WorkflowEngine
       ]
 
   /// Record an ActivityCompleted event.
-  recordActivityCompleted: result workflowId: workflowId :: String =>
+  recordActivityCompleted: result :: Object workflowId: workflowId :: String -> Object =>
     completedNow := Time nowMs div: 1000
     completedEvent := ExduraEvent
       new: #{
@@ -251,7 +258,7 @@ Actor subclass: WorkflowEngine
     result
 
   /// Record an ActivityFailed event.
-  recordActivityFailed: reason workflowId: workflowId :: String =>
+  recordActivityFailed: reason :: Object workflowId: workflowId :: String -> Nil =>
     failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{
@@ -262,7 +269,7 @@ Actor subclass: WorkflowEngine
     self.eventStore appendEvents: workflowId events: #(failedEvent)
 
   /// Record an ActivityTimedOut event.
-  recordActivityTimedOut: workflowId :: String =>
+  recordActivityTimedOut: workflowId :: String -> Nil =>
     timedOutNow := Time nowMs div: 1000
     timedOutEvent := ExduraEvent new: #{
       #eventType => #ActivityTimedOut,
@@ -277,7 +284,7 @@ Actor subclass: WorkflowEngine
   /// durable timer reconstruction can calculate the remainder on replay.
   ///
   ///   engine scheduleTimer: 5000 workflowId: "wf-1"
-  scheduleTimer: duration :: Integer workflowId: workflowId :: String =>
+  scheduleTimer: duration :: Integer workflowId: workflowId :: String -> Integer =>
     Tracing setContext: #{#workflowId => workflowId}
     nowMs := Time nowMs
     fireAt := nowMs + duration
@@ -296,7 +303,7 @@ Actor subclass: WorkflowEngine
   /// Record a TimerFired event after the context has slept.
   ///
   ///   engine recordTimerFired: 5000 workflowId: "wf-1"
-  recordTimerFired: duration :: Integer workflowId: workflowId :: String =>
+  recordTimerFired: duration :: Integer workflowId: workflowId :: String -> Nil =>
     firedNow := Time nowMs
     firedEvent := ExduraEvent
       new: #{
@@ -313,7 +320,7 @@ Actor subclass: WorkflowEngine
   /// the TimerFired event. Otherwise sleeps for the remainder.
   ///
   ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
-  reconstructTimer: _duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String =>
+  reconstructTimer: _duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String -> Integer =>
     Tracing setContext: #{#workflowId => workflowId}
     nowMs := Time nowMs
     remaining := fireAt - nowMs
@@ -334,7 +341,7 @@ Actor subclass: WorkflowEngine
   /// be delivered at the next safe point when the workflow drains its buffer.
   ///
   ///   engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
-  bufferSignal: workflowId :: String name: signalName :: String payload: data =>
+  bufferSignal: workflowId :: String name: signalName :: String payload: data :: Object -> Nil =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
 
@@ -381,7 +388,7 @@ Actor subclass: WorkflowEngine
   /// re-enter the mailbox and deadlock while processing the current message).
   ///
   ///   engine completeWorkflow: "wf-1" result: 42
-  completeWorkflow: workflowId :: String result: result =>
+  completeWorkflow: workflowId :: String result: result :: Object -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: don't overwrite cancelled status with completed
     existing := self.eventStore getExecution: workflowId
@@ -415,6 +422,8 @@ Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
@@ -423,6 +432,8 @@ Actor subclass: WorkflowEngine
         isRunning and: [policy =:= #terminate]
       ]
     // Inline termination: record failed events for each child to terminate
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     toTerminate
       do: [:childId |
         failNow := Time nowMs div: 1000
@@ -448,7 +459,7 @@ Actor subclass: WorkflowEngine
   /// All logic is inlined to avoid self-send deadlock.
   ///
   ///   engine failWorkflow: "wf-1" reason: "something went wrong"
-  failWorkflow: workflowId :: String reason: reason :: String =>
+  failWorkflow: workflowId :: String reason: reason :: String -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
     failedEvent := ExduraEvent
@@ -479,6 +490,8 @@ Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
@@ -487,6 +500,8 @@ Actor subclass: WorkflowEngine
         isRunning and: [policy =:= #terminate]
       ]
     // Inline termination: record failed events for each child to terminate
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     toTerminate
       do: [:childId |
         failNow := Time nowMs div: 1000
@@ -510,7 +525,7 @@ Actor subclass: WorkflowEngine
   /// at configurable intervals to enable replay optimization.
   ///
   ///   engine saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
-  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer =>
+  saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer -> Nil =>
     now := Time nowMs div: 1000
     snapshotEvent := ExduraEvent
       new: #{
@@ -523,7 +538,6 @@ Actor subclass: WorkflowEngine
       saveSnapshot: workflowId
       state: state
       eventId: eventId
-    nil
 
   /// Register a workflow's query handlers with the engine.
   ///
@@ -531,7 +545,7 @@ Actor subclass: WorkflowEngine
   /// engine can evaluate query handler blocks when queries arrive.
   ///
   ///   engine registerQueryHandlers: handlers forWorkflow: "wf-1"
-  registerQueryHandlers: handlers :: Dictionary forWorkflow: workflowId :: String =>
+  registerQueryHandlers: handlers :: Dictionary forWorkflow: workflowId :: String -> Object =>
     self.workflowQueryHandlers := self.workflowQueryHandlers at: workflowId put: handlers
 
   /// Capture a snapshot of the workflow's state at a safe point.
@@ -541,7 +555,7 @@ Actor subclass: WorkflowEngine
   /// snapshot until the next safe point updates it.
   ///
   ///   engine captureSnapshot: #{#status => "processing"} forWorkflow: "wf-1"
-  captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String =>
+  captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String -> Object =>
     // Stop the previous snapshot Actor to avoid process leaks
     oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
     oldSnap ifNotNil: [[oldSnap stop] on: Error do: [:e | nil]]
@@ -556,7 +570,7 @@ Actor subclass: WorkflowEngine
   /// if no snapshot exists for the workflow.
   ///
   ///   result := engine handleQuery: "wf-1" name: "getStatus"
-  handleQuery: workflowId :: String name: queryName :: String =>
+  handleQuery: workflowId :: String name: queryName :: String -> Object =>
     handlers := self.workflowQueryHandlers at: workflowId ifAbsent: [nil]
     handlers isNil ifTrue: [
       self error: "No query handlers registered for workflow '{workflowId}'"
@@ -574,7 +588,7 @@ Actor subclass: WorkflowEngine
   /// Return the cached snapshot for a workflow (for testing/inspection).
   ///
   ///   engine getSnapshot: "wf-1"
-  getSnapshot: workflowId :: String =>
+  getSnapshot: workflowId :: String -> ActorSnapshot | Nil =>
     self.workflowSnapshots at: workflowId ifAbsent: [nil]
 
   /// Start a child workflow and return a ChildWorkflowHandle.
@@ -589,7 +603,7 @@ Actor subclass: WorkflowEngine
   ///
   ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
   ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
-  startChildWorkflow: workflowClass id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary -> ChildWorkflowHandle =>
+  startChildWorkflow: workflowClass :: Class id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary -> ChildWorkflowHandle =>
     Tracing
       setContext: #{
         #workflowId => childWorkflowId,
@@ -683,7 +697,7 @@ Actor subclass: WorkflowEngine
   /// The event is recorded before the ContinueAsNewRequest is returned.
   ///
   ///   engine recordContinueAsNew: "wf-1" args: #("nextCursor")
-  recordContinueAsNew: workflowId :: String args: args :: List =>
+  recordContinueAsNew: workflowId :: String args: args :: List -> Nil =>
     now := Time nowMs div: 1000
     continueEvent := ExduraEvent
       new: #{
@@ -692,7 +706,6 @@ Actor subclass: WorkflowEngine
         #payload => #{#args => args}
       }
     self.eventStore appendEvents: workflowId events: #(continueEvent)
-    nil
 
   /// Handle continue-as-new: mark old execution as continued_as_new
   /// and start a fresh execution with the same workflow_id but a new run_id.
@@ -703,7 +716,7 @@ Actor subclass: WorkflowEngine
   /// of old events.
   ///
   ///   engine continueAsNewWorkflow: "wf-1" workflowClass: PollerWorkflow args: #("nextCursor")
-  continueAsNewWorkflow: workflowId :: String workflowClass: workflowClass args: args :: List =>
+  continueAsNewWorkflow: workflowId :: String workflowClass: workflowClass :: Class args: args :: List -> WorkflowRunner =>
     Tracing setContext: #{
       #workflowId => workflowId,
       #workflowType => workflowClass name asString
@@ -767,7 +780,7 @@ Actor subclass: WorkflowEngine
   /// Called by WorkflowContext during first execution of a version: call.
   ///
   ///   engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
-  recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String =>
+  recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String -> Nil =>
     now := Time nowMs div: 1000
     markerEvent := ExduraEvent
       new: #{
@@ -776,7 +789,6 @@ Actor subclass: WorkflowEngine
         #payload => #{#name => name, #version => selectedVersion}
       }
     self.eventStore appendEvents: workflowId events: #(markerEvent)
-    nil
 
   /// Cancel a running workflow.
   ///
@@ -786,7 +798,7 @@ Actor subclass: WorkflowEngine
   /// updates the execution status to #cancelled.
   ///
   ///   engine cancelWorkflow: "wf-1"
-  cancelWorkflow: workflowId :: String =>
+  cancelWorkflow: workflowId :: String -> Nil =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: only cancel running workflows
     exec := self.eventStore getExecution: workflowId
@@ -810,6 +822,8 @@ Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     children
       do: [:childId |
         childExec := store getExecution: childId
@@ -858,7 +872,6 @@ Actor subclass: WorkflowEngine
           }
         self.eventStore appendEvents: parentId events: #(childCancelledEvent)
       ]
-    nil
 
   /// Check if a workflow has been cancelled.
   ///
@@ -872,7 +885,7 @@ Actor subclass: WorkflowEngine
   /// Clear the cancellation flag for a workflow (after it has been handled).
   ///
   ///   engine clearCancellation: "wf-1"
-  clearCancellation: workflowId :: String =>
+  clearCancellation: workflowId :: String -> Object =>
     self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 
   /// Return the underlying EventStore (for testing/inspection).

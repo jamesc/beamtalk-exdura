@@ -7,9 +7,9 @@
 ///   manager := TimerManager spawn
 ///   manager initWith: engine eventStore: store
 ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
-Actor subclass: TimerManager
-  state: engine = nil
-  state: eventStore = nil
+typed Actor subclass: TimerManager
+  state: engine :: WorkflowEngine | Nil = nil
+  state: eventStore :: EventStore | Nil = nil
   state: status :: Symbol = #ready
   state: pendingCount :: Integer = 0
 
@@ -23,9 +23,13 @@ Actor subclass: TimerManager
   class findPendingTimers: events :: List -> List =>
     // Count TimerStarted and TimerFired events.
     // If started > fired, the last (started - fired) timers are pending.
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     counts := events
       inject: #{#started => 0, #fired => 0}
       into: [:acc :evt |
+        // Block params: beamtalk blocks don't support typed parameters
+        @expect type
         evt eventType match: [
           #TimerStarted -> #{
             #started => (acc at: #started) + 1,
@@ -38,21 +42,33 @@ Actor subclass: TimerManager
           _ -> acc
         ]
       ]
+    // Dictionary access: per-key types not tracked by checker
+    @expect type
     startedCount := counts at: #started
+    // Dictionary access: per-key types not tracked by checker
+    @expect type
     firedCount := counts at: #fired
     pendingCount := startedCount - firedCount
     pendingCount <= 0 ifTrue: [^#()]
-    // Collect all TimerStarted events, take the last pendingCount
-    allStarted := events select: [:evt | evt eventType =:= #TimerStarted]
-    // Take the last pendingCount entries
-    startIdx := allStarted size - pendingCount + 1
-    startIdx < 1 ifTrue: [startIdx := 1]
-    pendingEvents := allStarted drop: startIdx - 1
-    pendingEvents
-      collect: [:evt |
-        payload := evt payload
-        dur := payload at: #duration ifAbsent: [0]
-        fireAt := payload at: #fireAt ifAbsent: [evt timestamp + dur]
+    // Collect all TimerStarted events, take the last pendingCount.
+    // Then extract timer info from each pending event.
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
+    started := events select: [:e | e eventType =:= #TimerStarted]
+    dropCount := (started size - pendingCount) max: 0
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
+    (started drop: dropCount)
+      collect: [:e |
+        // Block params: beamtalk blocks don't support typed parameters
+        @expect type
+        p := e payload
+        // Dictionary access: per-key types not tracked by checker
+        @expect type
+        dur := p at: #duration ifAbsent: [0]
+        // Dictionary access: per-key types not tracked by checker
+        @expect type
+        fireAt := p at: #fireAt ifAbsent: [e timestamp + dur]
         #{#duration => dur, #fireAt => fireAt}
       ]
 
@@ -69,9 +85,10 @@ Actor subclass: TimerManager
   /// Initialize the timer manager with an engine and event store.
   ///
   ///   manager initWith: engine eventStore: store
-  initWith: anEngine :: WorkflowEngine eventStore: aStore :: EventStore =>
+  initWith: anEngine :: WorkflowEngine eventStore: aStore :: EventStore -> Nil =>
     self.engine := anEngine
     self.eventStore := aStore
+    nil
 
   /// Scan event histories for unresolved timers and reconstruct them.
   ///
@@ -84,14 +101,24 @@ Actor subclass: TimerManager
   ///   // => 1  (number of timers reconstructed)
   reconstructPendingTimers: workflowIds :: List -> Integer =>
     self.status := #scanning
+    // Block params: beamtalk blocks don't support typed parameters
+    @expect type
     count := workflowIds
       inject: 0
       into: [:acc :wfId |
+        // Block params: beamtalk blocks don't support typed parameters
+        @expect type
         pending := TimerManager findPendingTimers: (self.eventStore readEvents: wfId fromSeq: 1)
         pending
           do: [:timerInfo |
+            // Dictionary access: per-key types not tracked by checker
+            @expect type
             dur := timerInfo at: #duration
+            // Dictionary access: per-key types not tracked by checker
+            @expect type
             fireAt := timerInfo at: #fireAt
+            // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
+            @expect type
             remaining := self.engine
               reconstructTimer: dur
               fireAt: fireAt
