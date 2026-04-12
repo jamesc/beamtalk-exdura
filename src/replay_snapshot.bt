@@ -9,4 +9,4 @@
 ///   }
 typed Value subclass: ReplaySnapshot
   field: replayCursor :: Integer = 0
-  field: deliveredSignals :: List = #()
+  field: deliveredSignals :: List(Signal) = #()

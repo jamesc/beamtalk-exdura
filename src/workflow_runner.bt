@@ -18,7 +18,7 @@ typed Actor subclass: WorkflowRunner
   state: engine :: WorkflowEngine
   state: workflowId :: String = ""
   state: input :: Object | Nil = nil
-  state: history :: List = #()
+  state: history :: List(ExduraEvent) = #()
   state: snapshot :: ReplaySnapshot | Nil = nil
   state: snapshotInterval :: Integer = 100
   state: doneSemName :: Symbol = #none

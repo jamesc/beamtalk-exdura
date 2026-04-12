@@ -9,4 +9,4 @@
 ///   result events           // => List of ExduraEvent
 typed Value subclass: SnapshotResult
   field: snapshot :: StoredSnapshot
-  field: events :: List = #()
+  field: events :: List(ExduraEvent) = #()

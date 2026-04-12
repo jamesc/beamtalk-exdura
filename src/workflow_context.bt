@@ -18,12 +18,12 @@ typed Actor subclass: WorkflowContext
   state: engine :: WorkflowEngine
   state: workflowId :: String = ""
   state: replayCursor :: Integer = 0
-  state: eventHistory :: List = #()
+  state: eventHistory :: List(ExduraEvent) = #()
   state: isReplaying :: Boolean = false
-  state: deliveredSignals :: List = #()
+  state: deliveredSignals :: List(Signal) = #()
   state: signalHandlers :: Dictionary(String, Block) = #{}
   state: workflowVars :: Dictionary(Symbol, Object) = #{}
-  state: receivedSignals :: List = #()
+  state: receivedSignals :: List(Signal) = #()
   state: snapshotInterval :: Integer = 100
   state: eventsSinceSnapshot :: Integer = 0
   state: queryHandlers :: Dictionary(String, Block) = #{}

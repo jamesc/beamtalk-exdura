@@ -9,4 +9,4 @@
 typed Value subclass: SignalSearchResult
   field: found :: Boolean = false
   field: signal :: Signal | Nil = nil
-  field: remaining :: List = #()
+  field: remaining :: List(Signal) = #()
