@@ -92,13 +92,13 @@ TestCase subclass: EventStorePersistenceTest
     // Read the file back and verify contents
     content := (File readBinary: (self.testDir ++ "/events/wf-etf-valid.etf")) unwrap
     dict := Binary deserialize: content
-    @expect type
+
     self assert: (dict at: #eventId) equals: 1
-    @expect type
+
     self assert: (dict at: #eventType) equals: #WorkflowStarted
-    @expect type
+
     self assert: (dict at: #timestamp) equals: 12345
-    @expect type
+
     self assert: ((dict at: #payload) at: #key) equals: "value"
 
   testMultipleEventsInSingleFile =>
