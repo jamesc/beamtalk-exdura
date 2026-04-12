@@ -21,8 +21,8 @@
 ///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
 ///   store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
 typed Actor subclass: EventStore
-  state: executions :: Ets
-  state: events :: Ets
+  state: executions :: Ets(String, WorkflowExecution)
+  state: events :: Ets(String, List(ExduraEvent))
   state: dataDir :: String = "data"
 
   /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
