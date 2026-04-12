@@ -273,8 +273,6 @@ typed Actor subclass: EventStore
                   offset: 0
                   size: contentSize
                   acc: #()
-                // Recursive call: checker can't resolve return type through recursion
-                @expect type
                 events isEmpty ifFalse: [eventsTable at: wfId put: events]
               ]
           ]

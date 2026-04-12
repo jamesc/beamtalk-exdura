@@ -77,8 +77,6 @@ typed Actor subclass: WorkflowContext
       ifFalse: [acc]
     (isSignal or: [eventType =:= #StateSnapshot])
       ifTrue: [
-        // Recursive call: checker can't resolve return type through recursion
-        @expect type
         self
           collectReplaySignalsFrom: fromIdx + 1
           history: eventHistory
@@ -102,8 +100,6 @@ typed Actor subclass: WorkflowContext
     eventType := (eventHistory at: fromIdx) eventType
     ((eventType =:= #StateSnapshot) or: [eventType =:= #SignalReceived])
       ifTrue: [
-        // Recursive call: checker can't resolve return type through recursion
-        @expect type
         self
           countSkippableEventsFrom: fromIdx + 1
           history: eventHistory
@@ -254,17 +250,9 @@ typed Actor subclass: WorkflowContext
           ifTrue: [
             completedEvent := self.eventHistory at: secondIdx
             self.replayCursor := secondIdx
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             replaySignals := WorkflowContext collectReplaySignalsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             skipCount := WorkflowContext countSkippableEventsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.replayCursor := secondIdx + skipCount
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
             ^completedEvent payload at: #result
@@ -320,17 +308,9 @@ typed Actor subclass: WorkflowContext
         (firstType =:= #TimerStarted and: [secondType =:= #TimerFired])
           ifTrue: [
             self.replayCursor := secondIdx
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             replaySignals := WorkflowContext collectReplaySignalsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             skipCount := WorkflowContext countSkippableEventsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.replayCursor := secondIdx + skipCount
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
             ^nil
@@ -419,17 +399,9 @@ typed Actor subclass: WorkflowContext
             startedEvent := self.eventHistory at: firstIdx
             completedEvent := self.eventHistory at: secondIdx
             self.replayCursor := secondIdx
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             replaySignals := WorkflowContext collectReplaySignalsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             skipCount := WorkflowContext countSkippableEventsFrom: secondIdx + 1 history: self.eventHistory
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.replayCursor := secondIdx + skipCount
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
             childId := startedEvent payload at: #childWorkflowId
@@ -510,8 +482,6 @@ typed Actor subclass: WorkflowContext
         ]
         newSignals := self.isReplaying
           ifTrue: [
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             WorkflowContext collectReplaySignalsFrom: self.replayCursor + 1 history: self.eventHistory
           ]
           ifFalse: [self.engine drainSignals: self.workflowId]
@@ -554,8 +524,6 @@ typed Actor subclass: WorkflowContext
         ]
         newSignals := self.isReplaying
           ifTrue: [
-            // Recursive call: checker can't resolve return type through recursion
-            @expect type
             WorkflowContext collectReplaySignalsFrom: self.replayCursor + 1 history: self.eventHistory
           ]
           ifFalse: [self.engine drainSignals: self.workflowId]
