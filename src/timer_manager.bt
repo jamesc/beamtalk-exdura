@@ -20,16 +20,12 @@ typed Actor subclass: TimerManager
   ///
   ///   TimerManager findPendingTimers: events
   ///   // => #(#{#duration => 5000, #fireAt => 1710000005000})
-  class findPendingTimers: events :: List -> List =>
+  class findPendingTimers: events :: List(ExduraEvent) -> List(TimerInfo) =>
     // Count TimerStarted and TimerFired events.
     // If started > fired, the last (started - fired) timers are pending.
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     counts := events
       inject: #{#started => 0, #fired => 0}
       into: [:acc :evt |
-        // Block params: beamtalk blocks don't support typed parameters
-        @expect type
         evt eventType match: [
           #TimerStarted -> #{
             #started => (acc at: #started) + 1,
@@ -48,16 +44,10 @@ typed Actor subclass: TimerManager
     pendingCount <= 0 ifTrue: [^#()]
     // Collect all TimerStarted events, take the last pendingCount.
     // Then extract timer info from each pending event.
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     started := events select: [:e | e eventType =:= #TimerStarted]
     dropCount := (started size - pendingCount) max: 0
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     (started drop: dropCount)
       collect: [:e |
-        // Block params: beamtalk blocks don't support typed parameters
-        @expect type
         p := e payload
         dur := p at: #duration ifAbsent: [0]
         fireAt := p at: #fireAt ifAbsent: [e timestamp + dur]
@@ -91,15 +81,11 @@ typed Actor subclass: TimerManager
   ///
   ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
   ///   // => 1  (number of timers reconstructed)
-  reconstructPendingTimers: workflowIds :: List -> Integer =>
+  reconstructPendingTimers: workflowIds :: List(String) -> Integer =>
     self.status := #scanning
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     count := workflowIds
       inject: 0
       into: [:acc :wfId |
-        // Block params: beamtalk blocks don't support typed parameters
-        @expect type
         pending := TimerManager findPendingTimers: (self.eventStore readEvents: wfId fromSeq: 1)
         pending
           do: [:timerInfo |

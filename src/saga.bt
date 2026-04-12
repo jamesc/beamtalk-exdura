@@ -9,7 +9,7 @@
 ///   saga addCompensation: [inventory restock: item]
 ///   saga compensate  // restocks first, then credits
 typed Actor subclass: Saga
-  state: compensations :: List = #()
+  state: compensations :: List(Block) = #()
 
   /// Append a compensation block to the list.
   ///
@@ -30,8 +30,6 @@ typed Actor subclass: Saga
   ///
   ///   saga compensate
   compensate -> Nil =>
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     self.compensations reversed do: [:block |
       [block value] on: Exception do: [:e | nil]
     ]

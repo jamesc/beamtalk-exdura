@@ -26,8 +26,6 @@ typed Actor subclass: ActorSnapshot
   ///   snap := ActorSnapshot of: someActor
   ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
   class of: actor :: Actor -> ActorSnapshot =>
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     data := actor fieldNames inject: #{} into: [:acc :name |
       acc at: name put: (actor fieldAt: name)
     ]

@@ -19,7 +19,7 @@ typed Actor subclass: WorkflowEngine
   state: signalBuffers :: Dictionary(String, List) = #{}
   state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
   state: workflowQueryHandlers :: Dictionary(String, Dictionary) = #{}
-  state: childWorkflows :: Dictionary(String, List) = #{}
+  state: childWorkflows :: Dictionary(String, List(String)) = #{}
   state: parentClosePolicy :: Dictionary(String, Symbol) = #{}
   state: cancelledWorkflows :: Dictionary(String, Boolean) = #{}
 
@@ -416,8 +416,6 @@ typed Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
@@ -425,9 +423,6 @@ typed Actor subclass: WorkflowEngine
         policy := policies at: childId ifAbsent: [#terminate]
         isRunning and: [policy =:= #terminate]
       ]
-    // Inline termination: record failed events for each child to terminate
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     toTerminate
       do: [:childId |
         failNow := Time nowMs div: 1000
@@ -484,8 +479,6 @@ typed Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     toTerminate := children
       select: [:childId |
         childExec := store getExecution: childId
@@ -493,9 +486,6 @@ typed Actor subclass: WorkflowEngine
         policy := policies at: childId ifAbsent: [#terminate]
         isRunning and: [policy =:= #terminate]
       ]
-    // Inline termination: record failed events for each child to terminate
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     toTerminate
       do: [:childId |
         failNow := Time nowMs div: 1000
@@ -816,8 +806,6 @@ typed Actor subclass: WorkflowEngine
     children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self.eventStore
     policies := self.parentClosePolicy
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     children
       do: [:childId |
         childExec := store getExecution: childId
