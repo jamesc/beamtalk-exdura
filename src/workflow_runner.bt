@@ -68,16 +68,16 @@ typed Actor subclass: WorkflowRunner
     }
     ctx := WorkflowContext spawn
     ctx setSnapshotInterval: self.snapshotInterval
-    self.snapshot isNil
-      ifTrue: [
+    self.snapshot
+      ifNil: [
         ctx
           initWith: self.engine
           workflowId: self.workflowId
           history: self.history
       ]
-      ifFalse: [
+      ifNotNil: [:snap |
         ctx
-          initWithSnapshot: self.snapshot
+          initWithSnapshot: snap
           engine: self.engine
           workflowId: self.workflowId
           history: self.history
