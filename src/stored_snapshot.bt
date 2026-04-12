@@ -1,0 +1,13 @@
+/// Serialized snapshot of workflow replay state at a specific event.
+///
+/// Written to disk as ETF by EventStore saveSnapshot: and deserialized
+/// by readEventsFromSnapshot:. Pairs a ReplaySnapshot with the eventId
+/// at which it was captured.
+///
+///   StoredSnapshot new: #{
+///     #state => (ReplaySnapshot new: #{#replayCursor => 50}),
+///     #eventId => 51
+///   }
+typed Value subclass: StoredSnapshot
+  field: state :: ReplaySnapshot
+  field: eventId :: Integer = 0

@@ -228,8 +228,8 @@ TestCase subclass: DurableTimerTest
     pending := TimerManager findPendingTimers: events
     self assert: pending size equals: 1
     info := pending at: 1
-    self assert: (info at: #duration) equals: 5000
-    self assert: (info at: #fireAt) equals: nowMs + 5000
+    self assert: info duration equals: 5000
+    self assert: info fireAt equals: nowMs + 5000
 
   /// TimerManager: no pending timers when all are matched.
   testTimerManagerNoPendingWhenAllFired =>

@@ -80,7 +80,7 @@ TestCase subclass: SignalBufferingTest
       payload: #{#user => "alice"}
     buffered := engine getBufferedSignals: "wf-sig-2"
     self assert: buffered size equals: 1
-    self assert: ((buffered at: 1) at: #name) equals: "approve"
+    self assert: (buffered at: 1) name equals: "approve"
 
   // === Engine drainSignals returns and clears buffer ===
   testDrainSignalsReturnsAndClears =>
@@ -108,8 +108,8 @@ TestCase subclass: SignalBufferingTest
 
     drained := engine drainSignals: "wf-sig-3"
     self assert: drained size equals: 2
-    self assert: ((drained at: 1) at: #name) equals: "sig1"
-    self assert: ((drained at: 2) at: #name) equals: "sig2"
+    self assert: (drained at: 1) name equals: "sig1"
+    self assert: (drained at: 2) name equals: "sig2"
 
     // Buffer should now be empty
     remaining := engine getBufferedSignals: "wf-sig-3"
@@ -145,9 +145,9 @@ TestCase subclass: SignalBufferingTest
 
     drained := engine drainSignals: "wf-sig-order"
     self assert: drained size equals: 3
-    self assert: ((drained at: 1) at: #name) equals: "first"
-    self assert: ((drained at: 2) at: #name) equals: "second"
-    self assert: ((drained at: 3) at: #name) equals: "third"
+    self assert: (drained at: 1) name equals: "first"
+    self assert: (drained at: 2) name equals: "second"
+    self assert: (drained at: 3) name equals: "third"
 
   // === Client signal: delegates to engine ===
   testClientSignalDelegatesToEngine =>
@@ -172,7 +172,7 @@ TestCase subclass: SignalBufferingTest
     // Signal should be in the buffer
     buffered := engine getBufferedSignals: "wf-client-sig"
     self assert: buffered size equals: 1
-    self assert: ((buffered at: 1) at: #name) equals: "notify"
+    self assert: (buffered at: 1) name equals: "notify"
 
     // SignalReceived event should be in history
     events := store readEvents: "wf-client-sig" fromSeq: 1
@@ -364,7 +364,7 @@ TestCase subclass: SignalBufferingTest
     // The SignalReceived event should have been consumed during replay
     delivered := ctx deliveredSignals
     self assert: delivered size equals: 1
-    self assert: ((delivered at: 1) at: #name) equals: "approve"
+    self assert: (delivered at: 1) name equals: "approve"
 
     // Engine buffer should be empty (signal came from history, not engine)
     buffered := engine getBufferedSignals: "wf-replay-sig2"

@@ -77,8 +77,8 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #doubleIt:
       args: #(5)
       timeout: nil
-    self assert: (outcome at: #status) equals: #completed
-    self assert: (outcome at: #result) equals: 10
+    self assert: outcome status equals: #completed
+    self assert: outcome result equals: 10
 
   testPoolReturnsCorrectResultForDifferentArgs =>
     outcome := self.pool
@@ -86,8 +86,8 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #addNumbers:
       args: #(#{#a => 3, #b => 4})
       timeout: nil
-    self assert: (outcome at: #status) equals: #completed
-    self assert: (outcome at: #result) equals: 7
+    self assert: outcome status equals: #completed
+    self assert: outcome result equals: 7
 
   // === ActivityWorkerPool: concurrency tracking ===
   testPoolActiveCountStartsAtZero =>
@@ -108,7 +108,7 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #doubleIt:
       args: #(5)
       timeout: nil
-    self assert: (outcome at: #status) equals: #rejected
+    self assert: outcome status equals: #rejected
 
   // === ActivityWorkerPool: worker crash recovery ===
   testPoolCatchesWorkerCrash =>
@@ -117,8 +117,8 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #crashIt:
       args: #("boom")
       timeout: nil
-    self assert: (outcome at: #status) equals: #failed
-    self assert: ((outcome at: #error) includesSubstring: "boom")
+    self assert: outcome status equals: #failed
+    self assert: (outcome error includesSubstring: "boom")
 
   testPoolRecoverAfterCrash =>
     // First call crashes
@@ -133,8 +133,8 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #doubleIt:
       args: #(3)
       timeout: nil
-    self assert: (outcome at: #status) equals: #completed
-    self assert: (outcome at: #result) equals: 6
+    self assert: outcome status equals: #completed
+    self assert: outcome result equals: 6
 
   // === ActivityWorkerPool: timeout enforcement ===
   testPoolTimesOutSlowActivity =>
@@ -144,8 +144,7 @@ TestCase subclass: ActivityWorkerPoolTest
       args: #(5000)
       timeout: 100
     // Should be either timedOut or failed (depending on race)
-    status := outcome at: #status
-    self assert: (status =:= #timedOut or: [status =:= #failed])
+    self assert: (outcome isTimedOut or: [outcome isFailed])
 
   testPoolNoTimeoutWhenActivityIsFast =>
     outcome := self.pool
@@ -153,8 +152,8 @@ TestCase subclass: ActivityWorkerPoolTest
       selector: #doubleIt:
       args: #(5)
       timeout: 5000
-    self assert: (outcome at: #status) equals: #completed
-    self assert: (outcome at: #result) equals: 10
+    self assert: outcome status equals: #completed
+    self assert: outcome result equals: 10
 
   // === ActivityWorkerPool: activeCount stability ===
   testPoolActiveCountReturnsToZeroAfterSuccess =>

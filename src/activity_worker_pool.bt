@@ -48,17 +48,17 @@ typed Actor subclass: ActivityWorkerPool
   /// All logic is inlined to avoid self-send deadlocks (Actor methods
   /// are gen_server handlers — calling self blocks).
   ///
-  /// Returns a Dictionary with outcome:
-  ///   #{#status => #completed, #result => 42}
-  ///   #{#status => #failed, #error => "division by zero"}
-  ///   #{#status => #timedOut}
-  ///   #{#status => #rejected} (when pool is at capacity)
+  /// Returns an ActivityOutcome describing the result:
+  ///   ActivityOutcome completed: 42
+  ///   ActivityOutcome failed: "division by zero"
+  ///   ActivityOutcome timedOut
+  ///   ActivityOutcome rejected
   ///
   ///   pool executeActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) timeout: nil
-  executeActivity: activityClass :: Class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> Dictionary =>
+  executeActivity: activityClass :: Class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
     // Enforce concurrency limit
-    self.activeCount >= self.maxConcurrent ifTrue: [^#{#status => #rejected}]
+    self.activeCount >= self.maxConcurrent ifTrue: [^ActivityOutcome rejected]
     self.activeCount := self.activeCount + 1
     // Spawn supervised worker and initialize it
     worker := self.supervisor startChild
@@ -69,8 +69,6 @@ typed Actor subclass: ActivityWorkerPool
     // Set up timeout: kill worker process after timeout ms.
     // Uses Pid kill to force immediate process termination,
     // which causes the pending gen_server call to fail instantly.
-    // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
-    @expect type
     timer := timeout isNil ifTrue: [
       nil
     ] ifFalse: [Timer after: timeout do: [worker kill]]
@@ -80,8 +78,6 @@ typed Actor subclass: ActivityWorkerPool
     // previous bug where an activity returning a Dictionary with a #status
     // key (e.g. #{#status => "reserved"}) was misidentified as a pool
     // error outcome.
-    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-    @expect type
     outcome := [worker execute]
       on: Exception
       do: [:e |
@@ -92,13 +88,13 @@ typed Actor subclass: ActivityWorkerPool
         (timer notNil and: [
           timer isActive not
         ]) ifTrue: [
-          ^#{#status => #timedOut}
-        ] ifFalse: [^#{#status => #failed, #error => e message}]
+          ^ActivityOutcome timedOut
+        ] ifFalse: [^ActivityOutcome failed: e message]
       ]
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
     timer ifNotNil: [timer cancel]
-    #{#status => #completed, #result => outcome}
+    ActivityOutcome completed: outcome
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
   /// singleton since other pools may still reference it.

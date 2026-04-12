@@ -1,0 +1,57 @@
+/// Result of executing an activity through the worker pool.
+///
+/// Replaces the raw #{#status => ..., #result => ..., #error => ...}
+/// dictionaries returned by ActivityWorkerPool executeActivity:.
+///
+///   ActivityOutcome completed: 42
+///   ActivityOutcome failed: "division by zero"
+///   ActivityOutcome timedOut
+///   ActivityOutcome rejected
+typed Value subclass: ActivityOutcome
+  field: status :: Symbol = #completed
+  field: result :: Object | Nil = nil
+  field: error :: String | Nil = nil
+
+  /// Create a completed outcome with the given result.
+  ///
+  ///   ActivityOutcome completed: 42
+  class completed: aResult :: Object -> ActivityOutcome =>
+    self new: #{#status => #completed, #result => aResult}
+
+  /// Create a failed outcome with an error message.
+  ///
+  ///   ActivityOutcome failed: "division by zero"
+  class failed: anError :: String -> ActivityOutcome =>
+    self new: #{#status => #failed, #error => anError}
+
+  /// Create a timed-out outcome.
+  ///
+  ///   ActivityOutcome timedOut
+  class timedOut -> ActivityOutcome =>
+    self new: #{#status => #timedOut}
+
+  /// Create a rejected outcome (pool at capacity).
+  ///
+  ///   ActivityOutcome rejected
+  class rejected -> ActivityOutcome =>
+    self new: #{#status => #rejected}
+
+  /// True if the activity completed successfully.
+  ///
+  ///   outcome isCompleted   // => true
+  isCompleted -> Boolean => self.status =:= #completed
+
+  /// True if the activity failed.
+  ///
+  ///   outcome isFailed   // => true
+  isFailed -> Boolean => self.status =:= #failed
+
+  /// True if the activity timed out.
+  ///
+  ///   outcome isTimedOut   // => true
+  isTimedOut -> Boolean => self.status =:= #timedOut
+
+  /// True if the activity was rejected (pool at capacity).
+  ///
+  ///   outcome isRejected   // => true
+  isRejected -> Boolean => self.status =:= #rejected

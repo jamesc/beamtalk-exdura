@@ -83,8 +83,6 @@ typed Actor subclass: WorkflowRunner
           history: self.history
       ]
     // Let the workflow register query handlers via the context
-    // Dynamic dispatch: concrete workflow class known only at runtime
-    @expect type
     self.workflow registerQueries: ctx
     // Register query handlers with the engine for query evaluation
     handlers := ctx queryHandlers

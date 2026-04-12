@@ -1,0 +1,12 @@
+/// Result of searching for a signal by name in a signal list.
+///
+/// Returned by WorkflowContext findSignal:in: to indicate whether a
+/// matching signal was found, provide the signal itself, and return
+/// the remaining signals with the match removed.
+///
+///   result := WorkflowContext findSignal: "approve" in: signals
+///   result found ifTrue: [result signal payload]
+typed Value subclass: SignalSearchResult
+  field: found :: Boolean = false
+  field: signal :: Signal | Nil = nil
+  field: remaining :: List = #()

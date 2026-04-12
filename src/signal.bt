@@ -1,0 +1,9 @@
+/// A named signal with an optional payload.
+///
+/// Replaces the raw #{#name => ..., #payload => ...} dictionaries used
+/// throughout WorkflowContext for signal buffering and delivery.
+///
+///   Signal new: #{#name => "approve", #payload => #{#user => "alice"}}
+typed Value subclass: Signal
+  field: name :: String = ""
+  field: payload :: Object | Nil = nil

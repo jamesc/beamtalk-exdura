@@ -279,7 +279,7 @@ TestCase subclass: SignalTest
     // Signal should be in delivered signals from replay
     delivered := ctx deliveredSignals
     self assert: delivered size equals: 1
-    self assert: ((delivered at: 1) at: #name) equals: "approve"
+    self assert: (delivered at: 1) name equals: "approve"
 
     // Now waitForSignal should find the replayed signal
     payload := ctx waitForSignal: "approve" timeout: 1000

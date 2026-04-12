@@ -156,7 +156,7 @@ typed Actor subclass: EventStore
   ///   store saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
   saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer -> Nil =>
     path := self snapshotFilePath: workflowId
-    data := #{#state => state, #eventId => eventId}
+    data := StoredSnapshot new: #{#state => state, #eventId => eventId}
     binary := Binary serialize: data
     result := File writeBinary: path contents: binary
     result isError
@@ -167,16 +167,15 @@ typed Actor subclass: EventStore
 
   /// Load the latest snapshot for a workflow and return events after it.
   ///
-  /// Returns a Dictionary with #snapshot (the saved state Dictionary and
-  /// #eventId) and #events (events with eventId > snapshot eventId).
+  /// Returns a SnapshotResult with the StoredSnapshot and events after it.
   /// If no snapshot exists, returns nil.
   ///
   ///   result := store readEventsFromSnapshot: "wf-1"
   ///   result isNil ifFalse: [
-  ///     snap := result at: #snapshot
-  ///     events := result at: #events
+  ///     result snapshot state   // => ReplaySnapshot
+  ///     result events           // => List of ExduraEvent
   ///   ]
-  readEventsFromSnapshot: workflowId :: String -> Dictionary | Nil =>
+  readEventsFromSnapshot: workflowId :: String -> SnapshotResult | Nil =>
     path := self snapshotFilePath: workflowId
     readResult := File readBinary: path
     readResult isError ifTrue: [^nil]
@@ -184,21 +183,12 @@ typed Actor subclass: EventStore
     contentSize := content byteSize
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := Binary deserialize: content
-    // Dictionary access: per-key types not tracked by checker
-    @expect type
-    snapEventId := snapshot at: #eventId
-    // Dictionary access: per-key types not tracked by checker
-    @expect type
-    snapState := snapshot at: #state
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
     // Block params: beamtalk blocks don't support typed parameters
     @expect type
-    laterEvents := allEvents select: [:evt | evt eventId > snapEventId]
-    #{
-      #snapshot => #{#state => snapState, #eventId => snapEventId},
-      #events => laterEvents
-    }
+    laterEvents := allEvents select: [:evt | evt eventId > snapshot eventId]
+    SnapshotResult new: #{#snapshot => snapshot, #events => laterEvents}
 
   /// Check whether a snapshot file exists for a workflow.
   ///

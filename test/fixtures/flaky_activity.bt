@@ -13,7 +13,7 @@ Activity subclass: FlakyActivity
   /// Uses ETS to track how many times each key has been attempted.
   ///
   ///   FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
-  class doWork: args :: List -> Dictionary =>
+  class doWork: args :: List -> Dictionary(Symbol, Object) =>
     dict := args at: 1
     key := dict at: #key
     failCount := dict at: #failCount

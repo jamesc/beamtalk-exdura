@@ -138,8 +138,6 @@ typed Actor subclass: ExduraClient
     poolResult := Result tryDo: [self.engine activityPool]
     poolResult isOk
       ifTrue: [
-        // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
-        @expect type
         p := poolResult unwrap
         Result tryDo: [p destroy]
       ]

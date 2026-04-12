@@ -12,7 +12,7 @@ Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
   class execute: activityClass selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy =>
-    config := #{
+    config := ActivityRetryConfig new: #{
       #activity => activityClass,
       #selector => selector,
       #args => args,
@@ -31,14 +31,9 @@ Object subclass: ActivityRetryExecutor
   /// On success, records ActivityCompleted and returns the result.
   /// On non-retryable error or exhausted retries, records ActivityFailed
   /// and raises. Otherwise, sleeps with backoff and recurses.
-  class tryAttempt: attempt config: config :: Dictionary =>
-    activityClass := config at: #activity
-    selector := config at: #selector
-    args := config at: #args
-    eventStore := config at: #eventStore
-    workflowId := config at: #workflowId
+  class tryAttempt: attempt config: config :: ActivityRetryConfig =>
     outcome := Result tryDo: [
-      activityClass perform: selector withArguments: #(args)
+      config activity perform: config selector withArguments: #(config args)
     ]
     // Success — record ActivityCompleted and return
     outcome ok
@@ -50,7 +45,7 @@ Object subclass: ActivityRetryExecutor
             #timestamp => completedNow,
             #payload => #{#result => outcome value}
           }
-        eventStore appendEvents: workflowId events: #(completedEvent)
+        config eventStore appendEvents: config workflowId events: #(completedEvent)
         ^outcome value
       ]
     // Failure — extract error details
@@ -58,12 +53,11 @@ Object subclass: ActivityRetryExecutor
     errMsg := err message
     errClass := err class name asString
     // Check non-retryable errors
-    nonRetryableErrors := config at: #nonRetryableErrors
-    (nonRetryableErrors anySatisfy: [:nr | nr == errClass])
+    (config nonRetryableErrors anySatisfy: [:nr | nr == errClass])
       ifTrue: [
         ^ActivityRetryHelper
-          recordFailedAndRaise: eventStore
-          workflowId: workflowId
+          recordFailedAndRaise: config eventStore
+          workflowId: config workflowId
           payload: #{
             #error => errMsg,
             #errorClass => errClass,
@@ -72,13 +66,13 @@ Object subclass: ActivityRetryExecutor
           }
       ]
     // Check retry exhaustion (0 or nil means unlimited per SPEC §4.1.4)
-    maxAttempts := config at: #maxAttempts
+    maxAttempts := config maxAttempts
     hasLimit := maxAttempts notNil and: [maxAttempts > 0]
     (hasLimit and: [attempt >= maxAttempts])
       ifTrue: [
         ^ActivityRetryHelper
-          recordFailedAndRaise: eventStore
-          workflowId: workflowId
+          recordFailedAndRaise: config eventStore
+          workflowId: config workflowId
           payload: #{
             #error => errMsg,
             #errorClass => errClass,
@@ -87,13 +81,10 @@ Object subclass: ActivityRetryExecutor
           }
       ]
     // Backoff and recurse
-    initialInterval := config at: #initialInterval
-    backoffCoefficient := config at: #backoffCoefficient
-    maximumInterval := config at: #maximumInterval
-    rawDelay := initialInterval * (backoffCoefficient raisedTo: attempt - 1)
+    rawDelay := config initialInterval * (config backoffCoefficient raisedTo: attempt - 1)
     delay := rawDelay ceiling
-    cappedDelay := maximumInterval notNil ifTrue: [
-      delay min: maximumInterval
+    cappedDelay := config maximumInterval notNil ifTrue: [
+      delay min: config maximumInterval
     ] ifFalse: [delay]
     Timer sleep: cappedDelay
     self tryAttempt: attempt + 1 config: config

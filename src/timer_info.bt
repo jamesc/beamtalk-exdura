@@ -1,0 +1,10 @@
+/// Pending timer metadata extracted from event history.
+///
+/// Created by TimerManager findPendingTimers: when a TimerStarted
+/// event has no corresponding TimerFired. Used to reconstruct
+/// timers during replay.
+///
+///   TimerInfo new: #{#duration => 5000, #fireAt => 1710005000}
+typed Value subclass: TimerInfo
+  field: duration :: Integer = 0
+  field: fireAt :: Integer = 0

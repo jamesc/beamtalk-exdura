@@ -153,7 +153,7 @@ typed Actor subclass: WorkflowEngine
             #workflowId => workflowId,
             #input => input,
             #history => history,
-            #snapshot => ((snapResult at: #snapshot) at: #state),
+            #snapshot => snapResult snapshot state,
             #snapshotInterval => interval
           }
       ]
@@ -225,20 +225,18 @@ typed Actor subclass: WorkflowEngine
           selector: selector
           args: args
           timeout: timeout
-        // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-        @expect type
-        outcome match: [
-          #{#status => #completed, #result => result} -> self recordActivityCompleted: result workflowId: workflowId;
-          #{#status => #timedOut} -> [
-            self recordActivityTimedOut: workflowId
-            self error: "Activity timed out"
-          ] value;
-          #{#status => #failed, #error => reason} -> [
-            self recordActivityFailed: reason workflowId: workflowId
-            self error: "Activity failed: {reason}"
-          ] value;
-          _ -> self error: "Activity failed: unknown error"
+        outcome isCompleted ifTrue: [
+          ^self recordActivityCompleted: outcome result workflowId: workflowId
         ]
+        outcome isTimedOut ifTrue: [
+          self recordActivityTimedOut: workflowId
+          self error: "Activity timed out"
+        ]
+        outcome isFailed ifTrue: [
+          self recordActivityFailed: outcome error workflowId: workflowId
+          self error: "Activity failed: {outcome error}"
+        ]
+        self error: "Activity failed: unknown error"
       ]
 
   /// Record an ActivityCompleted event.
@@ -352,17 +350,17 @@ typed Actor subclass: WorkflowEngine
 
     // Append to per-workflow signal buffer
     existing := self.signalBuffers at: workflowId ifAbsent: [#()]
-    signal := #{#name => signalName, #payload => data}
+    signal := Signal new: #{#name => signalName, #payload => data}
     self.signalBuffers := self.signalBuffers at: workflowId put: (existing ++ #(signal))
     nil
 
   /// Drain and return all buffered signals for a workflow.
   ///
-  /// Returns the list of buffered signals (in arrival order) and clears
-  /// the buffer. Each signal is a Dictionary with #name and #payload keys.
+  /// Returns the list of buffered Signal objects (in arrival order) and
+  /// clears the buffer.
   ///
   ///   signals := engine drainSignals: "wf-1"
-  ///   // => #(#{#name => "approve", #payload => #{#user => "alice"}})
+  ///   // => #(Signal(name: "approve", payload: #{#user => "alice"}))
   drainSignals: workflowId :: String -> List =>
     signals := self.signalBuffers at: workflowId ifAbsent: [#()]
     self.signalBuffers := self.signalBuffers at: workflowId put: #()

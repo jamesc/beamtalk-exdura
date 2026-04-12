@@ -136,15 +136,13 @@ TestCase subclass: SnapshotTest
     // Read from snapshot — should get only events 4 and 5
     result := self.store readEventsFromSnapshot: "wf-snap-2"
     self assert: result notNil
-    laterEvents := result at: #events
+    laterEvents := result events
     self assert: laterEvents size equals: 2
     self assert: (laterEvents at: 1) eventId equals: 4
     self assert: (laterEvents at: 2) eventId equals: 5
     // Check snapshot state
-    snapshot := result at: #snapshot
-    snapState := snapshot at: #state
-    self assert: (snapState at: #replayCursor) equals: 3
-    self assert: (snapshot at: #eventId) equals: 3
+    self assert: (result snapshot state at: #replayCursor) equals: 3
+    self assert: result snapshot eventId equals: 3
 
   // ── Integration tests: snapshot during workflow execution ──
 
@@ -365,7 +363,7 @@ TestCase subclass: SnapshotTest
     // Read it back and verify
     result := self.store readEventsFromSnapshot: "wf-types"
     self assert: result notNil
-    snapState := (result at: #snapshot) at: #state
+    snapState := result snapshot state
     self assert: (snapState at: #anInteger) equals: 42
     self assert: (snapState at: #aString) equals: "hello"
     self assert: (snapState at: #aSymbol) equals: #test

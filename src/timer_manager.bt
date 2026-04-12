@@ -59,13 +59,9 @@ typed Actor subclass: TimerManager
         // Block params: beamtalk blocks don't support typed parameters
         @expect type
         p := e payload
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
         dur := p at: #duration ifAbsent: [0]
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
         fireAt := p at: #fireAt ifAbsent: [e timestamp + dur]
-        #{#duration => dur, #fireAt => fireAt}
+        TimerInfo new: #{#duration => dur, #fireAt => fireAt}
       ]
 
   /// Return the current status of the timer manager.
@@ -107,18 +103,12 @@ typed Actor subclass: TimerManager
         pending := TimerManager findPendingTimers: (self.eventStore readEvents: wfId fromSeq: 1)
         pending
           do: [:timerInfo |
-            // Dictionary access: per-key types not tracked by checker
-            @expect type
-            dur := timerInfo at: #duration
-            // Dictionary access: per-key types not tracked by checker
-            @expect type
-            fireAt := timerInfo at: #fireAt
             remaining := self.engine
-              reconstructTimer: dur
-              fireAt: fireAt
+              reconstructTimer: timerInfo duration
+              fireAt: timerInfo fireAt
               workflowId: wfId
             remaining > 0 ifTrue: [Timer sleep: remaining]
-            self.engine recordTimerFired: dur workflowId: wfId
+            self.engine recordTimerFired: timerInfo duration workflowId: wfId
           ]
         acc + pending size
       ]

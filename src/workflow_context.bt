@@ -69,7 +69,7 @@ typed Actor subclass: WorkflowContext
       ifTrue: [
         sigPayload := event payload
         acc
-          ++ #(#{
+          ++ #(Signal new: #{
             #name => (sigPayload at: #signalName),
             #payload => (sigPayload at: #payload)
           })
@@ -111,26 +111,26 @@ typed Actor subclass: WorkflowContext
       ]
       ifFalse: [count]
 
-  /// Find a signal by name in a list. Returns #{#found => true/false, ...}.
+  /// Find a signal by name in a list. Returns a SignalSearchResult.
   ///
   ///   WorkflowContext findSignal: "approve" in: signals
-  class findSignal: name :: String in: signals :: List -> Dictionary =>
+  class findSignal: name :: String in: signals :: List -> SignalSearchResult =>
     self
       findSignal: name
       in: signals
       idx: 1
 
   /// Recursive helper to find a signal by name.
-  class findSignal: name :: String in: signals :: List idx: idx :: Integer -> Dictionary =>
-    idx > signals size ifTrue: [^#{#found => false}]
+  class findSignal: name :: String in: signals :: List idx: idx :: Integer -> SignalSearchResult =>
+    idx > signals size ifTrue: [^SignalSearchResult new: #{#found => false}]
     sig := signals at: idx
-    (sig at: #name) =:= name
+    sig name =:= name
       ifTrue: [
         before := idx > 1 ifTrue: [signals from: 1 to: idx - 1] ifFalse: [#()]
         after := idx < signals size ifTrue: [
           signals from: idx + 1 to: signals size
         ] ifFalse: [#()]
-        ^#{#found => true, #signal => sig, #remaining => before ++ after}
+        ^SignalSearchResult new: #{#found => true, #signal => sig, #remaining => before ++ after}
       ]
     self
       findSignal: name
@@ -243,7 +243,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt:
   ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List options: options :: Dictionary -> Object =>
+  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Dictionary(Symbol, Object) =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -494,20 +494,14 @@ typed Actor subclass: WorkflowContext
   /// Block until a signal with the given name arrives or timeout expires.
   ///
   ///   payload := ctx waitForSignal: "approve" timeout: 60000
-  waitForSignal: name :: String timeout: ms :: Integer -> Object =>
+  waitForSignal: name :: String timeout: ms :: Integer -> Object | Nil =>
     deadline := (Time nowMs) + ms
     found := WorkflowContext findSignal: name in: self.deliveredSignals
-    (found at: #found)
+    found found
       ifTrue: [
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
-        self.deliveredSignals := found at: #remaining
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
-        self.receivedSignals := self.receivedSignals ++ #(found at: #signal)
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
-        ^(found at: #signal) at: #payload
+        self.deliveredSignals := found remaining
+        self.receivedSignals := self.receivedSignals ++ #(found signal)
+        ^found signal payload
       ]
     [true]
       whileTrue: [
@@ -527,26 +521,18 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: (sig at: #name) ifAbsent: [nil]) isNil
+            (self.signalHandlers at: sig name ifAbsent: [nil]) isNil
               ifTrue: [vars]
               ifFalse: [
-                (self.signalHandlers at: (sig at: #name)) value: (sig at: #payload) value: vars
+                (self.signalHandlers at: sig name) value: sig payload value: vars
               ]
           ]
-        // Dictionary access: per-key types not tracked by checker
-        @expect type
         found2 := WorkflowContext findSignal: name in: self.deliveredSignals
-        (found2 at: #found)
+        found2 found
           ifTrue: [
-            // Dictionary access: per-key types not tracked by checker
-            @expect type
-            self.deliveredSignals := found2 at: #remaining
-            // Dictionary access: per-key types not tracked by checker
-            @expect type
-            self.receivedSignals := self.receivedSignals ++ #(found2 at: #signal)
-            // Dictionary access: per-key types not tracked by checker
-            @expect type
-            ^(found2 at: #signal) at: #payload
+            self.deliveredSignals := found2 remaining
+            self.receivedSignals := self.receivedSignals ++ #(found2 signal)
+            ^found2 signal payload
           ]
         (self.engine isCancelled: self.workflowId) ifTrue: [
           CancellationError signal: "Workflow cancelled"
@@ -579,10 +565,10 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: (sig at: #name) ifAbsent: [nil]) isNil
+            (self.signalHandlers at: sig name ifAbsent: [nil]) isNil
               ifTrue: [vars]
               ifFalse: [
-                (self.signalHandlers at: (sig at: #name)) value: (sig at: #payload) value: vars
+                (self.signalHandlers at: sig name) value: sig payload value: vars
               ]
           ]
         self.receivedSignals := self.receivedSignals ++ self.deliveredSignals
