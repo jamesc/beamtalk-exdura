@@ -13,7 +13,7 @@
 ///   q dequeue     // => #{#taskId => "t-1", #type => "activity"}
 ///   q depth       // => 0
 typed Actor subclass: TaskQueue
-  state: table :: Ets | Nil = nil
+  state: table :: Ets
   state: nextSeq :: Integer = 1
 
   /// Initialize the ETS ordered_set table for FIFO ordering.
@@ -71,7 +71,4 @@ typed Actor subclass: TaskQueue
 
   /// Delete the ETS table and clean up resources.
   destroy -> Nil =>
-    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
-    @expect type
-    self.table ifNotNil: [[self.table delete] on: Error do: [:e | nil]]
-    self.table := nil
+    [self.table delete] on: Error do: [:e | nil]

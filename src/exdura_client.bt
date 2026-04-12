@@ -15,8 +15,8 @@
 ///   // List running workflows
 ///   running := client list: #{#status => #running}
 typed Actor subclass: ExduraClient
-  state: engine :: WorkflowEngine | Nil = nil
-  state: eventStore :: EventStore | Nil = nil
+  state: engine :: WorkflowEngine
+  state: eventStore :: EventStore
   state: supervisor :: Supervisor | Nil = nil
 
   /// Create a client connected to an in-process workflow engine.
@@ -135,20 +135,14 @@ typed Actor subclass: ExduraClient
         ^nil
       ]
     // Non-supervised: clean up components individually
-    self.engine isNil
-      ifFalse: [
-        poolResult := Result tryDo: [self.engine activityPool]
-        poolResult isOk
-          ifTrue: [
-            // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
-            @expect type
-            p := poolResult unwrap
-            Result tryDo: [p destroy]
-          ]
-        [self.engine stop] on: Error do: [:e | nil]
+    poolResult := Result tryDo: [self.engine activityPool]
+    poolResult isOk
+      ifTrue: [
+        // Ambiguous branches: ifTrue:/ifFalse: arms have different inferred types
+        @expect type
+        p := poolResult unwrap
+        Result tryDo: [p destroy]
       ]
-    self.eventStore isNil
-      ifFalse: [
-        [self.eventStore destroyWithFiles] on: Error do: [:e | nil]
-        [self.eventStore stop] on: Error do: [:e | nil]
-      ]
+    [self.engine stop] on: Error do: [:e | nil]
+    [self.eventStore destroyWithFiles] on: Error do: [:e | nil]
+    [self.eventStore stop] on: Error do: [:e | nil]

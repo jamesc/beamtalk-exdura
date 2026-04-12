@@ -46,8 +46,7 @@ typed Value subclass: ChildWorkflowHandle
   ///   result := handle result
   result -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
-    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-    @expect type
+
     [true]
       whileTrue: [
         exec := self eventStore getExecution: self childWorkflowId
@@ -69,8 +68,7 @@ typed Value subclass: ChildWorkflowHandle
   result: timeout :: Integer -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
     deadline := (Time nowMs) + timeout
-    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-    @expect type
+
     [true]
       whileTrue: [
         exec := self eventStore getExecution: self childWorkflowId

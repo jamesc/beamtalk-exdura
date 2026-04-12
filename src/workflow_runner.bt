@@ -14,8 +14,8 @@
 ///   }
 ///   runner go!
 typed Actor subclass: WorkflowRunner
-  state: workflow :: Class | Nil = nil
-  state: engine :: WorkflowEngine | Nil = nil
+  state: workflow :: Class
+  state: engine :: WorkflowEngine
   state: workflowId :: String = ""
   state: input :: Object | Nil = nil
   state: history :: List = #()
@@ -83,7 +83,7 @@ typed Actor subclass: WorkflowRunner
           history: self.history
       ]
     // Let the workflow register query handlers via the context
-    // Nil-safe: set via spawnWith: before go is called
+    // Dynamic dispatch: concrete workflow class known only at runtime
     @expect type
     self.workflow registerQueries: ctx
     // Register query handlers with the engine for query evaluation
@@ -96,8 +96,6 @@ typed Actor subclass: WorkflowRunner
     // Run the workflow in the runner's process (not the class object's).
     // CancellationError exits early via ^nil.
     // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
-    // Nil-safe: set via spawnWith: before go is called
-    @expect type
     result := [
       self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)
     ]

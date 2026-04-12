@@ -21,8 +21,8 @@
 ///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
 ///   store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
 typed Actor subclass: EventStore
-  state: executions :: Ets | Nil = nil
-  state: events :: Ets | Nil = nil
+  state: executions :: Ets
+  state: events :: Ets
   state: dataDir :: String = "data"
 
   /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
@@ -92,8 +92,6 @@ typed Actor subclass: EventStore
     allExecs := allKeys collect: [:k | self.executions at: k]
     filterStatus := filter at: #status ifAbsent: [nil]
     filterType := filter at: #workflowType ifAbsent: [nil]
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     allExecs
       select: [:e |
         statusOk := filterStatus isNil or: [e status =:= filterStatus]
@@ -212,14 +210,8 @@ typed Actor subclass: EventStore
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).
   destroy -> Nil =>
-    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
-    @expect type
-    self.executions ifNotNil: [
-      [self.executions delete] on: Error do: [:e | nil]
-    ]
-    // Ambiguous branches: ifNotNil: arm has different inferred type than nil path
-    @expect type
-    self.events ifNotNil: [[self.events delete] on: Error do: [:e | nil]]
+    [self.executions delete] on: Error do: [:e | nil]
+    [self.events delete] on: Error do: [:e | nil]
     nil
 
   /// Delete ETS tables and on-disk data directory.

@@ -15,7 +15,7 @@
 ///   ctx initWith: engine workflowId: "wf-1" history: events
 ///   result := ctx runActivity: MyActivities method: #doWork: with: #(args)
 typed Actor subclass: WorkflowContext
-  state: engine :: WorkflowEngine | Nil = nil
+  state: engine :: WorkflowEngine
   state: workflowId :: String = ""
   state: replayCursor :: Integer = 0
   state: eventHistory :: List = #()

@@ -11,8 +11,8 @@
 ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
 ///   result := worker execute   // => 10
 typed Actor subclass: ActivityWorker
-  state: activityClass :: Class | Nil = nil
-  state: selector :: Symbol | Nil = nil
+  state: activityClass :: Class
+  state: selector :: Symbol
   state: args :: List = #()
 
   /// Initialize the worker with activity details.
@@ -31,6 +31,4 @@ typed Actor subclass: ActivityWorker
   ///
   ///   worker execute   // => 10
   execute -> Object =>
-    // Ambiguous branches: perform:withArguments: returns Dynamic (reflective dispatch)
-    @expect type
     self.activityClass perform: self.selector withArguments: #(self.args)

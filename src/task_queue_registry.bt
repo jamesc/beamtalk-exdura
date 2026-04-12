@@ -8,7 +8,7 @@
 ///   q enqueue: #{#taskId => "t-1"}
 ///   registry queueNamed: "orders"   // => same TaskQueue actor
 typed Actor subclass: TaskQueueRegistry
-  state: queues :: Dictionary(String, TaskQueue) | Nil = nil
+  state: queues :: Dictionary(String, TaskQueue)
 
   /// Initialize the internal name-to-queue mapping.
   initialize -> Nil =>
@@ -41,8 +41,6 @@ typed Actor subclass: TaskQueueRegistry
 
   /// Destroy all managed queues and clean up.
   destroy -> Nil =>
-    // Block params: beamtalk blocks don't support typed parameters
-    @expect type
     self.queues keys
       do: [:name |
         q := self.queues at: name

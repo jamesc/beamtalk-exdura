@@ -8,8 +8,8 @@
 ///   manager initWith: engine eventStore: store
 ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
 typed Actor subclass: TimerManager
-  state: engine :: WorkflowEngine | Nil = nil
-  state: eventStore :: EventStore | Nil = nil
+  state: engine :: WorkflowEngine
+  state: eventStore :: EventStore
   state: status :: Symbol = #ready
   state: pendingCount :: Integer = 0
 
@@ -42,11 +42,7 @@ typed Actor subclass: TimerManager
           _ -> acc
         ]
       ]
-    // Dictionary access: per-key types not tracked by checker
-    @expect type
     startedCount := counts at: #started
-    // Dictionary access: per-key types not tracked by checker
-    @expect type
     firedCount := counts at: #fired
     pendingCount := startedCount - firedCount
     pendingCount <= 0 ifTrue: [^#()]
@@ -117,8 +113,6 @@ typed Actor subclass: TimerManager
             // Dictionary access: per-key types not tracked by checker
             @expect type
             fireAt := timerInfo at: #fireAt
-            // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
-            @expect type
             remaining := self.engine
               reconstructTimer: dur
               fireAt: fireAt

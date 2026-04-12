@@ -14,7 +14,7 @@
 ///   engine := WorkflowEngine withStore: store pool: pool
 ///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
 typed Actor subclass: WorkflowEngine
-  state: eventStore :: EventStore | Nil = nil
+  state: eventStore :: EventStore
   state: activityPool :: ActivityWorkerPool | Nil = nil
   state: signalBuffers :: Dictionary(String, List) = #{}
   state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
@@ -209,8 +209,6 @@ typed Actor subclass: WorkflowEngine
     self.activityPool isNil
       ifTrue: [
         // No pool — use retry executor with direct execution
-        // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
-        @expect type
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
@@ -222,8 +220,6 @@ typed Actor subclass: WorkflowEngine
       ifFalse: [
         // Pool available — supervised worker execution with timeout
         timeout := options at: #startToCloseTimeout ifAbsent: [nil]
-        // Nil-safe: initialized by ExduraSupervisor initialize: before any messages
-        @expect type
         outcome := self.activityPool
           executeActivity: activityClass
           selector: selector

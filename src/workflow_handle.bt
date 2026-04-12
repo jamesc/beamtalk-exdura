@@ -10,7 +10,7 @@
 ///   result := handle result: 5000    // blocks with 5s timeout
 typed Value subclass: WorkflowHandle
   field: workflowId :: String = ""
-  field: client :: ExduraClient | Nil = nil
+  field: client :: ExduraClient
 
   /// Create a new WorkflowHandle for the given workflow and client.
   ///
@@ -25,8 +25,6 @@ typed Value subclass: WorkflowHandle
   ///
   ///   result := handle result   // blocks until done
   result -> Object =>
-    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-    @expect type
     [true]
       whileTrue: [
         exec := self client getExecution: self workflowId
@@ -48,8 +46,6 @@ typed Value subclass: WorkflowHandle
   ///   result := handle result: 5000   // 5 second timeout
   result: timeout :: Integer -> Object =>
     deadline := (Time nowMs) + timeout
-    // Match ambiguity: error: arms diverge but checker infers Dynamic (needs Never type, BT-1945)
-    @expect type
     [true]
       whileTrue: [
         exec := self client getExecution: self workflowId

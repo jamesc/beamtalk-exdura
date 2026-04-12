@@ -17,7 +17,7 @@
 typed Actor subclass: ActivityWorkerPool
   state: maxConcurrent :: Integer = 10
   state: activeCount :: Integer = 0
-  state: supervisor :: ActivityWorkerSupervisor | Nil = nil
+  state: supervisor :: ActivityWorkerSupervisor
 
   /// Initialize the pool by starting the underlying DynamicSupervisor.
   initialize -> Nil =>
@@ -104,4 +104,4 @@ typed Actor subclass: ActivityWorkerPool
   /// singleton since other pools may still reference it.
   ///
   ///   pool destroy
-  destroy -> Nil => self.supervisor := nil
+  destroy -> Nil => nil
