@@ -330,7 +330,7 @@ TestCase subclass: WorkflowOptionsTest
       }
     }
 
-    result := ctx
+    result :: Dictionary := ctx
       runActivity: FlakyActivity
       method: #doWork:
       with: #(#{#key => "ctx-opts", #failCount => 2})

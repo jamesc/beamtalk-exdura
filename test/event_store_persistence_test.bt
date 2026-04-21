@@ -91,7 +91,8 @@ TestCase subclass: EventStorePersistenceTest
     self.store appendEvents: "wf-etf-valid" events: #(evt)
     // Read the file back and verify contents
     content := (File readBinary: (self.testDir ++ "/events/wf-etf-valid.etf")) unwrap
-    dict := Binary deserialize: content
+    @expect type
+    dict :: Dictionary := Binary deserialize: content
 
     self assert: (dict at: #eventId) equals: 1
 

@@ -66,12 +66,11 @@ typed Actor subclass: ActivityWorkerPool
       initWith: activityClass
       selector: selector
       args: args
-    // Set up timeout: kill worker process after timeout ms.
-    // Uses Pid kill to force immediate process termination,
-    // which causes the pending gen_server call to fail instantly.
-    timer := timeout isNil ifTrue: [
-      nil
-    ] ifFalse: [Timer after: timeout do: [worker kill]]
+    // Set up timeout: kill worker process after timeout ms. Uses Pid kill to
+    // force immediate process termination, which causes the pending
+    // gen_server call to fail instantly. When timeout is nil, a NullTimer
+    // stands in so downstream code can treat both cases uniformly.
+    timer := self killTimerFor: worker timeout: timeout
     // Execute the activity in the worker's process.
     // The exception handler returns early (^) from the method so that the
     // success path can unconditionally wrap the result. This avoids the
@@ -81,20 +80,25 @@ typed Actor subclass: ActivityWorkerPool
     outcome := [worker execute]
       on: Exception
       do: [:e |
-        timer ifNotNil: [timer cancel]
+        timer cancel
         self.activeCount := self.activeCount - 1
-        // Distinguish timeout from crash: if timer was set and has fired,
-        // the worker was killed by timeout
-        (timer notNil and: [
-          timer isActive not
-        ]) ifTrue: [
+        // Distinguish timeout from crash: an inactive timer has fired,
+        // meaning the worker was killed by timeout. NullTimer stays active.
+        timer isActive not ifTrue: [
           ^ActivityOutcome timedOut
         ] ifFalse: [^ActivityOutcome failed: e message]
       ]
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
-    timer ifNotNil: [timer cancel]
+    timer cancel
     ActivityOutcome completed: outcome
+
+  /// Build a TimeoutToken that kills `worker` after `ms` milliseconds.
+  /// Returns a NullTimer when `ms` is nil (no timeout configured).
+  killTimerFor: worker :: ActivityWorker timeout: ms :: Integer | Nil -> TimeoutToken =>
+    ms isNil ifTrue: [^NullTimer new]
+    @expect type  // isNil narrowing doesn't propagate into keyword-arg position
+    Timer after: ms do: [worker kill]
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
   /// singleton since other pools may still reference it.

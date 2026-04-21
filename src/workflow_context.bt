@@ -243,7 +243,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt:
   ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Dictionary(Symbol, Object) =>
+  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Object =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [

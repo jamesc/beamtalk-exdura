@@ -1,0 +1,13 @@
+/// Cancellable timeout token — a common shape for real Timers and NullTimer.
+///
+/// Lets call sites treat "no timeout configured" uniformly with a scheduled
+/// Timer, removing nil-guarded branches. Both Timer and NullTimer conform.
+///
+///   (Timer conformsTo: #TimeoutToken)      // => true
+///   (NullTimer conformsTo: #TimeoutToken)  // => true
+Protocol define: TimeoutToken
+  /// Cancel the pending action. Returns true if an active timer was cancelled.
+  cancel -> Boolean
+  /// True while the timeout is still pending (not fired, not cancelled).
+  /// For NullTimer this is always true — a null timeout never fires.
+  isActive -> Boolean

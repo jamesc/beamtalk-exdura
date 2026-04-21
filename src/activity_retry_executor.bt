@@ -11,7 +11,7 @@
 Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
-  class execute: activityClass selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy =>
+  class execute: activityClass :: Class selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy -> Object =>
     config := ActivityRetryConfig
       new: #{
         #activity => activityClass,
@@ -32,7 +32,7 @@ Object subclass: ActivityRetryExecutor
   /// On success, records ActivityCompleted and returns the result.
   /// On non-retryable error or exhausted retries, records ActivityFailed
   /// and raises. Otherwise, sleeps with backoff and recurses.
-  class tryAttempt: attempt config: config :: ActivityRetryConfig =>
+  class tryAttempt: attempt :: Integer config: config :: ActivityRetryConfig -> Object =>
     outcome := Result tryDo: [
       config activity perform: config selector withArguments: #(config args)
     ]
@@ -67,9 +67,7 @@ Object subclass: ActivityRetryExecutor
           }
       ]
     // Check retry exhaustion (0 or nil means unlimited per SPEC §4.1.4)
-    maxAttempts := config maxAttempts
-    hasLimit := maxAttempts notNil and: [maxAttempts > 0]
-    (hasLimit and: [attempt >= maxAttempts])
+    (self class retriesExhausted: attempt config: config)
       ifTrue: [
         ^ActivityRetryHelper
           recordFailedAndRaise: config eventStore
@@ -89,3 +87,11 @@ Object subclass: ActivityRetryExecutor
     ] ifFalse: [delay]
     Timer sleep: cappedDelay
     self tryAttempt: attempt + 1 config: config
+
+  /// True when `attempt` has reached the configured retry limit.
+  /// Returns false when maxAttempts is nil or 0 (unlimited per SPEC §4.1.4).
+  class retriesExhausted: attempt :: Integer config: config :: ActivityRetryConfig -> Boolean =>
+    maxAttempts := config maxAttempts
+    maxAttempts isNil ifTrue: [^false]
+    maxAttempts <= 0 ifTrue: [^false]
+    attempt >= maxAttempts
