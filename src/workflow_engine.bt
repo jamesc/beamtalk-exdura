@@ -228,14 +228,16 @@ typed Actor subclass: WorkflowEngine
         outcome isCompleted ifTrue: [
           ^self recordActivityCompleted: outcome result workflowId: workflowId
         ]
-        outcome isTimedOut ifTrue: [
-          self recordActivityTimedOut: workflowId
-          self error: "Activity timed out"
-        ]
-        outcome isFailed ifTrue: [
-          self recordActivityFailed: outcome error workflowId: workflowId
-          self error: "Activity failed: {outcome error}"
-        ]
+        outcome isTimedOut
+          ifTrue: [
+            self recordActivityTimedOut: workflowId
+            self error: "Activity timed out"
+          ]
+        outcome isFailed
+          ifTrue: [
+            self recordActivityFailed: outcome error workflowId: workflowId
+            self error: "Activity failed: {outcome error}"
+          ]
         self error: "Activity failed: unknown error"
       ]
 

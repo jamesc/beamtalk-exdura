@@ -12,18 +12,19 @@ Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
   class execute: activityClass selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy =>
-    config := ActivityRetryConfig new: #{
-      #activity => activityClass,
-      #selector => selector,
-      #args => args,
-      #eventStore => eventStore,
-      #workflowId => workflowId,
-      #maxAttempts => rp maximumAttempts,
-      #initialInterval => rp initialInterval,
-      #backoffCoefficient => rp backoffCoefficient,
-      #maximumInterval => rp maximumInterval,
-      #nonRetryableErrors => rp nonRetryableErrors
-    }
+    config := ActivityRetryConfig
+      new: #{
+        #activity => activityClass,
+        #selector => selector,
+        #args => args,
+        #eventStore => eventStore,
+        #workflowId => workflowId,
+        #maxAttempts => rp maximumAttempts,
+        #initialInterval => rp initialInterval,
+        #backoffCoefficient => rp backoffCoefficient,
+        #maximumInterval => rp maximumInterval,
+        #nonRetryableErrors => rp nonRetryableErrors
+      }
     self tryAttempt: 1 config: config
 
   /// Recursive retry: attempt one execution and handle result.

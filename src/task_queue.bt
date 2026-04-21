@@ -70,5 +70,4 @@ typed Actor subclass: TaskQueue
       ]
 
   /// Delete the ETS table and clean up resources.
-  destroy -> Nil =>
-    [self.table delete] on: Error do: [:e | nil]
+  destroy -> Nil => [self.table delete] on: Error do: [:e | nil]

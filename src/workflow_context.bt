@@ -126,7 +126,11 @@ typed Actor subclass: WorkflowContext
         after := idx < signals size ifTrue: [
           signals from: idx + 1 to: signals size
         ] ifFalse: [#()]
-        ^SignalSearchResult new: #{#found => true, #signal => sig, #remaining => before ++ after}
+        ^SignalSearchResult new: #{
+          #found => true,
+          #signal => sig,
+          #remaining => before ++ after
+        }
       ]
     self
       findSignal: name
@@ -491,11 +495,13 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: sig name ifAbsent: [nil]) isNil
-              ifTrue: [vars]
-              ifFalse: [
-                (self.signalHandlers at: sig name) value: sig payload value: vars
-              ]
+            (self.signalHandlers at: sig name ifAbsent: [
+              nil
+            ]) isNil ifTrue: [
+              vars
+            ] ifFalse: [
+              (self.signalHandlers at: sig name) value: sig payload value: vars
+            ]
           ]
         found2 := WorkflowContext findSignal: name in: self.deliveredSignals
         found2 found
@@ -533,11 +539,13 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: sig name ifAbsent: [nil]) isNil
-              ifTrue: [vars]
-              ifFalse: [
-                (self.signalHandlers at: sig name) value: sig payload value: vars
-              ]
+            (self.signalHandlers at: sig name ifAbsent: [
+              nil
+            ]) isNil ifTrue: [
+              vars
+            ] ifFalse: [
+              (self.signalHandlers at: sig name) value: sig payload value: vars
+            ]
           ]
         self.receivedSignals := self.receivedSignals ++ self.deliveredSignals
         self.deliveredSignals := #()

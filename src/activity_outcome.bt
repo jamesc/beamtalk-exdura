@@ -27,14 +27,12 @@ typed Value subclass: ActivityOutcome
   /// Create a timed-out outcome.
   ///
   ///   ActivityOutcome timedOut
-  class timedOut -> ActivityOutcome =>
-    self new: #{#status => #timedOut}
+  class timedOut -> ActivityOutcome => self new: #{#status => #timedOut}
 
   /// Create a rejected outcome (pool at capacity).
   ///
   ///   ActivityOutcome rejected
-  class rejected -> ActivityOutcome =>
-    self new: #{#status => #rejected}
+  class rejected -> ActivityOutcome => self new: #{#status => #rejected}
 
   /// True if the activity completed successfully.
   ///
