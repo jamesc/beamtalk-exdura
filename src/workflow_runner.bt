@@ -14,7 +14,7 @@
 ///   }
 ///   runner go!
 Actor subclass: WorkflowRunner
-  state: workflow :: Class
+  state: workflow :: Workflow class
   state: engine :: WorkflowEngine
   state: workflowId :: String = ""
   state: input :: Object | Nil = nil
@@ -83,7 +83,6 @@ Actor subclass: WorkflowRunner
           history: self.history
       ]
     // Let the workflow register query handlers via the context
-    @expect type  // subclass of Workflow
     self.workflow registerQueries: ctx
     // Register query handlers with the engine for query evaluation
     handlers := ctx queryHandlers

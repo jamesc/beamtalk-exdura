@@ -13,16 +13,20 @@ typed Object subclass: ExduraWorker
   ///
   ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
   class start: config :: Dictionary -> ExduraClient =>
-    sup := ExduraSupervisor supervise
-      valueOrDo: [:e | self error: "Failed to start ExduraSupervisor: {e}"]
+    sup := ExduraSupervisor supervise valueOrDo: [:e |
+      self error: "Failed to start ExduraSupervisor: {e}"
+    ]
 
     // Sibling wiring is handled by ExduraSupervisor class initialize:
-    engine := (sup which: WorkflowEngine)
-      valueOrDo: [:e | self error: "WorkflowEngine not found under ExduraSupervisor: {e}"]
-    store := (sup which: EventStore)
-      valueOrDo: [:e | self error: "EventStore not found under ExduraSupervisor: {e}"]
-    pool := (sup which: ActivityWorkerPool)
-      valueOrDo: [:e | self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"]
+    engine := (sup which: WorkflowEngine) valueOrDo: [:e |
+      self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
+    ]
+    store := (sup which: EventStore) valueOrDo: [:e |
+      self error: "EventStore not found under ExduraSupervisor: {e}"
+    ]
+    pool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
+      self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
+    ]
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]

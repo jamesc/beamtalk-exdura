@@ -273,7 +273,6 @@ typed Actor subclass: EventStore
                   offset: 0
                   size: contentSize
                   acc: #()
-                @expect type  // `:wfId` block param can't be annotated
                 events isEmpty ifFalse: [eventsTable at: wfId put: events]
               ]
           ]

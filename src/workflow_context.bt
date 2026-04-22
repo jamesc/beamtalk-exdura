@@ -232,7 +232,7 @@ typed Actor subclass: WorkflowContext
   /// Execute an activity or return its cached result during replay.
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
-  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List -> Object =>
+  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List -> Object =>
     self
       runActivity: activityClass
       method: selector
@@ -243,7 +243,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt:
   ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  runActivity: activityClass :: Class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Object =>
+  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Object =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -324,10 +324,12 @@ typed Actor subclass: WorkflowContext
           ifTrue: [
             startedEvent := self.eventHistory at: firstIdx
             payload := startedEvent payload
-            fireAt := payload at: #fireAt ifAbsent: [
+            fireAt :: Integer := payload at: #fireAt ifAbsent: [
               startedEvent timestamp + duration
             ]
-            storedDuration := payload at: #duration ifAbsent: [duration]
+            storedDuration :: Integer := payload at: #duration ifAbsent: [
+              duration
+            ]
             self.isReplaying := false
             remaining := self.engine
               reconstructTimer: storedDuration
@@ -380,7 +382,7 @@ typed Actor subclass: WorkflowContext
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
-  startChildWorkflow: workflowClass :: Class method: selector :: Symbol with: args :: List -> ChildWorkflowHandle =>
+  startChildWorkflow: workflowClass :: Workflow class method: selector :: Symbol with: args :: List -> ChildWorkflowHandle =>
     self
       startChildWorkflow: workflowClass
       method: selector
@@ -391,7 +393,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
   ///     options: #{#parentClosePolicy => #abandon}
-  startChildWorkflow: workflowClass :: Class method: _selector :: Symbol with: args :: List options: options :: Dictionary -> ChildWorkflowHandle =>
+  startChildWorkflow: workflowClass :: Workflow class method: _selector :: Symbol with: args :: List options: options :: Dictionary -> ChildWorkflowHandle =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -408,7 +410,7 @@ typed Actor subclass: WorkflowContext
             self.replayCursor := secondIdx + skipCount
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
-            childId := startedEvent payload at: #childWorkflowId
+            childId :: String := startedEvent payload at: #childWorkflowId
             cachedResult := completedEvent payload at: #result
             ^ChildWorkflowHandle forReplay: childId result: cachedResult
           ]

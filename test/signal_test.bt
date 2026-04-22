@@ -116,6 +116,7 @@ TestCase subclass: SignalTest
 
     // waitForSignal should find it immediately
     payload := ctx waitForSignal: "approve" timeout: 5000
+    @expect type  // signal is buffered above, waitForSignal won't return nil here
     self assert: (payload at: #user) equals: "alice"
 
   // === waitForSignal:timeout: raises on timeout ===
@@ -283,6 +284,7 @@ TestCase subclass: SignalTest
 
     // Now waitForSignal should find the replayed signal
     payload := ctx waitForSignal: "approve" timeout: 1000
+    @expect type  // signal was replayed above, waitForSignal won't return nil here
     self assert: (payload at: #user) equals: "alice"
 
   // === ApprovalWorkflow pattern from SPEC §5.4 ===

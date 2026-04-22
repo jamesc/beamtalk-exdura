@@ -21,8 +21,9 @@ typed Actor subclass: ActivityWorkerPool
 
   /// Initialize the pool by starting the underlying DynamicSupervisor.
   initialize -> Nil =>
-    self.supervisor := ActivityWorkerSupervisor supervise
-      valueOrDo: [:e | self error: "Failed to start ActivityWorkerSupervisor: {e}"]
+    self.supervisor := ActivityWorkerSupervisor supervise valueOrDo: [:e |
+      self error: "Failed to start ActivityWorkerSupervisor: {e}"
+    ]
     nil
 
   /// Set the maximum number of concurrent activity workers.
@@ -57,7 +58,7 @@ typed Actor subclass: ActivityWorkerPool
   ///
   ///   pool executeActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) timeout: nil
-  executeActivity: activityClass :: Class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
+  executeActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^ActivityOutcome rejected]
     self.activeCount := self.activeCount + 1
@@ -66,10 +67,11 @@ typed Actor subclass: ActivityWorkerPool
     // surface the failure as a rejection. Mutating Actor state inside a
     // closure is disallowed, so check the Result out-of-line.
     startResult := self.supervisor startChild
-    startResult isError ifTrue: [
-      self.activeCount := self.activeCount - 1
-      ^ActivityOutcome rejected
-    ]
+    startResult isError
+      ifTrue: [
+        self.activeCount := self.activeCount - 1
+        ^ActivityOutcome rejected
+      ]
     worker := startResult unwrap
     worker
       initWith: activityClass
@@ -106,7 +108,6 @@ typed Actor subclass: ActivityWorkerPool
   /// Returns a NullTimer when `ms` is nil (no timeout configured).
   killTimerFor: worker :: ActivityWorker timeout: ms :: Integer | Nil -> TimeoutToken =>
     ms isNil ifTrue: [^NullTimer new]
-    @expect type  // isNil narrowing doesn't propagate into keyword-arg position
     Timer after: ms do: [worker kill]
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor

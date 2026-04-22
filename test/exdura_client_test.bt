@@ -24,7 +24,7 @@ TestCase subclass: ExduraClientTest
 
   /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
   /// Polls every 50ms up to the given timeout in milliseconds.
-  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+  awaitWorkflow: workflowId :: String timeout: timeoutMs :: Integer -> WorkflowExecution =>
     deadline := Time nowMs + timeoutMs
     [true]
       whileTrue: [
@@ -40,6 +40,7 @@ TestCase subclass: ExduraClientTest
         ]
         Timer sleep: 50
       ]
+    self error: "unreachable"
 
   // === ExduraClient connect: ===
   testConnectCreatesClient =>
