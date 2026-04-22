@@ -22,6 +22,7 @@ typed Actor subclass: ActivityWorkerPool
   /// Initialize the pool by starting the underlying DynamicSupervisor.
   initialize -> Nil =>
     self.supervisor := ActivityWorkerSupervisor supervise
+      valueOrDo: [:e | self error: "Failed to start ActivityWorkerSupervisor: {e}"]
     nil
 
   /// Set the maximum number of concurrent activity workers.
@@ -60,8 +61,16 @@ typed Actor subclass: ActivityWorkerPool
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^ActivityOutcome rejected]
     self.activeCount := self.activeCount + 1
-    // Spawn supervised worker and initialize it
-    worker := self.supervisor startChild
+    // Spawn supervised worker and initialize it. If the supervisor refuses
+    // (e.g. max_children reached), undo the active-count increment and
+    // surface the failure as a rejection. Mutating Actor state inside a
+    // closure is disallowed, so check the Result out-of-line.
+    startResult := self.supervisor startChild
+    startResult isError ifTrue: [
+      self.activeCount := self.activeCount - 1
+      ^ActivityOutcome rejected
+    ]
+    worker := startResult unwrap
     worker
       initWith: activityClass
       selector: selector

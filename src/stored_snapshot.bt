@@ -11,3 +11,11 @@
 typed Value subclass: StoredSnapshot
   field: state :: ReplaySnapshot
   field: eventId :: Integer = 0
+
+  /// Deserialize an ETF-encoded binary into a StoredSnapshot.
+  ///
+  /// Casts away the Dynamic return of `Binary deserialize:` at a single
+  /// well-named boundary so callers can work in typed code.
+  class fromBinary: content :: Binary -> StoredSnapshot =>
+    result :: StoredSnapshot := Binary deserialize: content
+    result

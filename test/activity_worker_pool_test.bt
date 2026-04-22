@@ -61,8 +61,8 @@ TestCase subclass: ActivityWorkerPoolTest
 
   // === ActivityWorker: basic execution ===
   testWorkerExecutesActivityAndReturnsResult =>
-    sup := ActivityWorkerSupervisor supervise
-    worker := sup startChild
+    sup := ActivityWorkerSupervisor supervise unwrap
+    worker := sup startChild unwrap
     worker
       initWith: PoolTestActivities
       selector: #doubleIt:
