@@ -67,7 +67,7 @@ Object subclass: ActivityRetryExecutor
           }
       ]
     // Check retry exhaustion (0 or nil means unlimited per SPEC §4.1.4)
-    (self class retriesExhausted: attempt config: config)
+    (self retriesExhausted: attempt config: config)
       ifTrue: [
         ^ActivityRetryHelper
           recordFailedAndRaise: config eventStore

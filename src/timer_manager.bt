@@ -8,8 +8,8 @@
 ///   manager initWith: engine eventStore: store
 ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
 typed Actor subclass: TimerManager
-  state: engine :: WorkflowEngine
-  state: eventStore :: EventStore
+  state: engine :: WorkflowEngine | Nil = nil
+  state: eventStore :: EventStore | Nil = nil
   state: status :: Symbol = #ready
   state: pendingCount :: Integer = 0
 

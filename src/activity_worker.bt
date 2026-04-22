@@ -11,8 +11,8 @@
 ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
 ///   result := worker execute   // => 10
 typed Actor subclass: ActivityWorker
-  state: activityClass :: Activity class
-  state: selector :: Symbol
+  state: activityClass :: Activity class | Nil = nil
+  state: selector :: Symbol | Nil = nil
   state: args :: List = #()
 
   /// Initialize the worker with activity details.

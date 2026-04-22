@@ -22,7 +22,7 @@ TestCase subclass: QueryTest
 
   // === onQuery:do: registers handler with block receiving snapshot argument ===
   testOnQueryDoRegistersHandler =>
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => self.client engine}
     ctx
       initWith: (self.client engine)
       workflowId: "wf-test"
@@ -34,7 +34,7 @@ TestCase subclass: QueryTest
 
   // === Multiple query handlers can be registered ===
   testMultipleQueryHandlers =>
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => self.client engine}
     ctx
       initWith: (self.client engine)
       workflowId: "wf-test"

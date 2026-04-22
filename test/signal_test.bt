@@ -36,7 +36,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-handler-1"
@@ -61,7 +61,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-handler-2"
@@ -102,7 +102,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-sig-1"
@@ -135,7 +135,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-sig-timeout"
@@ -163,7 +163,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-cond-1"
@@ -197,7 +197,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-cond-timeout"
@@ -262,7 +262,7 @@ TestCase subclass: SignalTest
     store appendEvents: "wf-replay-handler" events: events
 
     history := store readEvents: "wf-replay-handler" fromSeq: 1
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-replay-handler"

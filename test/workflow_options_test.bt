@@ -316,7 +316,7 @@ TestCase subclass: WorkflowOptionsTest
     self.store createExecution: exec
 
     // Create a context and call runActivity:method:with:options:
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => self.engine}
     ctx
       initWith: self.engine
       workflowId: "wf-ctx-opts-1"

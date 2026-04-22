@@ -14,7 +14,7 @@
 ///   engine := WorkflowEngine withStore: store pool: pool
 ///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
 typed Actor subclass: WorkflowEngine
-  state: eventStore :: EventStore
+  state: eventStore :: EventStore | Nil = nil
   state: activityPool :: ActivityWorkerPool | Nil = nil
   state: signalBuffers :: Dictionary(String, List) = #{}
   state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
@@ -27,17 +27,13 @@ typed Actor subclass: WorkflowEngine
   ///
   ///   engine := WorkflowEngine withStore: (EventStore spawn) pool: (ActivityWorkerPool spawn)
   class withStore: anEventStore :: EventStore pool: aPool :: ActivityWorkerPool -> WorkflowEngine =>
-    eng := self spawn
-    eng initWithStore: anEventStore pool: aPool
-    eng
+    self spawnWith: #{#eventStore => anEventStore, #activityPool => aPool}
 
   /// Create a new WorkflowEngine with an EventStore (no pool — legacy Phase 0).
   ///
   ///   engine := WorkflowEngine withStore: (EventStore spawn)
   class withStore: anEventStore :: EventStore -> WorkflowEngine =>
-    eng := self spawn
-    eng initWithStore: anEventStore pool: nil
-    eng
+    self spawnWith: #{#eventStore => anEventStore}
 
   /// Initialize engine with an EventStore and optional ActivityWorkerPool.
   /// Called by withStore: for standalone use, or by ExduraWorker after

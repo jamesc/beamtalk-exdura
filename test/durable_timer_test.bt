@@ -293,8 +293,10 @@ TestCase subclass: DurableTimerTest
     self.store appendEvents: wfId events: #(startEvent, timerEvent)
 
     // Create TimerManager and reconstruct
-    manager := TimerManager spawn
-    manager initWith: self.engine eventStore: self.store
+    manager := TimerManager spawnWith: #{
+      #engine => self.engine,
+      #eventStore => self.store
+    }
     count := manager reconstructPendingTimers: #(wfId)
 
     // Should have found and reconstructed 1 timer
