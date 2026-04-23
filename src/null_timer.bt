@@ -1,0 +1,15 @@
+/// A no-op TimeoutToken used when no timeout is configured.
+///
+/// Conforms to TimeoutToken so callers can drop nil-guards on `cancel` and
+/// treat "no timeout" uniformly with a real Timer. `isActive` answers true
+/// (the timeout is pending indefinitely), so `isActive not` — the "fired?"
+/// check — is always false for a null timer.
+///
+///   token := NullTimer new
+///   token cancel      // => false
+///   token isActive    // => true
+Value subclass: NullTimer
+
+  cancel -> Boolean => false
+
+  isActive -> Boolean => true

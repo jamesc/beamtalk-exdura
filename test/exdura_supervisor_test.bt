@@ -20,7 +20,7 @@ TestCase subclass: ExduraSupervisorTest
 
   /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
   /// Polls every 50ms up to the given timeout in milliseconds.
-  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+  awaitWorkflow: workflowId :: String timeout: timeoutMs :: Integer -> WorkflowExecution =>
     deadline := Time nowMs + timeoutMs
     [true]
       whileTrue: [
@@ -36,6 +36,7 @@ TestCase subclass: ExduraSupervisorTest
         ]
         Timer sleep: 50
       ]
+    self error: "unreachable"
 
   // === ExduraSupervisor class-side config ===
   testSupervisorStrategyIsRestForOne =>
@@ -53,10 +54,10 @@ TestCase subclass: ExduraSupervisorTest
     sup := self.client supervisor
     self assert: sup notNil
     self assert: sup count equals: 4
-    self assert: (sup which: EventStore) notNil
-    self assert: (sup which: ActivityWorkerPool) notNil
-    self assert: (sup which: WorkflowEngine) notNil
-    self assert: (sup which: TimerManager) notNil
+    self assert: (sup which: EventStore) isOk
+    self assert: (sup which: ActivityWorkerPool) isOk
+    self assert: (sup which: WorkflowEngine) isOk
+    self assert: (sup which: TimerManager) isOk
 
     // Verify config was applied to the pool
     pool := self.client engine activityPool

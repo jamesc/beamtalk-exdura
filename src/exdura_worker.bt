@@ -13,12 +13,22 @@ typed Object subclass: ExduraWorker
   ///
   ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
   class start: config :: Dictionary -> ExduraClient =>
-    sup := ExduraSupervisor supervise
+    sup := ExduraSupervisor supervise valueOrDo: [:e |
+      self error: "Failed to start ExduraSupervisor: {e}"
+    ]
 
-    // Sibling wiring is handled by ExduraSupervisor class initialize:
-    engine := sup which: WorkflowEngine
-    store := sup which: EventStore
-    pool := sup which: ActivityWorkerPool
+    // Sibling wiring is handled by ExduraSupervisor class initialize:.
+    // sup which: is typed -> Result(Object, Error); typing the local asserts
+    // the concrete class so downstream method sends type-check cleanly.
+    engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |
+      self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
+    ]
+    store :: EventStore := (sup which: EventStore) valueOrDo: [:e |
+      self error: "EventStore not found under ExduraSupervisor: {e}"
+    ]
+    pool :: ActivityWorkerPool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
+      self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
+    ]
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]

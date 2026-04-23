@@ -31,7 +31,7 @@ TestCase subclass: CancellationTest
     self.store := nil
 
   /// Poll for a ChildWorkflowStarted event in the parent's history.
-  awaitChildStarted: parentId timeout: timeoutMs :: Integer =>
+  awaitChildStarted: parentId :: String timeout: timeoutMs :: Integer -> ExduraEvent =>
     deadline := Time nowMs + timeoutMs
     [true]
       whileTrue: [
@@ -45,6 +45,7 @@ TestCase subclass: CancellationTest
         ]
         Timer sleep: 50
       ]
+    self error: "unreachable"
 
   /// Poll for a workflow to reach a terminal status.
   awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>

@@ -61,8 +61,8 @@ TestCase subclass: ActivityWorkerPoolTest
 
   // === ActivityWorker: basic execution ===
   testWorkerExecutesActivityAndReturnsResult =>
-    sup := ActivityWorkerSupervisor supervise
-    worker := sup startChild
+    sup := ActivityWorkerSupervisor supervise unwrap
+    worker := sup startChild unwrap
     worker
       initWith: PoolTestActivities
       selector: #doubleIt:
@@ -119,6 +119,18 @@ TestCase subclass: ActivityWorkerPoolTest
       timeout: nil
     self assert: outcome status equals: #failed
     self assert: (outcome error includesSubstring: "boom")
+
+  testPoolCrashWithTimeoutClassifiesAsFailed =>
+    // Regression: crash under a non-nil timeout must still report #failed,
+    // not #timedOut. The exception handler must capture `timer isActive`
+    // before calling `timer cancel`, since cancel deactivates the timer.
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("boom-with-timeout")
+      timeout: 5000
+    self assert: outcome status equals: #failed
+    self assert: (outcome error includesSubstring: "boom-with-timeout")
 
   testPoolRecoverAfterCrash =>
     // First call crashes

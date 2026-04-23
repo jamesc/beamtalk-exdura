@@ -8,8 +8,8 @@
 ///   manager initWith: engine eventStore: store
 ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
 typed Actor subclass: TimerManager
-  state: engine :: WorkflowEngine
-  state: eventStore :: EventStore
+  state: engine :: WorkflowEngine | Nil = nil
+  state: eventStore :: EventStore | Nil = nil
   state: status :: Symbol = #ready
   state: pendingCount :: Integer = 0
 
@@ -45,12 +45,13 @@ typed Actor subclass: TimerManager
     // Collect all TimerStarted events, take the last pendingCount.
     // Then extract timer info from each pending event.
     started := events select: [:e | e eventType =:= #TimerStarted]
-    dropCount := (started size - pendingCount) max: 0
+    diff := started size - pendingCount
+    dropCount := diff > 0 ifTrue: [diff] ifFalse: [0]
     (started drop: dropCount)
       collect: [:e |
         p := e payload
-        dur := p at: #duration ifAbsent: [0]
-        fireAt := p at: #fireAt ifAbsent: [e timestamp + dur]
+        dur :: Integer := p at: #duration ifAbsent: [0]
+        fireAt :: Integer := p at: #fireAt ifAbsent: [e timestamp + dur]
         TimerInfo new: #{#duration => dur, #fireAt => fireAt}
       ]
 

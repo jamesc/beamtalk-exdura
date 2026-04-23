@@ -21,7 +21,9 @@ typed Actor subclass: ActivityWorkerPool
 
   /// Initialize the pool by starting the underlying DynamicSupervisor.
   initialize -> Nil =>
-    self.supervisor := ActivityWorkerSupervisor supervise
+    self.supervisor := ActivityWorkerSupervisor supervise valueOrDo: [:e |
+      self error: "Failed to start ActivityWorkerSupervisor: {e}"
+    ]
     nil
 
   /// Set the maximum number of concurrent activity workers.
@@ -56,45 +58,63 @@ typed Actor subclass: ActivityWorkerPool
   ///
   ///   pool executeActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) timeout: nil
-  executeActivity: activityClass :: Class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
+  executeActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^ActivityOutcome rejected]
     self.activeCount := self.activeCount + 1
-    // Spawn supervised worker and initialize it
-    worker := self.supervisor startChild
+    // Spawn supervised worker and initialize it. If the supervisor refuses
+    // (e.g. max_children reached), undo the active-count increment and
+    // surface the failure as a rejection. Mutating Actor state inside a
+    // closure is disallowed, so check the Result out-of-line.
+    startResult := self.supervisor startChild
+    startResult isError
+      ifTrue: [
+        self.activeCount := self.activeCount - 1
+        ^ActivityOutcome rejected
+      ]
+    worker := startResult unwrap
     worker
       initWith: activityClass
       selector: selector
       args: args
-    // Set up timeout: kill worker process after timeout ms.
-    // Uses Pid kill to force immediate process termination,
-    // which causes the pending gen_server call to fail instantly.
-    timer := timeout isNil ifTrue: [
-      nil
-    ] ifFalse: [Timer after: timeout do: [worker kill]]
+    // Set up timeout: kill worker process after timeout ms. Uses Pid kill to
+    // force immediate process termination, which causes the pending
+    // gen_server call to fail instantly. When timeout is nil, a NullTimer
+    // stands in so downstream code can treat both cases uniformly.
+    timer := self killTimerFor: worker timeout: timeout
     // Execute the activity in the worker's process.
     // The exception handler returns early (^) from the method so that the
     // success path can unconditionally wrap the result. This avoids the
     // previous bug where an activity returning a Dictionary with a #status
     // key (e.g. #{#status => "reserved"}) was misidentified as a pool
     // error outcome.
+    // Capture state before cancel: cancel deactivates the timer, so
+    // isActive must be read first (inside the handler) to distinguish a
+    // timeout-kill from a pre-timeout crash. NullTimer stays active.
+    firedByTimeout := false
     outcome := [worker execute]
       on: Exception
       do: [:e |
-        timer ifNotNil: [timer cancel]
+        firedByTimeout := timer isActive not
+        timer cancel
         self.activeCount := self.activeCount - 1
-        // Distinguish timeout from crash: if timer was set and has fired,
-        // the worker was killed by timeout
-        (timer notNil and: [
-          timer isActive not
-        ]) ifTrue: [
-          ^ActivityOutcome timedOut
-        ] ifFalse: [^ActivityOutcome failed: e message]
+        firedByTimeout
+          ifTrue: [^ActivityOutcome timedOut]
+          ifFalse: [
+            @expect type
+            ^ActivityOutcome failed: e message
+          ]
       ]
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
-    timer ifNotNil: [timer cancel]
+    timer cancel
     ActivityOutcome completed: outcome
+
+  /// Build a TimeoutToken that kills `worker` after `ms` milliseconds.
+  /// Returns a NullTimer when `ms` is nil (no timeout configured).
+  killTimerFor: worker :: ActivityWorker timeout: ms :: Integer | Nil -> TimeoutToken =>
+    ms isNil ifTrue: [^NullTimer new]
+    Timer after: ms do: [worker kill]
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
   /// singleton since other pools may still reference it.

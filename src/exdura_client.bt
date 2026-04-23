@@ -42,7 +42,7 @@ typed Actor subclass: ExduraClient
   ///   handle := client start: OrderWorkflow id: "order-1"
   ///     args: #("data") taskQueue: "orders" options: #{}
   ///   result := handle result
-  start: workflowClass :: Class id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
+  start: workflowClass :: Workflow class id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
     self.engine
       startWorkflow: workflowClass
       id: workflowId
@@ -131,7 +131,8 @@ typed Actor subclass: ExduraClient
         // Supervisor-managed: stop supervisor first (terminates all children),
         // then clean up files. Order matters: destroyWithFiles would crash the
         // EventStore, triggering a supervisor restart before we stop it.
-        [self.supervisor stop] on: Error do: [:e | nil]
+        @expect type  // narrowing to Supervisor doesn't propagate here
+        self.supervisor stop valueOrDo: [:e | nil]
         ^nil
       ]
     // Non-supervised: clean up components individually

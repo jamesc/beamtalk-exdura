@@ -176,7 +176,7 @@ typed Actor subclass: EventStore
     content := readResult unwrap
     contentSize := content byteSize
     contentSize =:= 0 ifTrue: [^nil]
-    snapshot := Binary deserialize: content
+    snapshot := StoredSnapshot fromBinary: content
     // Read only events after the snapshot point
     allEvents := self.events at: workflowId ifAbsent: [#()]
     laterEvents := allEvents select: [:evt | evt eventId > snapshot eventId]

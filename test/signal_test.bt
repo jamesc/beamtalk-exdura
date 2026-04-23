@@ -36,7 +36,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-handler-1"
@@ -61,7 +61,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-handler-2"
@@ -102,7 +102,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-sig-1"
@@ -116,6 +116,7 @@ TestCase subclass: SignalTest
 
     // waitForSignal should find it immediately
     payload := ctx waitForSignal: "approve" timeout: 5000
+    @expect type  // signal is buffered above, waitForSignal won't return nil here
     self assert: (payload at: #user) equals: "alice"
 
   // === waitForSignal:timeout: raises on timeout ===
@@ -134,7 +135,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-sig-timeout"
@@ -162,7 +163,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-cond-1"
@@ -196,7 +197,7 @@ TestCase subclass: SignalTest
       }
     store createExecution: exec
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-wait-cond-timeout"
@@ -261,7 +262,7 @@ TestCase subclass: SignalTest
     store appendEvents: "wf-replay-handler" events: events
 
     history := store readEvents: "wf-replay-handler" fromSeq: 1
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-replay-handler"
@@ -283,6 +284,7 @@ TestCase subclass: SignalTest
 
     // Now waitForSignal should find the replayed signal
     payload := ctx waitForSignal: "approve" timeout: 1000
+    @expect type  // signal was replayed above, waitForSignal won't return nil here
     self assert: (payload at: #user) equals: "alice"
 
   // === ApprovalWorkflow pattern from SPEC §5.4 ===

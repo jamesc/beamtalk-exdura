@@ -287,7 +287,7 @@ TestCase subclass: SignalBufferingTest
     history := store readEvents: "wf-replay-sig" fromSeq: 1
     self assert: history size equals: 4
 
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-replay-sig"
@@ -349,7 +349,7 @@ TestCase subclass: SignalBufferingTest
     store appendEvents: "wf-replay-sig2" events: events
 
     history := store readEvents: "wf-replay-sig2" fromSeq: 1
-    ctx := WorkflowContext spawn
+    ctx := WorkflowContext spawnWith: #{#engine => engine}
     ctx
       initWith: engine
       workflowId: "wf-replay-sig2"
