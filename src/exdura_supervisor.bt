@@ -31,9 +31,10 @@ typed Supervisor subclass: ExduraSupervisor
     store := (sup which: EventStore) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: EventStore missing: {e}"
     ]
-    pool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
-      self error: "ExduraSupervisor initialize: ActivityWorkerPool missing: {e}"
-    ]
+    pool := (sup which: ActivityWorkerPool)
+      valueOrDo: [:e |
+        self error: "ExduraSupervisor initialize: ActivityWorkerPool missing: {e}"
+      ]
     engine := (sup which: WorkflowEngine) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: WorkflowEngine missing: {e}"
     ]

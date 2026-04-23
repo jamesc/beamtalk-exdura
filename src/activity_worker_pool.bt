@@ -88,14 +88,17 @@ typed Actor subclass: ActivityWorkerPool
     // previous bug where an activity returning a Dictionary with a #status
     // key (e.g. #{#status => "reserved"}) was misidentified as a pool
     // error outcome.
+    // Capture state before cancel: cancel deactivates the timer, so
+    // isActive must be read first (inside the handler) to distinguish a
+    // timeout-kill from a pre-timeout crash. NullTimer stays active.
+    firedByTimeout := false
     outcome := [worker execute]
       on: Exception
       do: [:e |
+        firedByTimeout := timer isActive not
         timer cancel
         self.activeCount := self.activeCount - 1
-        // Distinguish timeout from crash: an inactive timer has fired,
-        // meaning the worker was killed by timeout. NullTimer stays active.
-        timer isActive not ifTrue: [
+        firedByTimeout ifTrue: [
           ^ActivityOutcome timedOut
         ] ifFalse: [^ActivityOutcome failed: e message]
       ]

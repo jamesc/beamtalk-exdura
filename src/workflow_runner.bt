@@ -13,7 +13,7 @@
 ///     #history => #()
 ///   }
 ///   runner go!
-Actor subclass: WorkflowRunner
+typed Actor subclass: WorkflowRunner
   state: workflow :: Workflow class
   state: engine :: WorkflowEngine
   state: workflowId :: String = ""

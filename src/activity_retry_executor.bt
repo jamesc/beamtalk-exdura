@@ -90,6 +90,12 @@ Object subclass: ActivityRetryExecutor
 
   /// True when `attempt` has reached the configured retry limit.
   /// Returns false when maxAttempts is nil or 0 (unlimited per SPEC §4.1.4).
+  ///
+  ///   cfg := ActivityRetryConfig new: #{#maxAttempts => 3}
+  ///   ActivityRetryExecutor retriesExhausted: 2 config: cfg   // => false
+  ///   ActivityRetryExecutor retriesExhausted: 3 config: cfg   // => true
+  ///   unlimited := ActivityRetryConfig new: #{#maxAttempts => 0}
+  ///   ActivityRetryExecutor retriesExhausted: 99 config: unlimited   // => false
   class retriesExhausted: attempt :: Integer config: config :: ActivityRetryConfig -> Boolean =>
     maxAttempts := config maxAttempts
     maxAttempts isNil ifTrue: [^false]
