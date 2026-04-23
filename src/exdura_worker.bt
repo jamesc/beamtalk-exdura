@@ -17,20 +17,24 @@ typed Object subclass: ExduraWorker
       self error: "Failed to start ExduraSupervisor: {e}"
     ]
 
-    // Sibling wiring is handled by ExduraSupervisor class initialize:
-    engine := (sup which: WorkflowEngine) valueOrDo: [:e |
+    // Sibling wiring is handled by ExduraSupervisor class initialize:.
+    // sup which: is typed -> Result(Object, Error); we assert the concrete
+    // class at the binding site so downstream method sends type-check cleanly.
+    @expect type
+    engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |
       self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
     ]
-    store := (sup which: EventStore) valueOrDo: [:e |
+    @expect type
+    store :: EventStore := (sup which: EventStore) valueOrDo: [:e |
       self error: "EventStore not found under ExduraSupervisor: {e}"
     ]
-    pool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
+    @expect type
+    pool :: ActivityWorkerPool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
       self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
     ]
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]
-    @expect dnu  // sup which: is typed -> Result(Object, Error); caller knows the concrete class
     pool setMaxConcurrent: maxActivities
 
     // Create client connected to the supervised engine
