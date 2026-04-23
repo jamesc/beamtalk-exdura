@@ -131,9 +131,7 @@ typed Actor subclass: ExduraClient
         // Supervisor-managed: stop supervisor first (terminates all children),
         // then clean up files. Order matters: destroyWithFiles would crash the
         // EventStore, triggering a supervisor restart before we stop it.
-        @expect type  // narrowing to Supervisor doesn't propagate here
-        self.supervisor stop valueOrDo: [:e | nil]
-        ^nil
+        ^self.supervisor stop
       ]
     // Non-supervised: clean up components individually
     poolResult := Result tryDo: [self.engine activityPool]

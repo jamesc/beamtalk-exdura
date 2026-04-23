@@ -98,12 +98,9 @@ typed Actor subclass: ActivityWorkerPool
         firedByTimeout := timer isActive not
         timer cancel
         self.activeCount := self.activeCount - 1
-        firedByTimeout
-          ifTrue: [^ActivityOutcome timedOut]
-          ifFalse: [
-            @expect type
-            ^ActivityOutcome failed: e message
-          ]
+        firedByTimeout ifTrue: [
+          ^ActivityOutcome timedOut
+        ] ifFalse: [^ActivityOutcome failed: e message]
       ]
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1

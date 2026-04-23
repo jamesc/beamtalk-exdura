@@ -205,9 +205,6 @@ typed Actor subclass: WorkflowEngine
     self.activityPool isNil
       ifTrue: [
         // No pool — use retry executor with direct execution.
-        // self.eventStore is `| Nil` to satisfy supervisor spawn; the
-        // supervisor's initialize: guarantees it is set before any messages.
-        @expect type
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
@@ -657,9 +654,6 @@ typed Actor subclass: WorkflowEngine
     runner go!
 
     // Return a handle for the caller to wait on.
-    // self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
-    // non-nil by ExduraSupervisor initialize: before any messages arrive.
-    @expect type
     ChildWorkflowHandle
       for: childWorkflowId
       engine: self

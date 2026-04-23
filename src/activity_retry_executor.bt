@@ -79,12 +79,15 @@ Object subclass: ActivityRetryExecutor
             #retriesExhausted => true
           }
       ]
+
     // Backoff and recurse
     rawDelay := config initialInterval * (config backoffCoefficient raisedTo: attempt - 1)
     delay := rawDelay ceiling
     cappedDelay := config maximumInterval ifNil: [
       delay
-    ] ifNotNil: [:maxInterval | delay min: maxInterval]
+    ] ifNotNil: [:maxInterval |
+      delay < maxInterval ifTrue: [delay] ifFalse: [maxInterval]
+    ]
     Timer sleep: cappedDelay
     self tryAttempt: attempt + 1 config: config
 
