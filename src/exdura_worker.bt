@@ -30,7 +30,7 @@ typed Object subclass: ExduraWorker
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]
-    @expect dnu  // sup which: returns Result(Object); narrowing doesn't propagate here
+    @expect dnu  // sup which: is typed -> Result(Object, Error); caller knows the concrete class
     pool setMaxConcurrent: maxActivities
 
     // Create client connected to the supervised engine

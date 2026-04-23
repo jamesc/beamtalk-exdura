@@ -41,8 +41,8 @@ typed Supervisor subclass: ExduraSupervisor
     timer := (sup which: TimerManager) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: TimerManager missing: {e}"
     ]
-    @expect type  // sup which: returns Result(Object); narrowing doesn't propagate here
+    @expect type  // sup which: is typed -> Result(Object, Error); caller knows the concrete class
     engine initWithStore: store pool: pool
-    @expect type  // sup which: returns Result(Object); narrowing doesn't propagate here
+    @expect type  // sup which: is typed -> Result(Object, Error); caller knows the concrete class
     timer initWith: engine eventStore: store
     nil
