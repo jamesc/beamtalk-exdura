@@ -54,10 +54,10 @@ TestCase subclass: ExduraSupervisorTest
     sup := self.client supervisor
     self assert: sup notNil
     self assert: sup count equals: 4
-    self assert: (sup which: EventStore) notNil
-    self assert: (sup which: ActivityWorkerPool) notNil
-    self assert: (sup which: WorkflowEngine) notNil
-    self assert: (sup which: TimerManager) notNil
+    self assert: (sup which: EventStore) isOk
+    self assert: (sup which: ActivityWorkerPool) isOk
+    self assert: (sup which: WorkflowEngine) isOk
+    self assert: (sup which: TimerManager) isOk
 
     // Verify config was applied to the pool
     pool := self.client engine activityPool

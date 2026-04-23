@@ -18,22 +18,19 @@ typed Object subclass: ExduraWorker
     ]
 
     // Sibling wiring is handled by ExduraSupervisor class initialize:
-    // `which:` returns the child directly or nil (pre-ADR-0080-Phase-2).
-    engine := sup which: WorkflowEngine
-    engine isNil ifTrue: [
-      self error: "WorkflowEngine not found under ExduraSupervisor"
+    engine := (sup which: WorkflowEngine) valueOrDo: [:e |
+      self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
     ]
-    store := sup which: EventStore
-    store isNil ifTrue: [
-      self error: "EventStore not found under ExduraSupervisor"
+    store := (sup which: EventStore) valueOrDo: [:e |
+      self error: "EventStore not found under ExduraSupervisor: {e}"
     ]
-    pool := sup which: ActivityWorkerPool
-    pool isNil ifTrue: [
-      self error: "ActivityWorkerPool not found under ExduraSupervisor"
+    pool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
+      self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
     ]
 
     // Apply config
     maxActivities := config at: #maxConcurrentActivities ifAbsent: [10]
+    @expect dnu  // sup which: returns Result(Object); narrowing doesn't propagate here
     pool setMaxConcurrent: maxActivities
 
     // Create client connected to the supervised engine
