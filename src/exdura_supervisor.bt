@@ -28,22 +28,18 @@ typed Supervisor subclass: ExduraSupervisor
   /// Wire children together after all are started.
   /// Re-runs on restart (rest_for_one), so restarted children get fresh refs.
   class initialize: sup :: Supervisor -> nil =>
-    // sup which: is typed -> Result(Object, Error); we assert the concrete
-    // class at the binding site so downstream method sends type-check cleanly.
-    @expect type
+    // sup which: is typed -> Result(Object, Error); typing the local asserts
+    // the concrete class so downstream method sends type-check cleanly.
     store :: EventStore := (sup which: EventStore) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: EventStore missing: {e}"
     ]
-    @expect type
     pool :: ActivityWorkerPool := (sup which: ActivityWorkerPool)
       valueOrDo: [:e |
         self error: "ExduraSupervisor initialize: ActivityWorkerPool missing: {e}"
       ]
-    @expect type
     engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: WorkflowEngine missing: {e}"
     ]
-    @expect type
     timer :: TimerManager := (sup which: TimerManager) valueOrDo: [:e |
       self error: "ExduraSupervisor initialize: TimerManager missing: {e}"
     ]

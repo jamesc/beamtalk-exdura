@@ -18,17 +18,14 @@ typed Object subclass: ExduraWorker
     ]
 
     // Sibling wiring is handled by ExduraSupervisor class initialize:.
-    // sup which: is typed -> Result(Object, Error); we assert the concrete
-    // class at the binding site so downstream method sends type-check cleanly.
-    @expect type
+    // sup which: is typed -> Result(Object, Error); typing the local asserts
+    // the concrete class so downstream method sends type-check cleanly.
     engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |
       self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
     ]
-    @expect type
     store :: EventStore := (sup which: EventStore) valueOrDo: [:e |
       self error: "EventStore not found under ExduraSupervisor: {e}"
     ]
-    @expect type
     pool :: ActivityWorkerPool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
       self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
     ]
