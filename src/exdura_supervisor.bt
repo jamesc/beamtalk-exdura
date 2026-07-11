@@ -17,7 +17,7 @@ typed Supervisor subclass: ExduraSupervisor
   class strategy -> Symbol => #restForOne
 
   /// Child specs in dependency order.
-  class children -> List(Actor) =>
+  class children -> List(SupervisionSpec) =>
     storeSpec := EventStore supervisionSpec withRestart: #permanent
     poolSpec := ActivityWorkerPool supervisionSpec withRestart: #permanent
     engineSpec := WorkflowEngine supervisionSpec withRestart: #permanent

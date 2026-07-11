@@ -42,6 +42,19 @@ typed Actor subclass: EventStore
       size: totalSize
       acc: (acc add: evt)
 
+  /// Stamp events with sequential eventIds starting at nextId.
+  /// Class method (not inject:into: with a mixed-shape accumulator) so the
+  /// accumulator stays a plain List(ExduraEvent) throughout the recursion,
+  /// rather than the { #id => Integer, #list => List } dict the old
+  /// inject:into: used, which the type checker can't type consistently.
+  class stampEvents: events :: List(ExduraEvent) nextId: nextId :: Integer acc: acc :: List(ExduraEvent) -> List(ExduraEvent) =>
+    events isEmpty ifTrue: [^acc]
+    numbered := events first withEventId: nextId
+    self
+      stampEvents: events rest
+      nextId: nextId + 1
+      acc: (acc add: numbered)
+
   initialize -> Nil =>
     uid := System uniqueId
     execName := "exdura_executions_{uid}" asAtom
@@ -108,14 +121,10 @@ typed Actor subclass: EventStore
   appendEvents: workflowId :: String events: newEvents :: List(ExduraEvent) -> List(ExduraEvent) =>
     existing := self.events at: workflowId ifAbsent: [#()]
     startId := existing size + 1
-    stamped := newEvents
-      inject: #{#id => startId, #list => #()}
-      into: [:acc :evt |
-        curId := acc at: #id
-        numbered := evt withEventId: curId
-        #{#id => curId + 1, #list => ((acc at: #list) add: numbered)}
-      ]
-    stampedEvents := stamped at: #list
+    stampedEvents := EventStore
+      stampEvents: newEvents
+      nextId: startId
+      acc: #()
     self.events at: workflowId put: (existing ++ stampedEvents)
     // Persist to disk
     self persistEvents: workflowId events: stampedEvents
