@@ -161,12 +161,11 @@ typed Actor subclass: WorkflowEngine
   ///   engine scheduleActivity: TestActivities selector: #doubleIt:
   ///     args: #(5) workflowId: "wf-1"
   scheduleActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List workflowId: workflowId :: String -> Object =>
-    self
-      scheduleActivity: activityClass
-      selector: selector
-      args: args
-      workflowId: workflowId
-      options: #{}
+    // Dispatched via perform:withArguments: (not a direct self-send) to avoid
+    // a compiler codegen bug (self-send forwarding into a method that can
+    // `self error:` mis-unwraps the propagated error and crashes with a
+    // function_clause instead of surfacing the real error kind).
+    self perform: #scheduleActivity:selector:args:workflowId:options: withArguments: #(activityClass, selector, args, workflowId, #{})
 
   /// Execute an activity with options (retry policy, timeouts).
   ///

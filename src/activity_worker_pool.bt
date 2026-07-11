@@ -98,6 +98,11 @@ typed Actor subclass: ActivityWorkerPool
         firedByTimeout := timer isActive not
         timer cancel
         self.activeCount := self.activeCount - 1
+        // Worker survives a caught activity crash (safe_dispatch returns it
+        // as a normal reply) — stop it so it doesn't leak as a permanent
+        // child of the shared ActivityWorkerSupervisor singleton. A
+        // timeout-killed worker is already dead; stop then just no-ops/errors.
+        [worker stop] on: Error do: [:e2 | nil]
         firedByTimeout ifTrue: [
           ^ActivityOutcome timedOut
         ] ifFalse: [^ActivityOutcome failed: e message]
@@ -105,6 +110,11 @@ typed Actor subclass: ActivityWorkerPool
     // Success: wrap result unconditionally
     self.activeCount := self.activeCount - 1
     timer cancel
+    // One-shot worker: stop it now rather than leaking it as a permanent
+    // child of the shared ActivityWorkerSupervisor singleton (BT-1495 pool
+    // docs). Left running, these accumulate across every activity dispatch
+    // in the suite and can starve later tests that also need the supervisor.
+    [worker stop] on: Error do: [:e2 | nil]
     ActivityOutcome completed: outcome
 
   /// Build a TimeoutToken that kills `worker` after `ms` milliseconds.

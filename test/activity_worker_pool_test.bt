@@ -192,6 +192,31 @@ TestCase subclass: ActivityWorkerPoolTest
       timeout: 100
     self assert: self.pool activeCount equals: 0
 
+  // === ActivityWorkerPool: one-shot workers don't leak under the shared
+  // ActivityWorkerSupervisor singleton. Regression coverage: a worker left
+  // running after executeActivity: returns accumulates as a permanent
+  // supervisor child, and enough of them starve later activity dispatches
+  // (observed as unrelated tests timing out under load). ===
+  testPoolDoesNotLeakWorkerAfterSuccess =>
+    sup := ActivityWorkerSupervisor supervise unwrap
+    before := sup count
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(5)
+      timeout: nil
+    self assert: sup count equals: before
+
+  testPoolDoesNotLeakWorkerAfterCrash =>
+    sup := ActivityWorkerSupervisor supervise unwrap
+    before := sup count
+    self.pool
+      executeActivity: PoolTestActivities
+      selector: #crashIt:
+      args: #("leak test")
+      timeout: nil
+    self assert: sup count equals: before
+
   // === WorkflowEngine integration: dispatch through pool ===
   testEngineDispatchesThroughPool =>
     exec := WorkflowExecution
@@ -225,7 +250,9 @@ TestCase subclass: ActivityWorkerPoolTest
         #startedAt => 1710000000
       }
     self.store createExecution: exec
-    // Engine should raise on activity failure
+    // Engine should raise on activity failure. The engine re-raises via
+    // `self error:`, which is always kind #user_error (same as e.g.
+    // EventStore>>createExecution:'s duplicate-workflow guard).
     self
       should: [
         self.engine
@@ -234,7 +261,7 @@ TestCase subclass: ActivityWorkerPoolTest
           args: #("engine crash test")
           workflowId: "wf-pool-fail-1"
       ]
-      raise: #runtime_error
+      raise: #user_error
     // Verify ActivityFailed event was recorded
     events := self.store readEvents: "wf-pool-fail-1" fromSeq: 1
     self assert: events size equals: 2
