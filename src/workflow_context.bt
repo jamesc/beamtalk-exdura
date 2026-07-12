@@ -40,7 +40,7 @@ typed Actor subclass: WorkflowContext
   /// If no event exists at a position, its type is #none and idx is 0.
   ///
   ///   #[ft, st, fi, si] := WorkflowContext peekEventPair: 1 history: events
-  class peekEventPair: cursor :: Integer history: eventHistory :: List -> List =>
+  class peekEventPair: cursor :: Integer history: eventHistory :: List(ExduraEvent) -> List =>
     skippable := self countSkippableEventsFrom: cursor + 1 history: eventHistory
     firstIdx := cursor + skippable + 1
     firstIdx > eventHistory size ifTrue: [^#(#none, #none, 0, 0)]
@@ -53,14 +53,14 @@ typed Actor subclass: WorkflowContext
   /// Collect consecutive SignalReceived events from a history starting at fromIdx.
   ///
   ///   WorkflowContext collectReplaySignalsFrom: 4 history: events
-  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List -> List =>
+  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> List(Signal) =>
     self
       collectReplaySignalsFrom: fromIdx
       history: eventHistory
       acc: #()
 
   /// Recursive helper to collect consecutive SignalReceived events.
-  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List acc: acc :: List -> List =>
+  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) acc: acc :: List(Signal) -> List(Signal) =>
     fromIdx > eventHistory size ifTrue: [^acc]
     event := eventHistory at: fromIdx
     eventType := event eventType
@@ -88,14 +88,14 @@ typed Actor subclass: WorkflowContext
   /// starting from a given index.
   ///
   ///   WorkflowContext countSkippableEventsFrom: 5 history: events
-  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List -> Integer =>
+  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> Integer =>
     self
       countSkippableEventsFrom: fromIdx
       history: eventHistory
       count: 0
 
   /// Recursive helper for counting skippable events.
-  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List count: count :: Integer -> Integer =>
+  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) count: count :: Integer -> Integer =>
     fromIdx > eventHistory size ifTrue: [^count]
     eventType := (eventHistory at: fromIdx) eventType
     ((eventType =:= #StateSnapshot) or: [eventType =:= #SignalReceived])
@@ -110,14 +110,14 @@ typed Actor subclass: WorkflowContext
   /// Find a signal by name in a list. Returns a SignalSearchResult.
   ///
   ///   WorkflowContext findSignal: "approve" in: signals
-  class findSignal: name :: String in: signals :: List -> SignalSearchResult =>
+  class findSignal: name :: String in: signals :: List(Signal) -> SignalSearchResult =>
     self
       findSignal: name
       in: signals
       idx: 1
 
   /// Recursive helper to find a signal by name.
-  class findSignal: name :: String in: signals :: List idx: idx :: Integer -> SignalSearchResult =>
+  class findSignal: name :: String in: signals :: List(Signal) idx: idx :: Integer -> SignalSearchResult =>
     idx > signals size ifTrue: [^SignalSearchResult new: #{#found => false}]
     sig := signals at: idx
     sig name =:= name
@@ -144,7 +144,7 @@ typed Actor subclass: WorkflowContext
   /// Initialize with engine, workflow ID, and event history.
   ///
   ///   ctx initWith: engine workflowId: "wf-1" history: events
-  initWith: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List -> Nil =>
+  initWith: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List(ExduraEvent) -> Nil =>
     self.engine := anEngine
     self.workflowId := anId
     self.eventHistory := aHistory
@@ -155,7 +155,7 @@ typed Actor subclass: WorkflowContext
   /// Initialize from a snapshot for optimized replay.
   ///
   ///   ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
-  initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List -> Nil =>
+  initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List(ExduraEvent) -> Nil =>
     self.engine := anEngine
     self.workflowId := anId
     self.eventHistory := aHistory
@@ -191,7 +191,7 @@ typed Actor subclass: WorkflowContext
     self.workflowVars at: name ifAbsent: [nil]
 
   /// Return all workflow variables (for testing).
-  getVars -> Dictionary => self.workflowVars
+  getVars -> Dictionary(Symbol, Object) => self.workflowVars
 
   /// Register a signal handler block.
   ///
@@ -208,7 +208,7 @@ typed Actor subclass: WorkflowContext
     nil
 
   /// Return all registered query handlers.
-  queryHandlers -> Dictionary => self.queryHandlers
+  queryHandlers -> Dictionary(String, Block) => self.queryHandlers
 
   /// Set a workflow state field visible in query snapshots.
   ///
@@ -218,7 +218,7 @@ typed Actor subclass: WorkflowContext
     nil
 
   /// Return the current workflow state as a Dictionary.
-  workflowState -> Dictionary => self.workflowState
+  workflowState -> Dictionary(Symbol, Object) => self.workflowState
 
   // ═══════════════════════════════════════════════════════════════════
   // Command dispatch — runActivity, sleep, startChildWorkflow, version
@@ -232,7 +232,7 @@ typed Actor subclass: WorkflowContext
   /// Execute an activity or return its cached result during replay.
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
-  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List -> Object =>
+  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List(Object) -> Object =>
     self
       runActivity: activityClass
       method: selector
@@ -243,7 +243,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   result := ctx runActivity: TestActivities method: #doubleIt:
   ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
-  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List options: options :: Dictionary(Symbol, Object) -> Object =>
+  runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List(Object) options: options :: Dictionary(Symbol, Object) -> Object =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -382,7 +382,7 @@ typed Actor subclass: WorkflowContext
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
-  startChildWorkflow: workflowClass :: Workflow class method: selector :: Symbol with: args :: List -> ChildWorkflowHandle =>
+  startChildWorkflow: workflowClass :: Workflow class method: selector :: Symbol with: args :: List(Object) -> ChildWorkflowHandle =>
     self
       startChildWorkflow: workflowClass
       method: selector
@@ -393,7 +393,7 @@ typed Actor subclass: WorkflowContext
   ///
   ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
   ///     options: #{#parentClosePolicy => #abandon}
-  startChildWorkflow: workflowClass :: Workflow class method: _selector :: Symbol with: args :: List options: options :: Dictionary -> ChildWorkflowHandle =>
+  startChildWorkflow: workflowClass :: Workflow class method: _selector :: Symbol with: args :: List(Object) options: options :: Dictionary(Symbol, Object) -> ChildWorkflowHandle =>
     // ── Replay path ──
     self.isReplaying
       ifTrue: [
@@ -563,19 +563,19 @@ typed Actor subclass: WorkflowContext
   // ═══════════════════════════════════════════════════════════════════
 
   /// Return the list of signals delivered at safe points.
-  deliveredSignals -> List => self.deliveredSignals
+  deliveredSignals -> List(Signal) => self.deliveredSignals
 
   /// Return all signals that have been received and processed.
-  receivedSignals -> List => self.receivedSignals
+  receivedSignals -> List(Signal) => self.receivedSignals
 
   /// Drain and return all delivered signals, clearing the internal list.
-  drainAndClearSignals -> List =>
+  drainAndClearSignals -> List(Signal) =>
     signals := self.deliveredSignals
     self.deliveredSignals := #()
     signals
 
   /// Actively drain signals from the engine (live) and return them.
-  pollSignals -> List =>
+  pollSignals -> List(Signal) =>
     self.isReplaying ifTrue: [^self drainAndClearSignals]
     signals := self.engine drainSignals: self.workflowId
     signals size > 0 ifTrue: [
@@ -586,7 +586,7 @@ typed Actor subclass: WorkflowContext
   /// Request continue-as-new: record the event and return a ContinueAsNewRequest.
   ///
   ///   ctx continueAsNew: #("nextCursor")
-  continueAsNew: args :: List -> ContinueAsNewRequest =>
+  continueAsNew: args :: List(Object) -> ContinueAsNewRequest =>
     self.engine recordContinueAsNew: self.workflowId args: args
     ContinueAsNewRequest new: #{#args => args}
 
