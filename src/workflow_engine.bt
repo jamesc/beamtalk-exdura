@@ -206,7 +206,7 @@ typed Actor subclass: WorkflowEngine
         // No pool — use retry executor with direct execution.
         // self.eventStore is `| Nil` to satisfy supervisor spawn; the
         // supervisor's initialize: guarantees it is set before any messages.
-        @expect type
+        self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
@@ -658,7 +658,7 @@ typed Actor subclass: WorkflowEngine
     // Return a handle for the caller to wait on.
     // self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
     // non-nil by ExduraSupervisor initialize: before any messages arrive.
-    @expect type
+    self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
     ChildWorkflowHandle
       for: childWorkflowId
       engine: self
@@ -871,7 +871,15 @@ typed Actor subclass: WorkflowEngine
     self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 
   /// Return the underlying EventStore (for testing/inspection).
-  eventStore -> EventStore => self.eventStore
+  /// self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
+  /// non-nil by ExduraSupervisor initialize: before any messages arrive.
+  eventStore -> EventStore =>
+    self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
+    self.eventStore
 
   /// Return the ActivityWorkerPool (for testing/inspection).
-  activityPool -> ActivityWorkerPool => self.activityPool
+  /// self.activityPool is `| Nil` to satisfy supervisor spawn; guaranteed
+  /// non-nil by ExduraSupervisor initialize: before any messages arrive.
+  activityPool -> ActivityWorkerPool =>
+    self.activityPool isNil ifTrue: [self error: "activityPool not yet initialized"]
+    self.activityPool
