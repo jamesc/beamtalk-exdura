@@ -126,13 +126,13 @@ typed Actor subclass: ExduraClient
   ///
   ///   client destroy
   destroy -> Nil =>
-    self.supervisor isNil
-      ifFalse: [
-        // Supervisor-managed: stop supervisor first (terminates all children),
-        // then clean up files. Order matters: destroyWithFiles would crash the
-        // EventStore, triggering a supervisor restart before we stop it.
-        ^self.supervisor stop
-      ]
+    self.supervisor match: [
+      nil -> nil;
+      // Supervisor-managed: stop supervisor first (terminates all children),
+      // then clean up files. Order matters: destroyWithFiles would crash the
+      // EventStore, triggering a supervisor restart before we stop it.
+      sup -> ^sup stop
+    ]
     // Non-supervised: clean up components individually
     poolResult := Result tryDo: [self.engine activityPool]
     poolResult isOk

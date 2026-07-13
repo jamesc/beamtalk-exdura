@@ -10,9 +10,10 @@ Workflow subclass: TwoStepWorkflow
   /// Run two sequential activities: first processes the input,
   /// second processes the first result.
   class run: input ctx: ctx -> Dictionary =>
-    args := (input isKindOf: Dictionary) ifTrue: [
-      input
-    ] ifFalse: [#{#input => input}]
+    args := input match: [
+      d :: Dictionary -> d;
+      _ -> #{#input => input}
+    ]
     a := ctx
       runActivity: CountingActivity
       method: #doWork:

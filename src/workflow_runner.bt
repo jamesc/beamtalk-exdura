@@ -111,17 +111,16 @@ typed Actor subclass: WorkflowRunner
     // Engine may have been stopped by tearDown — skip post-workflow calls if dead
     self.engine isAlive
       ifTrue: [
-        (result isKindOf: ContinueAsNewRequest)
-          ifTrue: [
-            self.engine
-              continueAsNewWorkflow: self.workflowId
-              workflowClass: self.workflow
-              args: result args
-          ]
-          ifFalse: [
+        result match: [
+          r :: ContinueAsNewRequest -> self.engine
+            continueAsNewWorkflow: self.workflowId
+            workflowClass: self.workflow
+            args: r args;
+          _ -> [
             self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
             self.engine completeWorkflow: self.workflowId result: result
-          ]
+          ] value
+        ]
       ]
     (AtomicCounter named: self.doneSemName) increment
     nil

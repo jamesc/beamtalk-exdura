@@ -87,8 +87,10 @@ typed Actor subclass: EventStore
   ///
   ///   store updateExecution: "wf-1" status: #completed result: 42
   updateExecution: workflowId :: String status: status :: Symbol result: result :: Object -> WorkflowExecution =>
-    existing := self.executions at: workflowId
-    existing isNil ifTrue: [self error: "Execution not found: {workflowId}"]
+    existing := (self.executions at: workflowId) match: [
+      nil -> self error: "Execution not found: {workflowId}";
+      e -> e
+    ]
     updated := (existing withStatus: status) withResult: result
     self.executions at: workflowId put: updated
     updated

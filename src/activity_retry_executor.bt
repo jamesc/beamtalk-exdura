@@ -100,7 +100,8 @@ Object subclass: ActivityRetryExecutor
   ///   unlimited := ActivityRetryConfig new: #{#maxAttempts => 0}
   ///   ActivityRetryExecutor retriesExhausted: 99 config: unlimited   // => false
   class retriesExhausted: attempt :: Integer config: config :: ActivityRetryConfig -> Boolean =>
-    maxAttempts := config maxAttempts
-    maxAttempts isNil ifTrue: [^false]
-    maxAttempts <= 0 ifTrue: [^false]
-    attempt >= maxAttempts
+    config maxAttempts match: [
+      nil -> false;
+      n :: Integer when: [n <= 0] -> false;
+      n :: Integer -> attempt >= n
+    ]

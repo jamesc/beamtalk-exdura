@@ -127,32 +127,29 @@ typed Actor subclass: WorkflowEngine
     }
     history := self.eventStore readEvents: workflowId fromSeq: 1
     snapResult := self.eventStore readEventsFromSnapshot: workflowId
-    runner := snapResult isNil
-      ifTrue: [
-        // No snapshot — full replay from event history
-        WorkflowRunner
-          spawnWith: #{
-            #workflow => workflowClass,
-            #engine => self,
-            #workflowId => workflowId,
-            #input => input,
-            #history => history,
-            #snapshotInterval => interval
-          }
-      ]
-      ifFalse: [
-        // Snapshot found — use snapshot state with full history
-        WorkflowRunner
-          spawnWith: #{
-            #workflow => workflowClass,
-            #engine => self,
-            #workflowId => workflowId,
-            #input => input,
-            #history => history,
-            #snapshot => snapResult snapshot state,
-            #snapshotInterval => interval
-          }
-      ]
+    runner := snapResult match: [
+      // No snapshot — full replay from event history
+      nil -> WorkflowRunner
+        spawnWith: #{
+          #workflow => workflowClass,
+          #engine => self,
+          #workflowId => workflowId,
+          #input => input,
+          #history => history,
+          #snapshotInterval => interval
+        };
+      // Snapshot found — use snapshot state with full history
+      snap -> WorkflowRunner
+        spawnWith: #{
+          #workflow => workflowClass,
+          #engine => self,
+          #workflowId => workflowId,
+          #input => input,
+          #history => history,
+          #snapshot => snap snapshot state,
+          #snapshotInterval => interval
+        }
+    ]
     runner go!
     runner
 
@@ -196,9 +193,10 @@ typed Actor subclass: WorkflowEngine
 
     // Build retry policy from options
     rpDict := options at: #retryPolicy ifAbsent: [#{}]
-    rp := (rpDict isKindOf: RetryPolicy) ifTrue: [
-      rpDict
-    ] ifFalse: [RetryPolicy new: rpDict]
+    rp := rpDict match: [
+      rp :: RetryPolicy -> rp;
+      _ -> RetryPolicy new: rpDict
+    ]
 
     // Dispatch through pool if available, otherwise use ActivityRetryExecutor
     self.activityPool isNil
@@ -206,7 +204,9 @@ typed Actor subclass: WorkflowEngine
         // No pool — use retry executor with direct execution.
         // self.eventStore is `| Nil` to satisfy supervisor spawn; the
         // supervisor's initialize: guarantees it is set before any messages.
-        self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
+        self.eventStore isNil ifTrue: [
+          self error: "eventStore not yet initialized"
+        ]
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
@@ -658,11 +658,14 @@ typed Actor subclass: WorkflowEngine
     // Return a handle for the caller to wait on.
     // self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
     // non-nil by ExduraSupervisor initialize: before any messages arrive.
-    self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
+    store := self.eventStore match: [
+      nil -> self error: "eventStore not yet initialized";
+      s -> s
+    ]
     ChildWorkflowHandle
       for: childWorkflowId
       engine: self
-      eventStore: self.eventStore
+      eventStore: store
 
   /// Return the list of child workflow IDs for a parent (for testing).
   ///
@@ -874,12 +877,16 @@ typed Actor subclass: WorkflowEngine
   /// self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
   /// non-nil by ExduraSupervisor initialize: before any messages arrive.
   eventStore -> EventStore =>
-    self.eventStore isNil ifTrue: [self error: "eventStore not yet initialized"]
-    self.eventStore
+    self.eventStore match: [
+      nil -> self error: "eventStore not yet initialized";
+      s -> s
+    ]
 
   /// Return the ActivityWorkerPool (for testing/inspection).
   /// self.activityPool is `| Nil` to satisfy supervisor spawn; guaranteed
   /// non-nil by ExduraSupervisor initialize: before any messages arrive.
   activityPool -> ActivityWorkerPool =>
-    self.activityPool isNil ifTrue: [self error: "activityPool not yet initialized"]
-    self.activityPool
+    self.activityPool match: [
+      nil -> self error: "activityPool not yet initialized";
+      p -> p
+    ]

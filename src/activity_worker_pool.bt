@@ -120,8 +120,10 @@ typed Actor subclass: ActivityWorkerPool
   /// Build a TimeoutToken that kills `worker` after `ms` milliseconds.
   /// Returns a NullTimer when `ms` is nil (no timeout configured).
   killTimerFor: worker :: ActivityWorker timeout: ms :: Integer | Nil -> TimeoutToken =>
-    ms isNil ifTrue: [^NullTimer new]
-    Timer after: ms do: [worker kill]
+    ms match: [
+      nil -> NullTimer new;
+      t :: Integer -> Timer after: t do: [worker kill]
+    ]
 
   /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
   /// singleton since other pools may still reference it.

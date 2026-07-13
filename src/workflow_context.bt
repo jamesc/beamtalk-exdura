@@ -497,12 +497,9 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: sig name ifAbsent: [
-              nil
-            ]) isNil ifTrue: [
-              vars
-            ] ifFalse: [
-              (self.signalHandlers at: sig name) value: sig payload value: vars
+            (self.signalHandlers at: sig name ifAbsent: [nil]) match: [
+              nil -> vars;
+              h -> h value: sig payload value: vars
             ]
           ]
         found2 := WorkflowContext findSignal: name in: self.deliveredSignals
@@ -541,12 +538,9 @@ typed Actor subclass: WorkflowContext
         self.workflowVars := self.deliveredSignals
           inject: self.workflowVars
           into: [:vars :sig |
-            (self.signalHandlers at: sig name ifAbsent: [
-              nil
-            ]) isNil ifTrue: [
-              vars
-            ] ifFalse: [
-              (self.signalHandlers at: sig name) value: sig payload value: vars
+            (self.signalHandlers at: sig name ifAbsent: [nil]) match: [
+              nil -> vars;
+              h -> h value: sig payload value: vars
             ]
           ]
         self.receivedSignals := self.receivedSignals ++ self.deliveredSignals
