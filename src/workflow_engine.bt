@@ -857,6 +857,7 @@ typed Actor subclass: WorkflowEngine
           }
         self.eventStore appendEvents: exec parentWorkflowId events: #(childCancelledEvent)
       ]
+    nil
 
   /// Check if a workflow has been cancelled.
   ///
