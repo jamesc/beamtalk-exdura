@@ -14,7 +14,7 @@ typed Value subclass: ExduraEvent
   field: eventId :: Integer = 0
   field: eventType :: Symbol = #unknown
   field: timestamp :: Integer = 0
-  field: payload :: Dictionary(Symbol, Object) = #{}
+  field: payload :: Dictionary(Symbol, JsonValue) = #{}
 
   /// Display as ExduraEvent(1: WorkflowStarted)
   printString -> String => "ExduraEvent({self eventId}: {self eventType})"

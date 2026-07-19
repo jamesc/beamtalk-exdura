@@ -324,11 +324,14 @@ typed Actor subclass: WorkflowContext
           ifTrue: [
             startedEvent := self.eventHistory at: firstIdx
             payload := startedEvent payload
-            fireAt :: Integer := payload at: #fireAt ifAbsent: [
-              startedEvent timestamp + duration
+            fireAtDefault := startedEvent timestamp + duration
+            fireAt := (payload at: #fireAt ifAbsent: [fireAtDefault]) match: [
+              f :: Integer -> f;
+              _ -> fireAtDefault
             ]
-            storedDuration :: Integer := payload at: #duration ifAbsent: [
-              duration
+            storedDuration := (payload at: #duration ifAbsent: [duration]) match: [
+              d :: Integer -> d;
+              _ -> duration
             ]
             self.isReplaying := false
             remaining := self.engine
@@ -410,7 +413,10 @@ typed Actor subclass: WorkflowContext
             self.replayCursor := secondIdx + skipCount
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
-            childId :: String := startedEvent payload at: #childWorkflowId
+            childId :: String := (startedEvent payload at: #childWorkflowId) match: [
+              c :: String -> c;
+              _ -> self error: "childWorkflowId payload is not a String"
+            ]
             cachedResult := completedEvent payload at: #result
             ^ChildWorkflowHandle forReplay: childId result: cachedResult
           ]
