@@ -329,7 +329,9 @@ typed Actor subclass: WorkflowContext
               f :: Integer -> f;
               _ -> fireAtDefault
             ]
-            storedDuration := (payload at: #duration ifAbsent: [duration]) match: [
+            storedDuration := (payload at: #duration ifAbsent: [
+              duration
+            ]) match: [
               d :: Integer -> d;
               _ -> duration
             ]
