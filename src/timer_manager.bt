@@ -50,8 +50,16 @@ typed Actor subclass: TimerManager
     (started drop: dropCount)
       collect: [:e |
         p := e payload
-        dur :: Integer := p at: #duration ifAbsent: [0]
-        fireAt :: Integer := p at: #fireAt ifAbsent: [e timestamp + dur]
+        durDefault := 0
+        dur := (p at: #duration ifAbsent: [durDefault]) match: [
+          d :: Integer -> d;
+          _ -> durDefault
+        ]
+        fireAtDefault := e timestamp + dur
+        fireAt := (p at: #fireAt ifAbsent: [fireAtDefault]) match: [
+          f :: Integer -> f;
+          _ -> fireAtDefault
+        ]
         TimerInfo new: #{#duration => dur, #fireAt => fireAt}
       ]
 

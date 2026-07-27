@@ -6,4 +6,4 @@
 ///   Signal new: #{#name => "approve", #payload => #{#user => "alice"}}
 typed Value subclass: Signal
   field: name :: String = ""
-  field: payload :: Object | Nil = nil
+  field: payload :: JsonValue | Nil = nil
