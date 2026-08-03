@@ -5,7 +5,7 @@
 name = "http"
 url = "https://github.com/jamesc/beamtalk-http"
 reference = "branch:main"
-sha = "b2b1c629e6c0191ba2c1b826241a908b473b6e6a"
+sha = "03b17be3ef08d134f54a49dff0d8d5c77ac39ef3"
 
 [[native_package]]
 name = "cowboy"
