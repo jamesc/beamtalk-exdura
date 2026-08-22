@@ -3,8 +3,10 @@
 
 [[package]]
 name = "http"
-url = "https://github.com/jamesc/beamtalk-http"
-reference = "branch:main"
+version = "0.1.2"
+registry = "https://github.com/jamesc/beamtalk-registry"
+url = "https://github.com/jamesc/beamtalk-http.git"
+reference = "tag:v0.1.2"
 sha = "03f1d24dbc7f98d8adc6ba1cb8c155d4e3e7aadf"
 
 [[native_package]]
