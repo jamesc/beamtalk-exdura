@@ -5,7 +5,7 @@
 name = "http"
 url = "https://github.com/jamesc/beamtalk-http"
 reference = "branch:main"
-sha = "03b17be3ef08d134f54a49dff0d8d5c77ac39ef3"
+sha = "03f1d24dbc7f98d8adc6ba1cb8c155d4e3e7aadf"
 
 [[native_package]]
 name = "cowboy"
@@ -14,7 +14,7 @@ sha = ""
 
 [[native_package]]
 name = "cowlib"
-version = "2.16.0"
+version = "2.19.0"
 sha = ""
 
 [[native_package]]
@@ -24,6 +24,6 @@ sha = ""
 
 [[native_package]]
 name = "ranch"
-version = "2.2.0"
+version = "2.2.1"
 sha = ""
 
