@@ -6,12 +6,15 @@
 ///
 /// Named queues are managed by TaskQueueRegistry (see task_queue_registry.bt).
 ///
-///   q := TaskQueue spawn
-///   q enqueue: #{#taskId => "t-1", #type => "activity"}
-///   q depth       // => 1
-///   q peek        // => #{#taskId => "t-1", #type => "activity"}
-///   q dequeue     // => #{#taskId => "t-1", #type => "activity"}
-///   q depth       // => 0
+/// ## Examples
+/// ```beamtalk
+/// q := TaskQueue spawn
+/// q enqueue: #{#taskId => "t-1", #type => "activity"}
+/// q depth       // => 1
+/// q peek        // => #{#taskId => "t-1", #type => "activity"}
+/// q dequeue     // => #{#taskId => "t-1", #type => "activity"}
+/// q depth       // => 0
+/// ```
 typed Actor subclass: TaskQueue
   state: table :: Ets
   state: nextSeq :: Integer = 1
@@ -26,8 +29,11 @@ typed Actor subclass: TaskQueue
 
   /// Add a task to the end of the queue.
   ///
-  ///   q enqueue: #{#taskId => "t-1"}
-  ///   q depth   // => 1
+  /// ## Examples
+  /// ```beamtalk
+  /// q enqueue: #{#taskId => "t-1"}
+  /// q depth   // => 1
+  /// ```
   enqueue: task :: Object -> Object =>
     self.table at: self.nextSeq put: task
     self.nextSeq := self.nextSeq + 1
@@ -36,9 +42,12 @@ typed Actor subclass: TaskQueue
   /// Remove and return the next task from the queue (FIFO order).
   /// Returns nil if the queue is empty.
   ///
-  ///   q enqueue: #{#taskId => "t-1"}
-  ///   q dequeue   // => #{#taskId => "t-1"}
-  ///   q dequeue   // => nil
+  /// ## Examples
+  /// ```beamtalk
+  /// q enqueue: #{#taskId => "t-1"}
+  /// q dequeue   // => #{#taskId => "t-1"}
+  /// q dequeue   // => nil
+  /// ```
   dequeue -> Object | Nil =>
     self.table size == 0
       ifTrue: [nil]
@@ -52,14 +61,20 @@ typed Actor subclass: TaskQueue
 
   /// Return the number of pending tasks in the queue.
   ///
-  ///   q depth   // => 0
+  /// ## Examples
+  /// ```beamtalk
+  /// q depth   // => 0
+  /// ```
   depth -> Integer => self.table size
 
   /// View the next task without removing it. Returns nil if empty.
   ///
-  ///   q enqueue: "task-1"
-  ///   q peek      // => "task-1"
-  ///   q depth     // => 1 (unchanged)
+  /// ## Examples
+  /// ```beamtalk
+  /// q enqueue: "task-1"
+  /// q peek      // => "task-1"
+  /// q depth     // => 1 (unchanged)
+  /// ```
   peek -> Object | Nil =>
     self.table size == 0
       ifTrue: [nil]

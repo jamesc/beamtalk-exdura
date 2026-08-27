@@ -4,9 +4,12 @@
 /// (TimerStarted without a matching TimerFired) and reconstructs them
 /// via the WorkflowEngine. This ensures timers survive process restarts.
 ///
-///   manager := TimerManager spawn
-///   manager initWith: engine eventStore: store
-///   manager reconstructPendingTimers: #("wf-1", "wf-2")
+/// ## Examples
+/// ```beamtalk
+/// manager := TimerManager spawn
+/// manager initWith: engine eventStore: store
+/// manager reconstructPendingTimers: #("wf-1", "wf-2")
+/// ```
 typed Actor subclass: TimerManager
   state: engine :: WorkflowEngine | Nil = nil
   state: eventStore :: EventStore | Nil = nil
@@ -18,8 +21,11 @@ typed Actor subclass: TimerManager
   /// Returns a list of dictionaries with #duration and #fireAt for each
   /// TimerStarted event that has no matching TimerFired.
   ///
-  ///   TimerManager findPendingTimers: events
-  ///   // => #(#{#duration => 5000, #fireAt => 1710000005000})
+  /// ## Examples
+  /// ```beamtalk
+  /// TimerManager findPendingTimers: events
+  /// // => #(#{#duration => 5000, #fireAt => 1710000005000})
+  /// ```
   class findPendingTimers: events :: List(ExduraEvent) -> List(TimerInfo) =>
     // Count TimerStarted and TimerFired events.
     // If started > fired, the last (started - fired) timers are pending.
@@ -65,17 +71,26 @@ typed Actor subclass: TimerManager
 
   /// Return the current status of the timer manager.
   ///
-  ///   manager status   // => #ready
+  /// ## Examples
+  /// ```beamtalk
+  /// manager status   // => #ready
+  /// ```
   status -> Symbol => self.status
 
   /// Return the number of timers currently pending reconstruction.
   ///
-  ///   manager pendingCount   // => 0
+  /// ## Examples
+  /// ```beamtalk
+  /// manager pendingCount   // => 0
+  /// ```
   pendingCount -> Integer => self.pendingCount
 
   /// Initialize the timer manager with an engine and event store.
   ///
-  ///   manager initWith: engine eventStore: store
+  /// ## Examples
+  /// ```beamtalk
+  /// manager initWith: engine eventStore: store
+  /// ```
   initWith: anEngine :: WorkflowEngine eventStore: aStore :: EventStore -> Nil =>
     self.engine := anEngine
     self.eventStore := aStore
@@ -88,8 +103,11 @@ typed Actor subclass: TimerManager
   /// Unresolved timers are re-armed via the engine's reconstructTimer
   /// method.
   ///
-  ///   manager reconstructPendingTimers: #("wf-1", "wf-2")
-  ///   // => 1  (number of timers reconstructed)
+  /// ## Examples
+  /// ```beamtalk
+  /// manager reconstructPendingTimers: #("wf-1", "wf-2")
+  /// // => 1  (number of timers reconstructed)
+  /// ```
   reconstructPendingTimers: workflowIds :: List(String) -> Integer =>
     self.status := #scanning
     count := workflowIds

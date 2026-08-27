@@ -4,10 +4,13 @@
 /// to 2. When replaying a workflow originally run with V1, the recorded
 /// VersionMarker (version: 1) takes precedence over the new default.
 ///
-///   workflow := VersionedWorkflowV2 new
-///   workflow run: "order-1" ctx: ctx
-///   // => "v2-result" (first execution with defaultVersion 2)
-///   // => "v1-result" (replay of workflow originally run with V1)
+/// ## Examples
+/// ```beamtalk
+/// workflow := VersionedWorkflowV2 new
+/// workflow run: "order-1" ctx: ctx
+/// // => "v2-result" (first execution with defaultVersion 2)
+/// // => "v1-result" (replay of workflow originally run with V1)
+/// ```
 Object subclass: VersionedWorkflowV2
 
   class run: _args ctx: ctx -> String =>

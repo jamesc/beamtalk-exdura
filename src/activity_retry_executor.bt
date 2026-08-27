@@ -4,10 +4,13 @@
 /// Uses Result tryDo: for exception capture and recursive calls to avoid the
 /// block mutation gotcha with local variables.
 ///
-///   result := ActivityRetryExecutor
-///     execute: TestActivities selector: #doWork: args: #(data)
-///     eventStore: store workflowId: "wf-1"
-///     retryPolicy: (RetryPolicy new: #{#maximumAttempts => 3})
+/// ## Examples
+/// ```beamtalk
+/// result := ActivityRetryExecutor
+///   execute: TestActivities selector: #doWork: args: #(data)
+///   eventStore: store workflowId: "wf-1"
+///   retryPolicy: (RetryPolicy new: #{#maximumAttempts => 3})
+/// ```
 Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
@@ -94,11 +97,14 @@ Object subclass: ActivityRetryExecutor
   /// True when `attempt` has reached the configured retry limit.
   /// Returns false when maxAttempts is nil or 0 (unlimited per SPEC §4.1.4).
   ///
-  ///   cfg := ActivityRetryConfig new: #{#maxAttempts => 3}
-  ///   ActivityRetryExecutor retriesExhausted: 2 config: cfg   // => false
-  ///   ActivityRetryExecutor retriesExhausted: 3 config: cfg   // => true
-  ///   unlimited := ActivityRetryConfig new: #{#maxAttempts => 0}
-  ///   ActivityRetryExecutor retriesExhausted: 99 config: unlimited   // => false
+  /// ## Examples
+  /// ```beamtalk
+  /// cfg := ActivityRetryConfig new: #{#maxAttempts => 3}
+  /// ActivityRetryExecutor retriesExhausted: 2 config: cfg   // => false
+  /// ActivityRetryExecutor retriesExhausted: 3 config: cfg   // => true
+  /// unlimited := ActivityRetryConfig new: #{#maxAttempts => 0}
+  /// ActivityRetryExecutor retriesExhausted: 99 config: unlimited   // => false
+  /// ```
   class retriesExhausted: attempt :: Integer config: config :: ActivityRetryConfig -> Boolean =>
     config maxAttempts match: [
       nil -> false;

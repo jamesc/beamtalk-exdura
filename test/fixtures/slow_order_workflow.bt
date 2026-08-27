@@ -4,7 +4,10 @@
 /// safe-point state. The sleep provides a window to query while the
 /// workflow is blocked.
 ///
-///   engine startWorkflow: SlowOrderWorkflow id: "wf-1" args: #("order-42")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: SlowOrderWorkflow id: "wf-1" args: #("order-42")
+/// ```
 Workflow subclass: SlowOrderWorkflow
 
   /// Register query handlers for status and full order info.

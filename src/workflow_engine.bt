@@ -9,10 +9,13 @@
 /// (ActivityWorkerPool). Worker crashes are caught and reported as
 /// ActivityFailed. Timeouts are enforced via Timer.
 ///
-///   store := EventStore spawn
-///   pool := ActivityWorkerPool spawn
-///   engine := WorkflowEngine withStore: store pool: pool
-///   engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
+/// ## Examples
+/// ```beamtalk
+/// store := EventStore spawn
+/// pool := ActivityWorkerPool spawn
+/// engine := WorkflowEngine withStore: store pool: pool
+/// engine startWorkflow: MyWorkflow id: "wf-1" args: #("hello")
+/// ```
 typed Actor subclass: WorkflowEngine
   state: eventStore :: EventStore | Nil = nil
   state: activityPool :: ActivityWorkerPool | Nil = nil
@@ -25,13 +28,19 @@ typed Actor subclass: WorkflowEngine
 
   /// Create a new WorkflowEngine with the given EventStore and ActivityWorkerPool.
   ///
-  ///   engine := WorkflowEngine withStore: (EventStore spawn) pool: (ActivityWorkerPool spawn)
+  /// ## Examples
+  /// ```beamtalk
+  /// engine := WorkflowEngine withStore: (EventStore spawn) pool: (ActivityWorkerPool spawn)
+  /// ```
   class withStore: anEventStore :: EventStore pool: aPool :: ActivityWorkerPool -> WorkflowEngine =>
     self spawnWith: #{#eventStore => anEventStore, #activityPool => aPool}
 
   /// Create a new WorkflowEngine with an EventStore (no pool — legacy Phase 0).
   ///
-  ///   engine := WorkflowEngine withStore: (EventStore spawn)
+  /// ## Examples
+  /// ```beamtalk
+  /// engine := WorkflowEngine withStore: (EventStore spawn)
+  /// ```
   class withStore: anEventStore :: EventStore -> WorkflowEngine =>
     self spawnWith: #{#eventStore => anEventStore}
 
@@ -48,7 +57,10 @@ typed Actor subclass: WorkflowEngine
   /// Creates a WorkflowExecution record, records a WorkflowStarted event,
   /// spawns the Workflow Actor, and kicks off its run: method.
   ///
-  ///   engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
+  /// ## Examples
+  /// ```beamtalk
+  /// engine startWorkflow: OrderWorkflow id: "order-1" args: #("data")
+  /// ```
   startWorkflow: workflowClass :: Workflow class id: workflowId :: String args: args :: List -> WorkflowRunner =>
     wfType := workflowClass name asString
     Tracing setContext: #{#workflowId => workflowId, #workflowType => wfType}
@@ -104,7 +116,10 @@ typed Actor subclass: WorkflowEngine
   /// The snapshotInterval controls how often new snapshots are recorded
   /// during replay (default: 100 events).
   ///
-  ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello"
+  /// ```
   replayWorkflow: workflowClass :: Workflow class id: workflowId :: String input: input :: Object | Nil -> WorkflowRunner =>
     self
       replayWorkflow: workflowClass
@@ -119,7 +134,10 @@ typed Actor subclass: WorkflowEngine
   /// activities before the snapshot are replayed from history (fast, no
   /// execution), while only truly new activities execute live.
   ///
-  ///   engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
+  /// ## Examples
+  /// ```beamtalk
+  /// engine replayWorkflow: MyWorkflow id: "wf-1" input: "hello" snapshotInterval: 50
+  /// ```
   replayWorkflow: workflowClass :: Workflow class id: workflowId :: String input: input :: Object | Nil snapshotInterval: interval :: Integer -> WorkflowRunner =>
     Tracing setContext: #{
       #workflowId => workflowId,
@@ -155,8 +173,11 @@ typed Actor subclass: WorkflowEngine
 
   /// Execute an activity class method and record events (no options).
   ///
-  ///   engine scheduleActivity: TestActivities selector: #doubleIt:
-  ///     args: #(5) workflowId: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine scheduleActivity: TestActivities selector: #doubleIt:
+  ///   args: #(5) workflowId: "wf-1"
+  /// ```
   scheduleActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List workflowId: workflowId :: String -> Object =>
     // Dispatched via perform:withArguments: (not a direct self-send) to avoid
     // a compiler codegen bug (self-send forwarding into a method that can
@@ -170,9 +191,12 @@ typed Actor subclass: WorkflowEngine
   /// and records ActivityCompleted or ActivityFailed. If an ActivityWorkerPool
   /// is available, dispatches through it; otherwise falls back to direct execution.
   ///
-  ///   engine scheduleActivity: TestActivities selector: #doubleIt:
-  ///     args: #(5) workflowId: "wf-1"
-  ///     options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  /// ## Examples
+  /// ```beamtalk
+  /// engine scheduleActivity: TestActivities selector: #doubleIt:
+  ///   args: #(5) workflowId: "wf-1"
+  ///   options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  /// ```
   scheduleActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List workflowId: workflowId :: String options: options :: Dictionary -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
@@ -277,7 +301,10 @@ typed Actor subclass: WorkflowEngine
   /// Stores the original fire time in the TimerStarted payload so that
   /// durable timer reconstruction can calculate the remainder on replay.
   ///
-  ///   engine scheduleTimer: 5000 workflowId: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine scheduleTimer: 5000 workflowId: "wf-1"
+  /// ```
   scheduleTimer: duration :: Integer workflowId: workflowId :: String -> Integer =>
     Tracing setContext: #{#workflowId => workflowId}
     nowMs := Time nowMs
@@ -296,7 +323,10 @@ typed Actor subclass: WorkflowEngine
 
   /// Record a TimerFired event after the context has slept.
   ///
-  ///   engine recordTimerFired: 5000 workflowId: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine recordTimerFired: 5000 workflowId: "wf-1"
+  /// ```
   recordTimerFired: duration :: Integer workflowId: workflowId :: String -> Nil =>
     firedNow := Time nowMs
     firedEvent := ExduraEvent
@@ -313,7 +343,10 @@ typed Actor subclass: WorkflowEngine
   /// If the original fire time has already passed, fires immediately and records
   /// the TimerFired event. Otherwise sleeps for the remainder.
   ///
-  ///   engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine reconstructTimer: 5000 fireAt: 1710000005000 workflowId: "wf-1"
+  /// ```
   reconstructTimer: _duration :: Integer fireAt: fireAt :: Integer workflowId: workflowId :: String -> Integer =>
     Tracing setContext: #{#workflowId => workflowId}
     nowMs := Time nowMs
@@ -324,7 +357,10 @@ typed Actor subclass: WorkflowEngine
 
   /// Return the event history for a workflow.
   ///
-  ///   engine getEventHistory: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine getEventHistory: "wf-1"
+  /// ```
   getEventHistory: workflowId :: String -> List =>
     self.eventStore readEvents: workflowId fromSeq: 1
 
@@ -334,7 +370,10 @@ typed Actor subclass: WorkflowEngine
   /// SignalReceived event is recorded in the event history. The signal will
   /// be delivered at the next safe point when the workflow drains its buffer.
   ///
-  ///   engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  /// ## Examples
+  /// ```beamtalk
+  /// engine bufferSignal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  /// ```
   bufferSignal: workflowId :: String name: signalName :: String payload: data :: Object -> Nil =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
@@ -359,8 +398,11 @@ typed Actor subclass: WorkflowEngine
   /// Returns the list of buffered Signal objects (in arrival order) and
   /// clears the buffer.
   ///
-  ///   signals := engine drainSignals: "wf-1"
-  ///   // => #(Signal(name: "approve", payload: #{#user => "alice"}))
+  /// ## Examples
+  /// ```beamtalk
+  /// signals := engine drainSignals: "wf-1"
+  /// // => #(Signal(name: "approve", payload: #{#user => "alice"}))
+  /// ```
   drainSignals: workflowId :: String -> List =>
     signals := self.signalBuffers at: workflowId ifAbsent: [#()]
     self.signalBuffers := self.signalBuffers at: workflowId put: #()
@@ -368,7 +410,10 @@ typed Actor subclass: WorkflowEngine
 
   /// Return buffered signals for a workflow (without clearing).
   ///
-  ///   engine getBufferedSignals: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine getBufferedSignals: "wf-1"
+  /// ```
   getBufferedSignals: workflowId :: String -> List =>
     self.signalBuffers at: workflowId ifAbsent: [#()]
 
@@ -381,7 +426,10 @@ typed Actor subclass: WorkflowEngine
   /// All logic is inlined to avoid self-send deadlock (Actor self-sends
   /// re-enter the mailbox and deadlock while processing the current message).
   ///
-  ///   engine completeWorkflow: "wf-1" result: 42
+  /// ## Examples
+  /// ```beamtalk
+  /// engine completeWorkflow: "wf-1" result: 42
+  /// ```
   completeWorkflow: workflowId :: String result: result :: Object -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: don't overwrite cancelled status with completed
@@ -446,7 +494,10 @@ typed Actor subclass: WorkflowEngine
   ///
   /// All logic is inlined to avoid self-send deadlock.
   ///
-  ///   engine failWorkflow: "wf-1" reason: "something went wrong"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine failWorkflow: "wf-1" reason: "something went wrong"
+  /// ```
   failWorkflow: workflowId :: String reason: reason :: String -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     now := Time nowMs div: 1000
@@ -506,7 +557,10 @@ typed Actor subclass: WorkflowEngine
   /// snapshot state to disk via the EventStore. Used by WorkflowContext
   /// at configurable intervals to enable replay optimization.
   ///
-  ///   engine saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  /// ## Examples
+  /// ```beamtalk
+  /// engine saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  /// ```
   saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer -> Nil =>
     now := Time nowMs div: 1000
     snapshotEvent := ExduraEvent
@@ -526,7 +580,10 @@ typed Actor subclass: WorkflowEngine
   /// Called by WorkflowRunner after creating the workflow object so the
   /// engine can evaluate query handler blocks when queries arrive.
   ///
-  ///   engine registerQueryHandlers: handlers forWorkflow: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine registerQueryHandlers: handlers forWorkflow: "wf-1"
+  /// ```
   registerQueryHandlers: handlers :: Dictionary forWorkflow: workflowId :: String -> Object =>
     self.workflowQueryHandlers := self.workflowQueryHandlers at: workflowId put: handlers
 
@@ -536,7 +593,10 @@ typed Actor subclass: WorkflowEngine
   /// it for the workflow. Query handlers will be evaluated against this
   /// snapshot until the next safe point updates it.
   ///
-  ///   engine captureSnapshot: #{#status => "processing"} forWorkflow: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine captureSnapshot: #{#status => "processing"} forWorkflow: "wf-1"
+  /// ```
   captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String -> Object =>
     // Stop the previous snapshot Actor to avoid process leaks
     oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
@@ -551,7 +611,10 @@ typed Actor subclass: WorkflowEngine
   /// Raises an error if no handler is registered for the query name or
   /// if no snapshot exists for the workflow.
   ///
-  ///   result := engine handleQuery: "wf-1" name: "getStatus"
+  /// ## Examples
+  /// ```beamtalk
+  /// result := engine handleQuery: "wf-1" name: "getStatus"
+  /// ```
   handleQuery: workflowId :: String name: queryName :: String -> Object =>
     handlers := self.workflowQueryHandlers at: workflowId ifAbsent: [nil]
     handlers isNil ifTrue: [
@@ -569,7 +632,10 @@ typed Actor subclass: WorkflowEngine
 
   /// Return the cached snapshot for a workflow (for testing/inspection).
   ///
-  ///   engine getSnapshot: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine getSnapshot: "wf-1"
+  /// ```
   getSnapshot: workflowId :: String -> ActorSnapshot | Nil =>
     self.workflowSnapshots at: workflowId ifAbsent: [nil]
 
@@ -583,8 +649,11 @@ typed Actor subclass: WorkflowEngine
   /// Options may include:
   ///   #parentClosePolicy — #terminate (default), #requestCancel, or #abandon
   ///
-  ///   handle := engine startChildWorkflow: ProcessItem id: "child-1"
-  ///     args: #("data") parentWorkflowId: "parent-1" options: #{}
+  /// ## Examples
+  /// ```beamtalk
+  /// handle := engine startChildWorkflow: ProcessItem id: "child-1"
+  ///   args: #("data") parentWorkflowId: "parent-1" options: #{}
+  /// ```
   startChildWorkflow: workflowClass :: Workflow class id: childWorkflowId :: String args: args :: List parentWorkflowId: parentId :: String options: options :: Dictionary -> ChildWorkflowHandle =>
     Tracing
       setContext: #{
@@ -669,13 +738,19 @@ typed Actor subclass: WorkflowEngine
 
   /// Return the list of child workflow IDs for a parent (for testing).
   ///
-  ///   engine getChildWorkflows: "parent-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine getChildWorkflows: "parent-1"
+  /// ```
   getChildWorkflows: parentId :: String -> List =>
     self.childWorkflows at: parentId ifAbsent: [#()]
 
   /// Return the parent-close policy for a child workflow (for testing).
   ///
-  ///   engine getParentClosePolicy: "child-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine getParentClosePolicy: "child-1"
+  /// ```
   getParentClosePolicy: childWorkflowId :: String -> Symbol =>
     self.parentClosePolicy at: childWorkflowId ifAbsent: [#terminate]
 
@@ -684,7 +759,10 @@ typed Actor subclass: WorkflowEngine
   /// Called by WorkflowContext when a workflow calls continueAsNew:.
   /// The event is recorded before the ContinueAsNewRequest is returned.
   ///
-  ///   engine recordContinueAsNew: "wf-1" args: #("nextCursor")
+  /// ## Examples
+  /// ```beamtalk
+  /// engine recordContinueAsNew: "wf-1" args: #("nextCursor")
+  /// ```
   recordContinueAsNew: workflowId :: String args: args :: List -> List(ExduraEvent) =>
     now := Time nowMs div: 1000
     continueEvent := ExduraEvent
@@ -703,7 +781,10 @@ typed Actor subclass: WorkflowEngine
   /// provided args. The new execution starts from scratch with no replay
   /// of old events.
   ///
-  ///   engine continueAsNewWorkflow: "wf-1" workflowClass: PollerWorkflow args: #("nextCursor")
+  /// ## Examples
+  /// ```beamtalk
+  /// engine continueAsNewWorkflow: "wf-1" workflowClass: PollerWorkflow args: #("nextCursor")
+  /// ```
   continueAsNewWorkflow: workflowId :: String workflowClass: workflowClass :: Workflow class args: args :: List -> WorkflowRunner =>
     Tracing setContext: #{
       #workflowId => workflowId,
@@ -767,7 +848,10 @@ typed Actor subclass: WorkflowEngine
   /// Stores the version name and selected version in the event history.
   /// Called by WorkflowContext during first execution of a version: call.
   ///
-  ///   engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine recordVersionMarker: "payment-flow" version: 1 workflowId: "wf-1"
+  /// ```
   recordVersionMarker: name :: String version: selectedVersion :: Integer workflowId: workflowId :: String -> List(ExduraEvent) =>
     now := Time nowMs div: 1000
     markerEvent := ExduraEvent
@@ -785,7 +869,10 @@ typed Actor subclass: WorkflowEngine
   /// cancels pending child workflows per their parent-close policy, and
   /// updates the execution status to #cancelled.
   ///
-  ///   engine cancelWorkflow: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine cancelWorkflow: "wf-1"
+  /// ```
   cancelWorkflow: workflowId :: String -> Nil =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: only cancel running workflows
@@ -864,13 +951,19 @@ typed Actor subclass: WorkflowEngine
   /// Returns true if cancelWorkflow: has been called for this workflow ID.
   /// Used by WorkflowContext to check at safe points.
   ///
-  ///   engine isCancelled: "wf-1"   // => true or false
+  /// ## Examples
+  /// ```beamtalk
+  /// engine isCancelled: "wf-1"   // => true or false
+  /// ```
   isCancelled: workflowId :: String -> Boolean =>
     self.cancelledWorkflows at: workflowId ifAbsent: [false]
 
   /// Clear the cancellation flag for a workflow (after it has been handled).
   ///
-  ///   engine clearCancellation: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// engine clearCancellation: "wf-1"
+  /// ```
   clearCancellation: workflowId :: String -> Object =>
     self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 

@@ -5,17 +5,21 @@
 ///
 /// Try it in the REPL:
 ///   :load "examples/"
-///   client := ExduraClient connect: #{}
-///   handle := client start: OrderWorkflow id: "order-123"
-///     args: #(#{#itemId => "SKU-42", #amount => 2999})
-///     taskQueue: "default" options: #{}
-///   handle result: 5000
-///   // => #{#inventory => #{#status => "reserved", ...},
-///   //     #payment => #{#status => "charged", ...}}
 ///
-///   // Inspect event history
-///   history := client eventStore readEvents: "order-123" fromSeq: 1
-///   history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
+/// ## Examples
+/// ```beamtalk
+/// client := ExduraClient connect: #{}
+/// handle := client start: OrderWorkflow id: "order-123"
+///   args: #(#{#itemId => "SKU-42", #amount => 2999})
+///   taskQueue: "default" options: #{}
+/// handle result: 5000
+/// // => #{#inventory => #{#status => "reserved", ...},
+/// //     #payment => #{#status => "charged", ...}}
+///
+/// // Inspect event history
+/// history := client eventStore readEvents: "order-123" fromSeq: 1
+/// history do: [:e | Transcript show: "{e eventId}: {e eventType}"; cr]
+/// ```
 Workflow subclass: OrderWorkflow
 
   class run: order ctx: ctx =>

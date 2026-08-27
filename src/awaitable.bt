@@ -4,8 +4,11 @@
 /// with an optional timeout. Both WorkflowHandle and ChildWorkflowHandle
 /// conform to this protocol.
 ///
-///   (WorkflowHandle conformsTo: #Awaitable)       // => true
-///   (ChildWorkflowHandle conformsTo: #Awaitable)   // => true
+/// ## Examples
+/// ```beamtalk
+/// (WorkflowHandle conformsTo: #Awaitable)       // => true
+/// (ChildWorkflowHandle conformsTo: #Awaitable)   // => true
+/// ```
 Protocol define: Awaitable
   /// Block until the result is available and return it.
   result -> Object

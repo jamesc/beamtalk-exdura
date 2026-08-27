@@ -4,8 +4,11 @@
 /// matching signal was found, provide the signal itself, and return
 /// the remaining signals with the match removed.
 ///
-///   result := WorkflowContext findSignal: "approve" in: signals
-///   result found ifTrue: [result signal payload]
+/// ## Examples
+/// ```beamtalk
+/// result := WorkflowContext findSignal: "approve" in: signals
+/// result found ifTrue: [result signal payload]
+/// ```
 typed Value subclass: SignalSearchResult
   field: found :: Boolean = false
   field: signal :: Signal | Nil = nil

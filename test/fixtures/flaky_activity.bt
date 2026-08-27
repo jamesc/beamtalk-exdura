@@ -3,8 +3,11 @@
 /// Uses an ETS table (#flaky_activity_state) to track attempts per key.
 /// The test setUp creates the table and resets it between tests.
 ///
-///   FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
-///   // Fails first 2 calls, succeeds on 3rd
+/// ## Examples
+/// ```beamtalk
+/// FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
+/// // Fails first 2 calls, succeeds on 3rd
+/// ```
 Activity subclass: FlakyActivity
 
   /// Fail `failCount` times, then return success.
@@ -12,7 +15,10 @@ Activity subclass: FlakyActivity
   /// Args: a list containing a dictionary with #key and #failCount.
   /// Uses ETS to track how many times each key has been attempted.
   ///
-  ///   FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
+  /// ## Examples
+  /// ```beamtalk
+  /// FlakyActivity doWork: #(#{#key => "test", #failCount => 2})
+  /// ```
   class doWork: args :: List -> Dictionary(Symbol, Object) =>
     dict := args at: 1
     key := dict at: #key

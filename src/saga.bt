@@ -4,23 +4,32 @@
 /// in reverse (LIFO) when compensate is called. Compensation blocks
 /// that fail are caught so remaining compensations still run.
 ///
-///   saga := Saga spawn
-///   saga addCompensation: [account credit: 100]
-///   saga addCompensation: [inventory restock: item]
-///   saga compensate  // restocks first, then credits
+/// ## Examples
+/// ```beamtalk
+/// saga := Saga spawn
+/// saga addCompensation: [account credit: 100]
+/// saga addCompensation: [inventory restock: item]
+/// saga compensate  // restocks first, then credits
+/// ```
 typed Actor subclass: Saga
   state: compensations :: List(Block) = #()
 
   /// Append a compensation block to the list.
   ///
-  ///   saga addCompensation: [account credit: amount]
+  /// ## Examples
+  /// ```beamtalk
+  /// saga addCompensation: [account credit: amount]
+  /// ```
   addCompensation: block :: Block -> Nil =>
     self.compensations := self.compensations add: block
     nil
 
   /// Return the list of registered compensation blocks.
   ///
-  ///   saga compensations  // => #(block1, block2, ...)
+  /// ## Examples
+  /// ```beamtalk
+  /// saga compensations  // => #(block1, block2, ...)
+  /// ```
   compensations -> List => self.compensations
 
   /// Execute all compensation blocks in reverse (LIFO) order.

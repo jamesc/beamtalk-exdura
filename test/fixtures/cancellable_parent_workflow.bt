@@ -3,7 +3,10 @@
 /// Used to test that cancelling the parent propagates cancellation to the
 /// child workflow per the parent-close policy.
 ///
-///   engine startWorkflow: CancellableParentWorkflow id: "p-1" args: #(5)
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: CancellableParentWorkflow id: "p-1" args: #(5)
+/// ```
 Workflow subclass: CancellableParentWorkflow
 
   /// Start a child workflow and then do a long task.

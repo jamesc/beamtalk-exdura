@@ -5,66 +5,84 @@
 /// signal handling, and child workflow support.
 /// No Actor — no inherited state issues.
 ///
+/// ## Examples
+///
 /// Activity dispatch supports options for retry and timeouts:
 ///
-///   Workflow subclass: GreetingWorkflow
-///     run: name ctx: ctx -> String =>
-///       ctx runActivity: GreetingActivities method: #greet: with: #(name)
-///         options: #{
-///           #retryPolicy => #{#maximumAttempts => 3},
-///           #startToCloseTimeout => 30000
-///         }
+/// ```beamtalk
+/// Workflow subclass: GreetingWorkflow
+///   run: name ctx: ctx -> String =>
+///     ctx runActivity: GreetingActivities method: #greet: with: #(name)
+///       options: #{
+///         #retryPolicy => #{#maximumAttempts => 3},
+///         #startToCloseTimeout => 30000
+///       }
+/// ```
 ///
 /// Durable sleep records timer events and skips during replay:
 ///
-///   ctx sleep: 5000   // sleep for 5 seconds
+/// ```beamtalk
+/// ctx sleep: 5000   // sleep for 5 seconds
+/// ```
 ///
 /// Signal handlers register named handlers that fire when signals are drained
 /// at safe points. Handlers receive the signal payload and current workflow
 /// variables, and return updated variables:
 ///
-///   ctx setVar: #approved to: false
-///   ctx onSignal: "approve" do: [:payload :vars |
-///     vars at: #approved put: true
-///   ]
+/// ```beamtalk
+/// ctx setVar: #approved to: false
+/// ctx onSignal: "approve" do: [:payload :vars |
+///   vars at: #approved put: true
+/// ]
+/// ```
 ///
 /// Blocking waits for signals or conditions:
 ///
-///   payload := ctx waitForSignal: "approve" timeout: 60000
-///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+/// ```beamtalk
+/// payload := ctx waitForSignal: "approve" timeout: 60000
+/// ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+/// ```
 ///
 /// Child workflows enable decomposition. Each child has its own event
 /// history and lifecycle:
 ///
-///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #(item)
-///   result := handle result   // blocks until child completes
+/// ```beamtalk
+/// handle := ctx startChildWorkflow: ProcessItem method: #run: with: #(item)
+/// result := handle result   // blocks until child completes
+/// ```
 ///
 /// Continue-as-new resets the event history for long-running workflows:
 ///
-///   nextCursor isNil
-///     ifTrue: ["done"]
-///     ifFalse: [ctx continueAsNew: #(nextCursor)]
+/// ```beamtalk
+/// nextCursor isNil
+///   ifTrue: ["done"]
+///   ifFalse: [ctx continueAsNew: #(nextCursor)]
+/// ```
 ///
 /// Versioning enables safe code changes for in-flight workflows:
 ///
-///   v := ctx version: "payment-flow" defaultVersion: 2 maxVersion: 2
-///   v == 1
-///     ifTrue: [ctx runActivity: PaymentActivities method: #chargeV1: with: #(orderId)]
-///     ifFalse: [ctx runActivity: PaymentActivities method: #chargeV2: with: #(orderId)]
+/// ```beamtalk
+/// v := ctx version: "payment-flow" defaultVersion: 2 maxVersion: 2
+/// v == 1
+///   ifTrue: [ctx runActivity: PaymentActivities method: #chargeV1: with: #(orderId)]
+///   ifFalse: [ctx runActivity: PaymentActivities method: #chargeV2: with: #(orderId)]
+/// ```
 ///
 /// Query handlers are registered in `registerQueries:` and receive an
 /// ActorSnapshot proxy as their argument. Workflow state visible to
 /// queries is managed through the context's setState:to: method:
 ///
-///   Workflow subclass: OrderWorkflow
-///     registerQueries: ctx =>
-///       ctx onQuery: "getStatus" do: [:snap | snap status]
+/// ```beamtalk
+/// Workflow subclass: OrderWorkflow
+///   registerQueries: ctx =>
+///     ctx onQuery: "getStatus" do: [:snap | snap status]
 ///
-///     run: orderId ctx: ctx =>
-///       ctx setState: #status to: "processing"
-///       ctx runActivity: OrderActivities method: #process: with: #(orderId)
-///       ctx setState: #status to: "completed"
-///       "done"
+///   run: orderId ctx: ctx =>
+///     ctx setState: #status to: "processing"
+///     ctx runActivity: OrderActivities method: #process: with: #(orderId)
+///     ctx setState: #status to: "completed"
+///     "done"
+/// ```
 Object subclass: Workflow
 
   /// Subclass hook — override this with workflow logic.
@@ -79,6 +97,9 @@ Object subclass: Workflow
   /// Called by the WorkflowRunner before run:ctx:. Override to register
   /// query handlers. The default implementation does nothing.
   ///
-  ///   registerQueries: ctx =>
-  ///     ctx onQuery: "getStatus" do: [:snap | snap status]
+  /// ## Examples
+  /// ```beamtalk
+  /// registerQueries: ctx =>
+  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
+  /// ```
   class registerQueries: _ctx => nil

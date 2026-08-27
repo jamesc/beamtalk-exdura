@@ -3,8 +3,11 @@
 /// Used by WorkflowEngineTest to verify activity dispatch, event recording,
 /// and replay behavior.
 ///
-///   engine startWorkflow: TwoActivityWorkflow id: "wf-1" args: #(5)
-///   // Runs doubleIt(5) => 10, then addNumbers(10, 10) => 20
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: TwoActivityWorkflow id: "wf-1" args: #(5)
+/// // Runs doubleIt(5) => 10, then addNumbers(10, 10) => 20
+/// ```
 Workflow subclass: TwoActivityWorkflow
 
   /// Run two activities: double the input, then add the result to itself.

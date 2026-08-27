@@ -8,7 +8,11 @@ Object subclass: ActivityRetryHelper
   ///
   ///   ActivityRetryHelper
   ///     recordFailedAndRaise: store workflowId: "wf-1"
-  ///     payload: #{#error => "boom", #attempt => 1, #nonRetryable => true}
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// payload: #{#error => "boom", #attempt => 1, #nonRetryable => true}
+  /// ```
   class recordFailedAndRaise: eventStore :: EventStore workflowId: workflowId :: String payload: payload :: Dictionary(Symbol, JsonValue) =>
     failedNow := Time nowMs div: 1000
     failedEvent := ExduraEvent new: #{

@@ -4,7 +4,10 @@
 /// state via the context at each step. Used by QueryTest to verify
 /// query results reflect the last safe-point state.
 ///
-///   engine startWorkflow: OrderWorkflow id: "wf-1" args: #("order-42")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: OrderWorkflow id: "wf-1" args: #("order-42")
+/// ```
 Workflow subclass: OrderWorkflow
 
   /// Register query handlers for order status and full order info.

@@ -3,7 +3,10 @@
 /// Replaces the raw #{#name => ..., #payload => ...} dictionaries used
 /// throughout WorkflowContext for signal buffering and delivery.
 ///
-///   Signal new: #{#name => "approve", #payload => #{#user => "alice"}}
+/// ## Examples
+/// ```beamtalk
+/// Signal new: #{#name => "approve", #payload => #{#user => "alice"}}
+/// ```
 typed Value subclass: Signal
   field: name :: String = ""
   field: payload :: JsonValue | Nil = nil

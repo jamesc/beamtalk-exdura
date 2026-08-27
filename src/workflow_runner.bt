@@ -5,14 +5,17 @@
 /// optimization: if a snapshot exists, the context starts from the snapshot
 /// point and replays only subsequent events.
 ///
-///   runner := WorkflowRunner spawnWith: #{
-///     #workflow => TwoActivityWorkflow,
-///     #engine => engine,
-///     #workflowId => "wf-1",
-///     #input => "hello",
-///     #history => #()
-///   }
-///   runner go!
+/// ## Examples
+/// ```beamtalk
+/// runner := WorkflowRunner spawnWith: #{
+///   #workflow => TwoActivityWorkflow,
+///   #engine => engine,
+///   #workflowId => "wf-1",
+///   #input => "hello",
+///   #history => #()
+/// }
+/// runner go!
+/// ```
 typed Actor subclass: WorkflowRunner
   state: workflow :: Workflow class
   state: engine :: WorkflowEngine
@@ -28,13 +31,19 @@ typed Actor subclass: WorkflowRunner
   /// The semaphore is created by go and stored as actor state.
   /// Callers should use performLocally: to avoid class object contention:
   ///
-  ///   runner go!
-  ///   WorkflowRunner performLocally: #await:timeout: withArguments: #(runner, 10000)
+  /// ## Examples
+  /// ```beamtalk
+  /// runner go!
+  /// WorkflowRunner performLocally: #await:timeout: withArguments: #(runner, 10000)
+  /// ```
+  ///
   /// Create a runner with a completion semaphore for zero-sleep await.
   ///
-  ///   {runner, semName} := WorkflowRunner spawnForAwait: #{#workflow => ..., #engine => ...}
-  ///   runner go!
-  ///   WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+  /// ```beamtalk
+  /// {runner, semName} := WorkflowRunner spawnForAwait: #{#workflow => ..., #engine => ...}
+  /// runner go!
+  /// WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+  /// ```
   class spawnForAwait: config :: Dictionary -> List =>
     semName := "wfr_{System uniqueId}" asAtom
     AtomicCounter new: semName

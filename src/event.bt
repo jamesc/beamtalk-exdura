@@ -4,12 +4,15 @@
 /// in a workflow execution. The engine replays this log to reconstruct
 /// workflow state after a crash or restart.
 ///
-///   ExduraEvent new: #{
-///     #eventId => 1,
-///     #eventType => #WorkflowStarted,
-///     #timestamp => 1710000000,
-///     #payload => #{#workflowId => "wf-1"}
-///   }
+/// ## Examples
+/// ```beamtalk
+/// ExduraEvent new: #{
+///   #eventId => 1,
+///   #eventType => #WorkflowStarted,
+///   #timestamp => 1710000000,
+///   #payload => #{#workflowId => "wf-1"}
+/// }
+/// ```
 typed Value subclass: ExduraEvent
   field: eventId :: Integer = 0
   field: eventType :: Symbol = #unknown

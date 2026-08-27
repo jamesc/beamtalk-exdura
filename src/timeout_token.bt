@@ -3,8 +3,11 @@
 /// Lets call sites treat "no timeout configured" uniformly with a scheduled
 /// Timer, removing nil-guarded branches. Both Timer and NullTimer conform.
 ///
-///   (Timer conformsTo: #TimeoutToken)      // => true
-///   (NullTimer conformsTo: #TimeoutToken)  // => true
+/// ## Examples
+/// ```beamtalk
+/// (Timer conformsTo: #TimeoutToken)      // => true
+/// (NullTimer conformsTo: #TimeoutToken)  // => true
+/// ```
 Protocol define: TimeoutToken
   /// Cancel the pending action. Returns true if an active timer was cancelled.
   cancel -> Boolean

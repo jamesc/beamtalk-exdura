@@ -3,10 +3,13 @@
 /// Provides named queue lookup. If a queue with the given name does not
 /// exist, it is created on first access.
 ///
-///   registry := TaskQueueRegistry spawn
-///   q := registry queueNamed: "orders"
-///   q enqueue: #{#taskId => "t-1"}
-///   registry queueNamed: "orders"   // => same TaskQueue actor
+/// ## Examples
+/// ```beamtalk
+/// registry := TaskQueueRegistry spawn
+/// q := registry queueNamed: "orders"
+/// q enqueue: #{#taskId => "t-1"}
+/// registry queueNamed: "orders"   // => same TaskQueue actor
+/// ```
 typed Actor subclass: TaskQueueRegistry
   state: queues :: Dictionary(String, TaskQueue)
 
@@ -17,7 +20,10 @@ typed Actor subclass: TaskQueueRegistry
 
   /// Return the TaskQueue for the given name, creating it if needed.
   ///
-  ///   registry queueNamed: "orders"   // => TaskQueue actor
+  /// ## Examples
+  /// ```beamtalk
+  /// registry queueNamed: "orders"   // => TaskQueue actor
+  /// ```
   queueNamed: name :: String -> TaskQueue =>
     existing := self.queues at: name ifAbsent: [nil]
     existing isNil
@@ -30,12 +36,18 @@ typed Actor subclass: TaskQueueRegistry
 
   /// Return all registered queue names.
   ///
-  ///   registry queueNames   // => #("orders", "emails")
+  /// ## Examples
+  /// ```beamtalk
+  /// registry queueNames   // => #("orders", "emails")
+  /// ```
   queueNames -> List => self.queues keys
 
   /// Return whether a queue with the given name exists.
   ///
-  ///   registry hasQueue: "orders"   // => true
+  /// ## Examples
+  /// ```beamtalk
+  /// registry hasQueue: "orders"   // => true
+  /// ```
   hasQueue: name :: String -> Boolean =>
     (self.queues at: name ifAbsent: [nil]) notNil
 

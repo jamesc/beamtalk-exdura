@@ -4,13 +4,16 @@
 /// EventStore and updated as the workflow progresses through its states:
 /// #running → #completed | #failed | #cancelled.
 ///
-///   WorkflowExecution new: #{
-///     #workflowId => "order-123",
-///     #runId => "run-abc",
-///     #workflowType => "OrderWorkflow",
-///     #taskQueue => "default",
-///     #startedAt => 1710000000
-///   }
+/// ## Examples
+/// ```beamtalk
+/// WorkflowExecution new: #{
+///   #workflowId => "order-123",
+///   #runId => "run-abc",
+///   #workflowType => "OrderWorkflow",
+///   #taskQueue => "default",
+///   #startedAt => 1710000000
+/// }
+/// ```
 typed Value subclass: WorkflowExecution
   field: workflowId :: String = ""
   field: runId :: String = ""

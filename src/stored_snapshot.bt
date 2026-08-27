@@ -4,10 +4,13 @@
 /// by readEventsFromSnapshot:. Pairs a ReplaySnapshot with the eventId
 /// at which it was captured.
 ///
-///   StoredSnapshot new: #{
-///     #state => (ReplaySnapshot new: #{#replayCursor => 50}),
-///     #eventId => 51
-///   }
+/// ## Examples
+/// ```beamtalk
+/// StoredSnapshot new: #{
+///   #state => (ReplaySnapshot new: #{#replayCursor => 50}),
+///   #eventId => 51
+/// }
+/// ```
 typed Value subclass: StoredSnapshot
   field: state :: ReplaySnapshot
   field: eventId :: Integer = 0

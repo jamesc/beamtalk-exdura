@@ -4,12 +4,15 @@
 /// Uses Temporal-compatible defaults: 1s initial interval, 2x backoff,
 /// unlimited attempts unless maximumAttempts is set.
 ///
-///   RetryPolicy new: #{
-///     #initialInterval => 500,
-///     #backoffCoefficient => 1.5,
-///     #maximumAttempts => 5,
-///     #nonRetryableErrors => #("InvalidInput")
-///   }
+/// ## Examples
+/// ```beamtalk
+/// RetryPolicy new: #{
+///   #initialInterval => 500,
+///   #backoffCoefficient => 1.5,
+///   #maximumAttempts => 5,
+///   #nonRetryableErrors => #("InvalidInput")
+/// }
+/// ```
 typed Value subclass: RetryPolicy
   field: initialInterval :: Integer = 1000
   field: backoffCoefficient :: Float = 2.0

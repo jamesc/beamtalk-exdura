@@ -3,7 +3,10 @@
 /// Registers an "approve" signal handler, then waits for the #approved
 /// condition to become true. Returns the approval status and approver name.
 ///
-///   engine startWorkflow: ApprovalWorkflow id: "wf-1" args: #("req-123")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: ApprovalWorkflow id: "wf-1" args: #("req-123")
+/// ```
 Workflow subclass: ApprovalWorkflow
 
   /// Run the approval workflow: register handler, wait for approval.

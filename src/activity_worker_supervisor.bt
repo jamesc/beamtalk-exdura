@@ -4,10 +4,13 @@
 /// automatically cleaned up by the supervisor without affecting other
 /// workers or the parent pool.
 ///
-///   sup := ActivityWorkerSupervisor supervise
-///   worker := sup startChild
-///   worker initWith: MyAct selector: #go: args: #(1)
-///   sup count   // => 1
+/// ## Examples
+/// ```beamtalk
+/// sup := ActivityWorkerSupervisor supervise
+/// worker := sup startChild
+/// worker initWith: MyAct selector: #go: args: #(1)
+/// sup count   // => 1
+/// ```
 DynamicSupervisor subclass: ActivityWorkerSupervisor
 
   class childClass => ActivityWorker

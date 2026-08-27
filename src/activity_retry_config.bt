@@ -4,18 +4,21 @@
 /// single typed object passed through the recursive tryAttempt: chain in
 /// ActivityRetryExecutor.
 ///
-///   ActivityRetryConfig new: #{
-///     #activity => TestActivities,
-///     #selector => #doWork:,
-///     #args => #("data"),
-///     #eventStore => store,
-///     #workflowId => "wf-1",
-///     #maxAttempts => 3,
-///     #initialInterval => 1000,
-///     #backoffCoefficient => 2.0,
-///     #maximumInterval => nil,
-///     #nonRetryableErrors => #()
-///   }
+/// ## Examples
+/// ```beamtalk
+/// ActivityRetryConfig new: #{
+///   #activity => TestActivities,
+///   #selector => #doWork:,
+///   #args => #("data"),
+///   #eventStore => store,
+///   #workflowId => "wf-1",
+///   #maxAttempts => 3,
+///   #initialInterval => 1000,
+///   #backoffCoefficient => 2.0,
+///   #maximumInterval => nil,
+///   #nonRetryableErrors => #()
+/// }
+/// ```
 typed Value subclass: ActivityRetryConfig
   field: activity :: Class
   field: selector :: Symbol

@@ -4,7 +4,10 @@
 /// then enters a cancellable section. If cancelled, runs compensation to
 /// release the reservation before re-raising CancellationError.
 ///
-///   engine startWorkflow: CancellableOrderWorkflow id: "wf-1" args: #("order-42")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: CancellableOrderWorkflow id: "wf-1" args: #("order-42")
+/// ```
 Workflow subclass: CancellableOrderWorkflow
 
   /// Register query handlers to observe workflow state during tests.

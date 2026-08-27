@@ -3,7 +3,10 @@
 /// Takes a sleep duration (ms) as input and sleeps for that long.
 /// Used to test WorkflowHandle timeout behavior.
 ///
-///   engine startWorkflow: SlowWorkflow id: "wf-1" args: #(5000)
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: SlowWorkflow id: "wf-1" args: #(5000)
+/// ```
 Workflow subclass: SlowWorkflow
 
   /// Sleep for the given duration (ms) and return #done.

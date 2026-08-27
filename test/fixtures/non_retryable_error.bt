@@ -3,5 +3,8 @@
 /// Activities throw NonRetryableError to skip the retry policy and
 /// propagate the error immediately to the workflow.
 ///
-///   NonRetryableError signal: "Invalid input"
+/// ## Examples
+/// ```beamtalk
+/// NonRetryableError signal: "Invalid input"
+/// ```
 Error subclass: NonRetryableError

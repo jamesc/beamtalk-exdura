@@ -8,10 +8,13 @@
 /// works directly with the WorkflowEngine and EventStore, since child
 /// workflows are managed within the engine process.
 ///
-///   handle := ChildWorkflowHandle
-///     for: "child-wf-1" engine: engine eventStore: store
-///   result := handle result          // blocks until child completes
-///   result := handle result: 5000    // blocks with 5s timeout
+/// ## Examples
+/// ```beamtalk
+/// handle := ChildWorkflowHandle
+///   for: "child-wf-1" engine: engine eventStore: store
+/// result := handle result          // blocks until child completes
+/// result := handle result: 5000    // blocks with 5s timeout
+/// ```
 typed Value subclass: ChildWorkflowHandle
   field: childWorkflowId :: String = ""
   field: engine :: WorkflowEngine | Nil = nil
@@ -21,7 +24,10 @@ typed Value subclass: ChildWorkflowHandle
 
   /// Create a new ChildWorkflowHandle for the given child workflow.
   ///
-  ///   ChildWorkflowHandle for: "child-1" engine: eng eventStore: store
+  /// ## Examples
+  /// ```beamtalk
+  /// ChildWorkflowHandle for: "child-1" engine: eng eventStore: store
+  /// ```
   class for: childWorkflowId :: String engine: anEngine :: WorkflowEngine eventStore: aStore :: EventStore -> ChildWorkflowHandle =>
     self
       new: #{
@@ -32,7 +38,10 @@ typed Value subclass: ChildWorkflowHandle
 
   /// Create a handle with a pre-cached result (used during replay).
   ///
-  ///   ChildWorkflowHandle forReplay: "child-1" result: 42
+  /// ## Examples
+  /// ```beamtalk
+  /// ChildWorkflowHandle forReplay: "child-1" result: 42
+  /// ```
   class forReplay: childWorkflowId :: String result: aResult :: Object -> ChildWorkflowHandle =>
     self
       new: #{
@@ -43,7 +52,10 @@ typed Value subclass: ChildWorkflowHandle
 
   /// Block until the child workflow completes and return the result.
   ///
-  ///   result := handle result
+  /// ## Examples
+  /// ```beamtalk
+  /// result := handle result
+  /// ```
   result -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
 
@@ -64,7 +76,10 @@ typed Value subclass: ChildWorkflowHandle
 
   /// Block until the child workflow completes or the timeout (ms) expires.
   ///
-  ///   result := handle result: 5000
+  /// ## Examples
+  /// ```beamtalk
+  /// result := handle result: 5000
+  /// ```
   result: timeout :: Integer -> Object =>
     self hasCachedResult ifTrue: [^self cachedResult]
     deadline := (Time nowMs) + timeout

@@ -4,7 +4,10 @@
 /// doWork: increments the ETS call counter, so replayed runs can be
 /// distinguished from fresh runs by checking the counter.
 ///
-///   engine startWorkflow: TwoStepWorkflow id: "wf-1" args: #(#{#input => "hello"})
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: TwoStepWorkflow id: "wf-1" args: #(#{#input => "hello"})
+/// ```
 Workflow subclass: TwoStepWorkflow
 
   /// Run two sequential activities: first processes the input,

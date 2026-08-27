@@ -3,8 +3,11 @@
 /// Uses two different version names to verify they coexist independently.
 /// Returns a string combining both version paths.
 ///
-///   MultiVersionWorkflow run: "test" ctx: ctx
-///   // => "pay-v1:notify-v2"
+/// ## Examples
+/// ```beamtalk
+/// MultiVersionWorkflow run: "test" ctx: ctx
+/// // => "pay-v1:notify-v2"
+/// ```
 Object subclass: MultiVersionWorkflow
 
   class run: _args ctx: ctx -> String =>

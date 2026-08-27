@@ -3,7 +3,10 @@
 /// Returns immediately without waiting for the child. The child should
 /// continue running independently after the parent completes.
 ///
-///   engine startWorkflow: AbandonPolicyParent id: "p-1" args: #(5)
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: AbandonPolicyParent id: "p-1" args: #(5)
+/// ```
 Workflow subclass: AbandonPolicyParent
 
   class run: value ctx: ctx =>

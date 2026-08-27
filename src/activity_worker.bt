@@ -7,9 +7,12 @@
 /// Timeout enforcement is handled by the ActivityWorkerPool, which kills
 /// the worker process via Pid kill when the timeout fires.
 ///
-///   worker := supervisor startChild
-///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
-///   result := worker execute   // => 10
+/// ## Examples
+/// ```beamtalk
+/// worker := supervisor startChild
+/// worker initWith: TestActivities selector: #doubleIt: args: #(5)
+/// result := worker execute   // => 10
+/// ```
 typed Actor subclass: ActivityWorker
   state: activityClass :: Activity class | Nil = nil
   state: selector :: Symbol | Nil = nil
@@ -17,7 +20,10 @@ typed Actor subclass: ActivityWorker
 
   /// Initialize the worker with activity details.
   ///
-  ///   worker initWith: TestActivities selector: #doubleIt: args: #(5)
+  /// ## Examples
+  /// ```beamtalk
+  /// worker initWith: TestActivities selector: #doubleIt: args: #(5)
+  /// ```
   initWith: anActivityClass :: Activity class selector: aSelector :: Symbol args: someArgs :: List -> Nil =>
     self.activityClass := anActivityClass
     self.selector := aSelector
@@ -29,6 +35,9 @@ typed Actor subclass: ActivityWorker
   /// Calls the activity class method with the stored arguments.
   /// Exceptions propagate to the caller (caught by the pool).
   ///
-  ///   worker execute   // => 10
+  /// ## Examples
+  /// ```beamtalk
+  /// worker execute   // => 10
+  /// ```
   execute -> Object =>
     self.activityClass perform: self.selector withArguments: #(self.args)

@@ -4,9 +4,12 @@
 /// exists. Contains the deserialized StoredSnapshot and the list of
 /// events recorded after the snapshot point.
 ///
-///   result := store readEventsFromSnapshot: "wf-1"
-///   result snapshot state   // => ReplaySnapshot
-///   result events           // => List of ExduraEvent
+/// ## Examples
+/// ```beamtalk
+/// result := store readEventsFromSnapshot: "wf-1"
+/// result snapshot state   // => ReplaySnapshot
+/// result events           // => List of ExduraEvent
+/// ```
 typed Value subclass: SnapshotResult
   field: snapshot :: StoredSnapshot
   field: events :: List(ExduraEvent) = #()

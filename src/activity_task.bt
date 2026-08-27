@@ -4,13 +4,16 @@
 /// that are executed outside the deterministic workflow context. Each task
 /// carries its own retry policy and timeout configuration.
 ///
-///   ActivityTask new: #{
-///     #taskId => "task-1",
-///     #workflowId => "wf-1",
-///     #activityType => "SendEmail",
-///     #args => #(#{#to => "user@example.com"}),
-///     #taskQueue => "email-queue"
-///   }
+/// ## Examples
+/// ```beamtalk
+/// ActivityTask new: #{
+///   #taskId => "task-1",
+///   #workflowId => "wf-1",
+///   #activityType => "SendEmail",
+///   #args => #(#{#to => "user@example.com"}),
+///   #taskQueue => "email-queue"
+/// }
+/// ```
 typed Value subclass: ActivityTask
   field: taskId :: String = ""
   field: workflowId :: String = ""
