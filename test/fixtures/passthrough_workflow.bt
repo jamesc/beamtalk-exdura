@@ -2,7 +2,10 @@
 ///
 /// Used by WorkflowEngineTest for simple start/complete lifecycle tests.
 ///
-///   engine startWorkflow: PassthroughWorkflow id: "wf-1" args: #("hello")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: PassthroughWorkflow id: "wf-1" args: #("hello")
+/// ```
 Workflow subclass: PassthroughWorkflow
 
   /// Return input unchanged.

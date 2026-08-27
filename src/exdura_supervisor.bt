@@ -10,7 +10,11 @@
 /// If WorkflowEngine crashes, TimerManager restarts too.
 ///
 ///   beamtalk run                          // starts via beamtalk.toml
-///   sup := ExduraSupervisor supervise     // or start manually
+///
+/// ## Examples
+/// ```beamtalk
+/// sup := ExduraSupervisor supervise     // or start manually
+/// ```
 typed Supervisor subclass: ExduraSupervisor
 
   /// rest_for_one: if a child crashes, all children after it restart.

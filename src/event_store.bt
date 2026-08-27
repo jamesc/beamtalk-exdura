@@ -14,12 +14,15 @@
 /// On startup, existing event files are scanned and reloaded into ETS,
 /// so workflows survive node restarts.
 ///
-///   store := EventStore spawn
-///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", ...})
-///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
-///   store readEvents: "wf-1" fromSeq: 1
-///   store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
-///   store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
+/// ## Examples
+/// ```beamtalk
+/// store := EventStore spawn
+/// store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", ...})
+/// store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
+/// store readEvents: "wf-1" fromSeq: 1
+/// store saveSnapshot: "wf-1" state: #{#replayCursor => 50} eventId: 51
+/// store readEventsFromSnapshot: "wf-1"   // => #{#snapshot => ..., #events => ...}
+/// ```
 typed Actor subclass: EventStore
   state: executions :: Ets(String, WorkflowExecution)
   state: events :: Ets(String, List(ExduraEvent))
@@ -68,7 +71,10 @@ typed Actor subclass: EventStore
 
   /// Store a new workflow execution. Raises if workflowId already exists.
   ///
-  ///   store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"})
+  /// ## Examples
+  /// ```beamtalk
+  /// store createExecution: (WorkflowExecution new: #{#workflowId => "wf-1", #runId => "run-1"})
+  /// ```
   createExecution: execution :: WorkflowExecution -> WorkflowExecution =>
     wfId := execution workflowId
     (self.executions includesKey: wfId) ifTrue: [
@@ -79,13 +85,19 @@ typed Actor subclass: EventStore
 
   /// Retrieve a workflow execution by ID. Returns nil if not found.
   ///
-  ///   store getExecution: "wf-1"   // => WorkflowExecution(...)
+  /// ## Examples
+  /// ```beamtalk
+  /// store getExecution: "wf-1"   // => WorkflowExecution(...)
+  /// ```
   getExecution: workflowId :: String -> WorkflowExecution | Nil =>
     self.executions at: workflowId
 
   /// Update an execution's status and result. Raises if not found.
   ///
-  ///   store updateExecution: "wf-1" status: #completed result: 42
+  /// ## Examples
+  /// ```beamtalk
+  /// store updateExecution: "wf-1" status: #completed result: 42
+  /// ```
   updateExecution: workflowId :: String status: status :: Symbol result: result :: Object -> WorkflowExecution =>
     existing := (self.executions at: workflowId) match: [
       nil -> self error: "Execution not found: {workflowId}";
@@ -98,8 +110,11 @@ typed Actor subclass: EventStore
   /// List executions matching a filter dictionary.
   /// Supported filter keys: #status (Symbol), #workflowType (String).
   ///
-  ///   store listExecutions: #{#status => #running}
-  ///   store listExecutions: #{}   // all executions
+  /// ## Examples
+  /// ```beamtalk
+  /// store listExecutions: #{#status => #running}
+  /// store listExecutions: #{}   // all executions
+  /// ```
   listExecutions: filter :: Dictionary -> List =>
     allKeys := self.executions keys
     allExecs := allKeys collect: [:k | self.executions at: k]
@@ -118,8 +133,11 @@ typed Actor subclass: EventStore
   /// Events are written to both ETS (in-memory) and disk (ETF file).
   /// Returns the stamped events with their assigned IDs.
   ///
-  ///   store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
-  ///   // => #(ExduraEvent(eventId: 1, ...))
+  /// ## Examples
+  /// ```beamtalk
+  /// store appendEvents: "wf-1" events: #(ExduraEvent new: #{#eventType => #WorkflowStarted})
+  /// // => #(ExduraEvent(eventId: 1, ...))
+  /// ```
   appendEvents: workflowId :: String events: newEvents :: List(ExduraEvent) -> List(ExduraEvent) =>
     existing := self.events at: workflowId ifAbsent: [#()]
     startId := existing size + 1
@@ -135,8 +153,11 @@ typed Actor subclass: EventStore
   /// Read events for a workflow starting from a sequence number.
   /// Note: SPEC says `from:` but `from` is reserved; using `fromSeq:` instead.
   ///
-  ///   store readEvents: "wf-1" fromSeq: 1   // all events
-  ///   store readEvents: "wf-1" fromSeq: 5   // events with eventId >= 5
+  /// ## Examples
+  /// ```beamtalk
+  /// store readEvents: "wf-1" fromSeq: 1   // all events
+  /// store readEvents: "wf-1" fromSeq: 5   // events with eventId >= 5
+  /// ```
   readEvents: workflowId :: String fromSeq: fromSeq :: Integer -> List(ExduraEvent) =>
     existing := self.events at: workflowId ifAbsent: [#()]
     existing select: [:evt | evt eventId >= fromSeq]
@@ -146,7 +167,10 @@ typed Actor subclass: EventStore
   /// Used by continue-as-new to reset the in-memory event history before
   /// starting a fresh execution. The old events remain on disk for auditing.
   ///
-  ///   store clearEvents: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// store clearEvents: "wf-1"
+  /// ```
   clearEvents: workflowId :: String -> Nil =>
     self.events at: workflowId put: #()
 
@@ -158,7 +182,10 @@ typed Actor subclass: EventStore
   /// context state at the time of the snapshot. It is written to
   /// `data/snapshots/{workflowId}.etf`, overwriting any previous snapshot.
   ///
-  ///   store saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  /// ## Examples
+  /// ```beamtalk
+  /// store saveSnapshot: "wf-1" state: (ReplaySnapshot new: #{#replayCursor => 50}) eventId: 51
+  /// ```
   saveSnapshot: workflowId :: String state: state :: ReplaySnapshot eventId: eventId :: Integer -> Nil =>
     path := self snapshotFilePath: workflowId
     data := StoredSnapshot new: #{#state => state, #eventId => eventId}
@@ -175,11 +202,14 @@ typed Actor subclass: EventStore
   /// Returns a SnapshotResult with the StoredSnapshot and events after it.
   /// If no snapshot exists, returns nil.
   ///
-  ///   result := store readEventsFromSnapshot: "wf-1"
-  ///   result isNil ifFalse: [
-  ///     result snapshot state   // => ReplaySnapshot
-  ///     result events           // => List of ExduraEvent
-  ///   ]
+  /// ## Examples
+  /// ```beamtalk
+  /// result := store readEventsFromSnapshot: "wf-1"
+  /// result isNil ifFalse: [
+  ///   result snapshot state   // => ReplaySnapshot
+  ///   result events           // => List of ExduraEvent
+  /// ]
+  /// ```
   readEventsFromSnapshot: workflowId :: String -> SnapshotResult | Nil =>
     path := self snapshotFilePath: workflowId
     readResult := File readBinary: path
@@ -195,7 +225,10 @@ typed Actor subclass: EventStore
 
   /// Check whether a snapshot file exists for a workflow.
   ///
-  ///   store hasSnapshot: "wf-1"   // => true or false
+  /// ## Examples
+  /// ```beamtalk
+  /// store hasSnapshot: "wf-1"   // => true or false
+  /// ```
   hasSnapshot: workflowId :: String -> Boolean =>
     path := self snapshotFilePath: workflowId
     File isFile: path

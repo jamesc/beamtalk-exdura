@@ -9,11 +9,14 @@
 /// a supervised worker, executes the activity, and returns a result
 /// dictionary describing the outcome.
 ///
-///   pool := ActivityWorkerPool spawn
-///   pool setMaxConcurrent: 5
-///   result := pool executeActivity: TestActivities selector: #doubleIt:
-///     args: #(5) timeout: nil
-///   // => #{#status => #completed, #result => 10}
+/// ## Examples
+/// ```beamtalk
+/// pool := ActivityWorkerPool spawn
+/// pool setMaxConcurrent: 5
+/// result := pool executeActivity: TestActivities selector: #doubleIt:
+///   args: #(5) timeout: nil
+/// // => #{#status => #completed, #result => 10}
+/// ```
 typed Actor subclass: ActivityWorkerPool
   state: maxConcurrent :: Integer = 10
   state: activeCount :: Integer = 0
@@ -28,19 +31,28 @@ typed Actor subclass: ActivityWorkerPool
 
   /// Set the maximum number of concurrent activity workers.
   ///
-  ///   pool setMaxConcurrent: 20
+  /// ## Examples
+  /// ```beamtalk
+  /// pool setMaxConcurrent: 20
+  /// ```
   setMaxConcurrent: max :: Integer -> Nil =>
     self.maxConcurrent := max
     nil
 
   /// Return the maximum concurrent activities allowed.
   ///
-  ///   pool maxConcurrent   // => 10
+  /// ## Examples
+  /// ```beamtalk
+  /// pool maxConcurrent   // => 10
+  /// ```
   maxConcurrent -> Integer => self.maxConcurrent
 
   /// Return the current number of active workers.
   ///
-  ///   pool activeCount   // => 3
+  /// ## Examples
+  /// ```beamtalk
+  /// pool activeCount   // => 3
+  /// ```
   activeCount -> Integer => self.activeCount
 
   /// Execute an activity through the supervised worker pool.
@@ -51,13 +63,17 @@ typed Actor subclass: ActivityWorkerPool
   /// are gen_server handlers — calling self blocks).
   ///
   /// Returns an ActivityOutcome describing the result:
-  ///   ActivityOutcome completed: 42
-  ///   ActivityOutcome failed: "division by zero"
-  ///   ActivityOutcome timedOut
-  ///   ActivityOutcome rejected
   ///
-  ///   pool executeActivity: TestActivities selector: #doubleIt:
-  ///     args: #(5) timeout: nil
+  /// ## Examples
+  /// ```beamtalk
+  /// ActivityOutcome completed: 42
+  /// ActivityOutcome failed: "division by zero"
+  /// ActivityOutcome timedOut
+  /// ActivityOutcome rejected
+  ///
+  /// pool executeActivity: TestActivities selector: #doubleIt:
+  ///   args: #(5) timeout: nil
+  /// ```
   executeActivity: activityClass :: Activity class selector: selector :: Symbol args: args :: List timeout: timeout :: Integer | Nil -> ActivityOutcome =>
     // Enforce concurrency limit
     self.activeCount >= self.maxConcurrent ifTrue: [^ActivityOutcome rejected]

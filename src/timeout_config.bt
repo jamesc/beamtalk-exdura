@@ -4,11 +4,14 @@
 /// Follows Temporal's timeout hierarchy: execution > run > schedule-to-close
 /// > start-to-close.
 ///
-///   TimeoutConfig new: #{
-///     #workflowExecutionTimeout => 86400000,
-///     #startToCloseTimeout => 30000,
-///     #heartbeatTimeout => 10000
-///   }
+/// ## Examples
+/// ```beamtalk
+/// TimeoutConfig new: #{
+///   #workflowExecutionTimeout => 86400000,
+///   #startToCloseTimeout => 30000,
+///   #heartbeatTimeout => 10000
+/// }
+/// ```
 typed Value subclass: TimeoutConfig
   field: workflowExecutionTimeout :: Integer | Nil = nil
   field: workflowRunTimeout :: Integer | Nil = nil

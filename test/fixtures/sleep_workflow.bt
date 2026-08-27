@@ -3,7 +3,10 @@
 /// Used to test durable sleep recording and replay behavior.
 /// Calls CountingActivity, sleeps, then calls CountingActivity again.
 ///
-///   engine startWorkflow: SleepWorkflow id: "wf-1" args: #("hello")
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: SleepWorkflow id: "wf-1" args: #("hello")
+/// ```
 Workflow subclass: SleepWorkflow
 
   /// Run two activities with a sleep in between.

@@ -3,15 +3,21 @@
 /// Starts ExduraSupervisor, wires children together, applies
 /// configuration, and returns a connected ExduraClient.
 ///
-///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
-///   handle := client start: OrderWorkflow id: "order-1"
-///     args: #("data") taskQueue: "orders" options: #{}
-///   result := handle result
+/// ## Examples
+/// ```beamtalk
+/// client := ExduraWorker start: #{#maxConcurrentActivities => 20}
+/// handle := client start: OrderWorkflow id: "order-1"
+///   args: #("data") taskQueue: "orders" options: #{}
+/// result := handle result
+/// ```
 typed Object subclass: ExduraWorker
 
   /// Boot the supervision tree and return a connected ExduraClient.
   ///
-  ///   client := ExduraWorker start: #{#maxConcurrentActivities => 20}
+  /// ## Examples
+  /// ```beamtalk
+  /// client := ExduraWorker start: #{#maxConcurrentActivities => 20}
+  /// ```
   class start: config :: Dictionary -> ExduraClient =>
     sup := ExduraSupervisor supervise valueOrDo: [:e |
       self error: "Failed to start ExduraSupervisor: {e}"

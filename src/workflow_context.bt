@@ -11,9 +11,12 @@
 /// signals are drained. Workflow variables (setVar:to: / getVar:) provide
 /// mutable state accessible to signal handlers and condition blocks.
 ///
-///   ctx := WorkflowContext spawn
-///   ctx initWith: engine workflowId: "wf-1" history: events
-///   result := ctx runActivity: MyActivities method: #doWork: with: #(args)
+/// ## Examples
+/// ```beamtalk
+/// ctx := WorkflowContext spawn
+/// ctx initWith: engine workflowId: "wf-1" history: events
+/// result := ctx runActivity: MyActivities method: #doWork: with: #(args)
+/// ```
 typed Actor subclass: WorkflowContext
   state: engine :: WorkflowEngine
   state: workflowId :: String = ""
@@ -39,7 +42,10 @@ typed Actor subclass: WorkflowContext
   ///   #(firstType, secondType, firstIdx, secondIdx)
   /// If no event exists at a position, its type is #none and idx is 0.
   ///
-  ///   #[ft, st, fi, si] := WorkflowContext peekEventPair: 1 history: events
+  /// ## Examples
+  /// ```beamtalk
+  /// #[ft, st, fi, si] := WorkflowContext peekEventPair: 1 history: events
+  /// ```
   class peekEventPair: cursor :: Integer history: eventHistory :: List(ExduraEvent) -> List =>
     skippable := self countSkippableEventsFrom: cursor + 1 history: eventHistory
     firstIdx := cursor + skippable + 1
@@ -52,7 +58,10 @@ typed Actor subclass: WorkflowContext
 
   /// Collect consecutive SignalReceived events from a history starting at fromIdx.
   ///
-  ///   WorkflowContext collectReplaySignalsFrom: 4 history: events
+  /// ## Examples
+  /// ```beamtalk
+  /// WorkflowContext collectReplaySignalsFrom: 4 history: events
+  /// ```
   class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> List(Signal) =>
     self
       collectReplaySignalsFrom: fromIdx
@@ -87,7 +96,10 @@ typed Actor subclass: WorkflowContext
   /// Count consecutive non-command events (StateSnapshot, SignalReceived)
   /// starting from a given index.
   ///
-  ///   WorkflowContext countSkippableEventsFrom: 5 history: events
+  /// ## Examples
+  /// ```beamtalk
+  /// WorkflowContext countSkippableEventsFrom: 5 history: events
+  /// ```
   class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> Integer =>
     self
       countSkippableEventsFrom: fromIdx
@@ -109,7 +121,10 @@ typed Actor subclass: WorkflowContext
 
   /// Find a signal by name in a list. Returns a SignalSearchResult.
   ///
-  ///   WorkflowContext findSignal: "approve" in: signals
+  /// ## Examples
+  /// ```beamtalk
+  /// WorkflowContext findSignal: "approve" in: signals
+  /// ```
   class findSignal: name :: String in: signals :: List(Signal) -> SignalSearchResult =>
     self
       findSignal: name
@@ -143,7 +158,10 @@ typed Actor subclass: WorkflowContext
 
   /// Initialize with engine, workflow ID, and event history.
   ///
-  ///   ctx initWith: engine workflowId: "wf-1" history: events
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx initWith: engine workflowId: "wf-1" history: events
+  /// ```
   initWith: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List(ExduraEvent) -> Nil =>
     self.engine := anEngine
     self.workflowId := anId
@@ -154,7 +172,10 @@ typed Actor subclass: WorkflowContext
 
   /// Initialize from a snapshot for optimized replay.
   ///
-  ///   ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx initWithSnapshot: snapData engine: engine workflowId: "wf-1" history: fullHistory
+  /// ```
   initWithSnapshot: snapshot :: ReplaySnapshot engine: anEngine :: WorkflowEngine workflowId: anId :: String history: aHistory :: List(ExduraEvent) -> Nil =>
     self.engine := anEngine
     self.workflowId := anId
@@ -179,14 +200,20 @@ typed Actor subclass: WorkflowContext
 
   /// Set a workflow variable.
   ///
-  ///   ctx setVar: #approved to: false
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx setVar: #approved to: false
+  /// ```
   setVar: name :: Symbol to: value :: Object -> Nil =>
     self.workflowVars := self.workflowVars at: name put: value
     nil
 
   /// Get a workflow variable value.
   ///
-  ///   ctx getVar: #approved   // => false
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx getVar: #approved   // => false
+  /// ```
   getVar: name :: Symbol -> Object | Nil =>
     self.workflowVars at: name ifAbsent: [nil]
 
@@ -195,14 +222,20 @@ typed Actor subclass: WorkflowContext
 
   /// Register a signal handler block.
   ///
-  ///   ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
+  /// ```
   onSignal: name :: String do: block :: Block -> Nil =>
     self.signalHandlers := self.signalHandlers at: name put: block
     nil
 
   /// Register a query handler block.
   ///
-  ///   ctx onQuery: "getStatus" do: [:snap | snap status]
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx onQuery: "getStatus" do: [:snap | snap status]
+  /// ```
   onQuery: queryName :: String do: handlerBlock :: Block -> Nil =>
     self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
     nil
@@ -212,7 +245,10 @@ typed Actor subclass: WorkflowContext
 
   /// Set a workflow state field visible in query snapshots.
   ///
-  ///   ctx setState: #status to: "processing"
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx setState: #status to: "processing"
+  /// ```
   setState: fieldName :: Symbol to: value :: Object -> Nil =>
     self.workflowState := self.workflowState at: fieldName put: value
     nil
@@ -231,7 +267,10 @@ typed Actor subclass: WorkflowContext
 
   /// Execute an activity or return its cached result during replay.
   ///
-  ///   result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
+  /// ## Examples
+  /// ```beamtalk
+  /// result := ctx runActivity: TestActivities method: #doubleIt: with: #(5)
+  /// ```
   runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List(Object) -> Object =>
     self
       runActivity: activityClass
@@ -241,8 +280,11 @@ typed Actor subclass: WorkflowContext
 
   /// Execute an activity with options, or return cached result during replay.
   ///
-  ///   result := ctx runActivity: TestActivities method: #doubleIt:
-  ///     with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  /// ## Examples
+  /// ```beamtalk
+  /// result := ctx runActivity: TestActivities method: #doubleIt:
+  ///   with: #(5) options: #{#retryPolicy => #{#maximumAttempts => 3}}
+  /// ```
   runActivity: activityClass :: Activity class method: selector :: Symbol with: args :: List(Object) options: options :: Dictionary(Symbol, Object) -> Object =>
     // ── Replay path ──
     self.isReplaying
@@ -302,7 +344,10 @@ typed Actor subclass: WorkflowContext
   /// TimerStarted only → reconstruct timer (sleep for remainder).
   /// No match → live execution (record events, sleep in context process).
   ///
-  ///   ctx sleep: 5000
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx sleep: 5000
+  /// ```
   sleep: duration :: Integer -> Nil =>
     // ── Replay path ──
     self.isReplaying
@@ -386,7 +431,10 @@ typed Actor subclass: WorkflowContext
 
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
-  ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
+  /// ## Examples
+  /// ```beamtalk
+  /// handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
+  /// ```
   startChildWorkflow: workflowClass :: Workflow class method: selector :: Symbol with: args :: List(Object) -> ChildWorkflowHandle =>
     self
       startChildWorkflow: workflowClass
@@ -396,8 +444,11 @@ typed Actor subclass: WorkflowContext
 
   /// Start a child workflow with options, or return cached result during replay.
   ///
-  ///   handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
-  ///     options: #{#parentClosePolicy => #abandon}
+  /// ## Examples
+  /// ```beamtalk
+  /// handle := ctx startChildWorkflow: ProcessItem method: #run: with: #("data")
+  ///   options: #{#parentClosePolicy => #abandon}
+  /// ```
   startChildWorkflow: workflowClass :: Workflow class method: _selector :: Symbol with: args :: List(Object) options: options :: Dictionary(Symbol, Object) -> ChildWorkflowHandle =>
     // ── Replay path ──
     self.isReplaying
@@ -451,7 +502,10 @@ typed Actor subclass: WorkflowContext
   /// records the default version. Enables safe code changes for in-flight
   /// workflows per SPEC §6.4.
   ///
-  ///   v := ctx version: "payment-flow" defaultVersion: 1 maxVersion: 2
+  /// ## Examples
+  /// ```beamtalk
+  /// v := ctx version: "payment-flow" defaultVersion: 1 maxVersion: 2
+  /// ```
   version: name :: String defaultVersion: defaultVer :: Integer maxVersion: _maxVer :: Integer -> Integer =>
     // ── Replay path ──
     self.isReplaying
@@ -479,7 +533,10 @@ typed Actor subclass: WorkflowContext
 
   /// Block until a signal with the given name arrives or timeout expires.
   ///
-  ///   payload := ctx waitForSignal: "approve" timeout: 60000
+  /// ## Examples
+  /// ```beamtalk
+  /// payload := ctx waitForSignal: "approve" timeout: 60000
+  /// ```
   waitForSignal: name :: String timeout: ms :: Integer -> Object | Nil =>
     deadline := (Time nowMs) + ms
     found := WorkflowContext findSignal: name in: self.deliveredSignals
@@ -526,7 +583,10 @@ typed Actor subclass: WorkflowContext
 
   /// Block until the condition block evaluates to true or timeout expires.
   ///
-  ///   ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
+  /// ```
   waitForCondition: block :: Block timeout: ms :: Integer -> Nil =>
     deadline := (Time nowMs) + ms
     (block value: self.workflowVars) ifTrue: [^nil]
@@ -587,7 +647,10 @@ typed Actor subclass: WorkflowContext
 
   /// Request continue-as-new: record the event and return a ContinueAsNewRequest.
   ///
-  ///   ctx continueAsNew: #("nextCursor")
+  /// ## Examples
+  /// ```beamtalk
+  /// ctx continueAsNew: #("nextCursor")
+  /// ```
   continueAsNew: args :: List(Object) -> ContinueAsNewRequest =>
     self.engine recordContinueAsNew: self.workflowId args: args
     ContinueAsNewRequest new: #{#args => args}

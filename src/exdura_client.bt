@@ -7,13 +7,16 @@
 /// ExduraClient is an Actor to hold mutable references to the engine and
 /// event store. All method calls are synchronous gen_server calls.
 ///
-///   client := ExduraClient connect: #{}
-///   handle := client start: OrderWorkflow id: "order-1"
-///     args: #("data") taskQueue: "orders" options: #{}
-///   result := handle result
+/// ## Examples
+/// ```beamtalk
+/// client := ExduraClient connect: #{}
+/// handle := client start: OrderWorkflow id: "order-1"
+///   args: #("data") taskQueue: "orders" options: #{}
+/// result := handle result
 ///
-///   // List running workflows
-///   running := client list: #{#status => #running}
+/// // List running workflows
+/// running := client list: #{#status => #running}
+/// ```
 typed Actor subclass: ExduraClient
   state: engine :: WorkflowEngine
   state: eventStore :: EventStore
@@ -25,7 +28,10 @@ typed Actor subclass: ExduraClient
   /// a local EventStore and WorkflowEngine. Future phases will support
   /// remote connections.
   ///
-  ///   client := ExduraClient connect: #{#host => "localhost"}
+  /// ## Examples
+  /// ```beamtalk
+  /// client := ExduraClient connect: #{#host => "localhost"}
+  /// ```
   class connect: options :: Dictionary -> ExduraClient =>
     dataDir := options at: #dataDir ifAbsent: ["data"]
     store := EventStore spawnWith: #{#dataDir => dataDir}
@@ -39,9 +45,12 @@ typed Actor subclass: ExduraClient
   /// The workflow begins executing asynchronously. Use the returned
   /// handle to wait for the result.
   ///
-  ///   handle := client start: OrderWorkflow id: "order-1"
-  ///     args: #("data") taskQueue: "orders" options: #{}
-  ///   result := handle result
+  /// ## Examples
+  /// ```beamtalk
+  /// handle := client start: OrderWorkflow id: "order-1"
+  ///   args: #("data") taskQueue: "orders" options: #{}
+  /// result := handle result
+  /// ```
   start: workflowClass :: Workflow class id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
     self.engine
       startWorkflow: workflowClass
@@ -55,7 +64,10 @@ typed Actor subclass: ExduraClient
   /// the signal in the engine. The signal will be delivered to the workflow
   /// at the next safe point (after the current command completes).
   ///
-  ///   client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  /// ## Examples
+  /// ```beamtalk
+  /// client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
+  /// ```
   signal: workflowId :: String name: signalName :: String payload: data :: Object -> Nil =>
     self.engine
       bufferSignal: workflowId
@@ -68,7 +80,10 @@ typed Actor subclass: ExduraClient
   /// snapshot (captured at the last safe point). Returns the handler's
   /// result. Raises an error if no handler or snapshot exists.
   ///
-  ///   status := client query: "wf-1" name: "getStatus"
+  /// ## Examples
+  /// ```beamtalk
+  /// status := client query: "wf-1" name: "getStatus"
+  /// ```
   query: workflowId :: String name: queryName :: String -> Object =>
     self.engine handleQuery: workflowId name: queryName
 
@@ -81,7 +96,10 @@ typed Actor subclass: ExduraClient
   ///
   /// Workflows can catch CancellationError with `on:do:` for cleanup.
   ///
-  ///   client cancel: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// client cancel: "wf-1"
+  /// ```
   cancel: workflowId :: String -> Nil => self.engine cancelWorkflow: workflowId
 
   /// List workflow executions matching a filter.
@@ -89,13 +107,19 @@ typed Actor subclass: ExduraClient
   /// Supported filter keys: #status (Symbol), #workflowType (String).
   /// Pass an empty dictionary to list all executions.
   ///
-  ///   client list: #{#status => #running}
-  ///   client list: #{}   // all executions
+  /// ## Examples
+  /// ```beamtalk
+  /// client list: #{#status => #running}
+  /// client list: #{}   // all executions
+  /// ```
   list: filter :: Dictionary -> List => self.eventStore listExecutions: filter
 
   /// Retrieve a workflow execution by ID (used by WorkflowHandle).
   ///
-  ///   client getExecution: "wf-1"
+  /// ## Examples
+  /// ```beamtalk
+  /// client getExecution: "wf-1"
+  /// ```
   getExecution: workflowId :: String -> WorkflowExecution | Nil =>
     self.eventStore getExecution: workflowId
 
@@ -113,7 +137,10 @@ typed Actor subclass: ExduraClient
   /// Called by ExduraWorker to attach the supervision tree reference,
   /// enabling proper cleanup via destroy.
   ///
-  ///   client setSupervisor: sup
+  /// ## Examples
+  /// ```beamtalk
+  /// client setSupervisor: sup
+  /// ```
   setSupervisor: sup :: Supervisor -> Nil =>
     self.supervisor := sup
     nil

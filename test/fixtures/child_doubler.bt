@@ -2,8 +2,11 @@
 ///
 /// Used by ChildWorkflowTest to verify child workflow execution and replay.
 ///
-///   ctx startChildWorkflow: ChildDoubler method: #run: with: #(5)
-///   // child returns 10
+/// ## Examples
+/// ```beamtalk
+/// ctx startChildWorkflow: ChildDoubler method: #run: with: #(5)
+/// // child returns 10
+/// ```
 Workflow subclass: ChildDoubler
 
   class run: value ctx: ctx -> Integer =>

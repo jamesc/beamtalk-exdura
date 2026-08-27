@@ -3,7 +3,10 @@
 /// Used by SnapshotTest to verify snapshot creation and replay optimization.
 /// Runs N activities (configurable via input), accumulating results.
 ///
-///   engine startWorkflow: ManyStepWorkflow id: "wf-1" args: #(#{#input => 120})
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: ManyStepWorkflow id: "wf-1" args: #(#{#input => 120})
+/// ```
 Workflow subclass: ManyStepWorkflow
 
   /// Recursive helper: run activities from `from` to `count`, accumulating total.

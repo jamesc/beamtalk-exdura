@@ -4,14 +4,20 @@
 /// #counting_activity_calls but can be overridden via #counterTableName
 /// in the args dict, allowing parallel tests to use isolated counters.
 ///
-///   CountingActivity doWork: #(#{#input => "hello"})
-///   // => #{#result => "done", #input => "hello"}
+/// ## Examples
+/// ```beamtalk
+/// CountingActivity doWork: #(#{#input => "hello"})
+/// // => #{#result => "done", #input => "hello"}
+/// ```
 Activity subclass: CountingActivity
 
   /// Increment the call counter and return a result dictionary.
   ///
-  ///   CountingActivity doWork: #(#{#input => "hello"})
-  ///   // => #{#result => "done", #input => "hello"}
+  /// ## Examples
+  /// ```beamtalk
+  /// CountingActivity doWork: #(#{#input => "hello"})
+  /// // => #{#result => "done", #input => "hello"}
+  /// ```
   class doWork: args :: List -> Dictionary =>
     dict := args at: 1
     tableName := dict at: #counterTableName ifAbsent: [#counting_activity_calls]

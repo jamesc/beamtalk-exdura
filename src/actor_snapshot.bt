@@ -9,12 +9,15 @@
 /// Snapshots are immutable — they reflect the Actor's state at capture time
 /// and are unaffected by subsequent mutations to the source Actor.
 ///
-///   actor := MyActor spawn
-///   actor setStatus: "running"
-///   snap := ActorSnapshot of: actor
-///   snap status   // => "running"
-///   actor setStatus: "done"
-///   snap status   // => "running" (unchanged)
+/// ## Examples
+/// ```beamtalk
+/// actor := MyActor spawn
+/// actor setStatus: "running"
+/// snap := ActorSnapshot of: actor
+/// snap status   // => "running"
+/// actor setStatus: "done"
+/// snap status   // => "running" (unchanged)
+/// ```
 typed Actor subclass: ActorSnapshot
   state: fields :: Dictionary(Symbol, Object) = #{}
 
@@ -23,8 +26,11 @@ typed Actor subclass: ActorSnapshot
   /// Iterates over the Actor's `fieldNames` and reads each field value
   /// via `fieldAt:`, storing them in a Dictionary.
   ///
-  ///   snap := ActorSnapshot of: someActor
-  ///   snap capturedFieldNames   // => #(#status, #orderId, ...)
+  /// ## Examples
+  /// ```beamtalk
+  /// snap := ActorSnapshot of: someActor
+  /// snap capturedFieldNames   // => #(#status, #orderId, ...)
+  /// ```
   class of: actor :: Actor -> ActorSnapshot =>
     data := actor fieldNames inject: #{} into: [:acc :name |
       acc at: name put: (actor fieldAt: name)
@@ -33,8 +39,11 @@ typed Actor subclass: ActorSnapshot
 
   /// Return the captured field names as a list of symbols.
   ///
-  ///   snap := ActorSnapshot of: actor
-  ///   snap capturedFieldNames   // => #(#status, #orderId)
+  /// ## Examples
+  /// ```beamtalk
+  /// snap := ActorSnapshot of: actor
+  /// snap capturedFieldNames   // => #(#status, #orderId)
+  /// ```
   capturedFieldNames -> List => self.fields keys
 
   /// Respond to any field getter by looking up the captured value.
@@ -42,9 +51,12 @@ typed Actor subclass: ActorSnapshot
   /// If the selector matches a captured field name, returns that value.
   /// Otherwise raises an error indicating the field does not exist.
   ///
-  ///   snap := ActorSnapshot of: actor
-  ///   snap status       // => "running" (if actor had a #status field)
-  ///   snap bogusField   // => Error: "ActorSnapshot: no field 'bogusField'"
+  /// ## Examples
+  /// ```beamtalk
+  /// snap := ActorSnapshot of: actor
+  /// snap status       // => "running" (if actor had a #status field)
+  /// snap bogusField   // => Error: "ActorSnapshot: no field 'bogusField'"
+  /// ```
   doesNotUnderstand: selector :: Symbol args: _arguments :: List -> Object =>
     self.fields at: selector ifAbsent: [
       self error: "ActorSnapshot: no field '{selector}'"

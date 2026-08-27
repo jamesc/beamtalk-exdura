@@ -4,6 +4,9 @@
 /// The WorkflowRunner checks the result of run:ctx: for this type and
 /// delegates to the engine to create a new execution.
 ///
-///   ContinueAsNewRequest new: #{#args => #("nextCursor")}
+/// ## Examples
+/// ```beamtalk
+/// ContinueAsNewRequest new: #{#args => #("nextCursor")}
+/// ```
 typed Value subclass: ContinueAsNewRequest
   field: args :: List = #()

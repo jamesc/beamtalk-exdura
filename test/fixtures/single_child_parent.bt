@@ -2,8 +2,11 @@
 ///
 /// Used by ChildWorkflowTest to verify parent-child workflow execution.
 ///
-///   engine startWorkflow: SingleChildParent id: "p-1" args: #(5)
-///   // starts ChildDoubler, returns 10
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: SingleChildParent id: "p-1" args: #(5)
+/// // starts ChildDoubler, returns 10
+/// ```
 Workflow subclass: SingleChildParent
 
   class run: value ctx: ctx -> Integer =>

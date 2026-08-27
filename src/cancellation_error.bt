@@ -5,9 +5,13 @@
 /// as cancelled.
 ///
 ///   [
-///     ctx runActivity: OrderActivities method: #charge: with: #(orderId)
-///   ] on: CancellationError do: [:e |
-///     ctx runActivity: OrderActivities method: #refund: with: #(orderId)
-///     e signal   // Re-raise cancellation
-///   ]
+///
+/// ## Examples
+/// ```beamtalk
+///   ctx runActivity: OrderActivities method: #charge: with: #(orderId)
+/// ] on: CancellationError do: [:e |
+///   ctx runActivity: OrderActivities method: #refund: with: #(orderId)
+///   e signal   // Re-raise cancellation
+/// ]
+/// ```
 Error subclass: CancellationError

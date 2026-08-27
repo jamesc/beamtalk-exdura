@@ -2,8 +2,11 @@
 ///
 /// Starts multiple child workflows in parallel and collects all results.
 ///
-///   engine startWorkflow: BatchProcessor id: "b-1" args: #(#(3, 5, 7))
-///   // returns #(6, 10, 14)
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: BatchProcessor id: "b-1" args: #(#(3, 5, 7))
+/// // returns #(6, 10, 14)
+/// ```
 Workflow subclass: BatchProcessor
 
   class run: items ctx: ctx -> List =>
