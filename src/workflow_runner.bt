@@ -39,6 +39,7 @@ typed Actor subclass: WorkflowRunner
   ///
   /// Create a runner with a completion semaphore for zero-sleep await.
   ///
+  /// ## Examples
   /// ```beamtalk
   /// {runner, semName} := WorkflowRunner spawnForAwait: #{#workflow => ..., #engine => ...}
   /// runner go!
