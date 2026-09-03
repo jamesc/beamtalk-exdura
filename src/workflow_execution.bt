@@ -30,3 +30,17 @@ typed Value subclass: WorkflowExecution
 
   /// Display as WorkflowExecution(order-123 running)
   printString -> String => "WorkflowExecution({self workflowId} {self status})"
+
+  /// JSON representation used by the HTTP client API (SPEC.md §7.2).
+  asJson -> Dictionary(String, Object) =>
+    #{
+      "workflowId" => self.workflowId,
+      "runId" => self.runId,
+      "workflowType" => self.workflowType,
+      "taskQueue" => self.taskQueue,
+      "status" => self.status asString,
+      "result" => self.result,
+      "error" => self.error,
+      "startedAt" => self.startedAt,
+      "closedAt" => self.closedAt
+    }

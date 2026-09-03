@@ -21,3 +21,12 @@ typed Value subclass: ExduraEvent
 
   /// Display as ExduraEvent(1: WorkflowStarted)
   printString -> String => "ExduraEvent({self eventId}: {self eventType})"
+
+  /// JSON representation used by the HTTP client API (SPEC.md §7.2).
+  asJson -> Dictionary(String, Object) =>
+    #{
+      "eventId" => self.eventId,
+      "eventType" => self.eventType asString,
+      "timestamp" => self.timestamp,
+      "payload" => self.payload
+    }

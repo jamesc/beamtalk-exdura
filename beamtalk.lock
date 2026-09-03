@@ -3,11 +3,11 @@
 
 [[package]]
 name = "http"
-version = "0.1.2"
+version = "0.1.4"
 registry = "https://github.com/jamesc/beamtalk-registry"
 url = "https://github.com/jamesc/beamtalk-http.git"
-reference = "tag:v0.1.2"
-sha = "03f1d24dbc7f98d8adc6ba1cb8c155d4e3e7aadf"
+reference = "tag:v0.1.4"
+sha = "9d14e89e53e4e959f74a2e5f422ae790fa2cb214"
 
 [[native_package]]
 name = "cowboy"

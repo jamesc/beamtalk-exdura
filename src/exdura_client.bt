@@ -21,6 +21,7 @@ typed Actor subclass: ExduraClient
   state: engine :: WorkflowEngine
   state: eventStore :: EventStore
   state: supervisor :: Supervisor | Nil = nil
+  state: httpServer :: ExduraHttpServer | Nil = nil
 
   /// Create a client connected to an in-process workflow engine.
   ///
@@ -145,6 +146,22 @@ typed Actor subclass: ExduraClient
     self.supervisor := sup
     nil
 
+  /// Return the optional HTTP client API server (nil unless ExduraWorker
+  /// was started with an `#http` config).
+  httpServer -> ExduraHttpServer | Nil => self.httpServer
+
+  /// Attach the optional HTTP client API server so `destroy` cleans it up.
+  ///
+  /// Called by ExduraWorker when `#http` config starts one.
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// client setHttpServer: http
+  /// ```
+  setHttpServer: http :: ExduraHttpServer -> Nil =>
+    self.httpServer := http
+    nil
+
   /// Clean up resources (EventStore ETS tables, worker pool, supervisor).
   ///
   /// If a supervisor is attached (ExduraWorker-managed), stops it which
@@ -153,6 +170,10 @@ typed Actor subclass: ExduraClient
   ///
   ///   client destroy
   destroy -> Nil =>
+    self.httpServer ifNotNil: [
+      [self.httpServer destroy] on: Error do: [:e | nil]
+      [self.httpServer stop] on: Error do: [:e | nil]
+    ]
     self.supervisor match: [
       nil -> nil;
       // Supervisor-managed: stop supervisor first (terminates all children),

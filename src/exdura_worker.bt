@@ -10,6 +10,20 @@
 ///   args: #("data") taskQueue: "orders" options: #{}
 /// result := handle result
 /// ```
+///
+/// ## Optional HTTP client API (SPEC.md §7.2)
+///
+/// Pass `#http` to also start a REST/JSON API for non-Beamtalk clients.
+/// `#workflows` lists every `Workflow` subclass startable by name over
+/// HTTP (`POST /api/v1/workflows` with a `workflowType` field).
+///
+/// ```beamtalk
+/// client := ExduraWorker start: #{
+///   #workflows => #(OrderWorkflow, ApprovalWorkflow),
+///   #http => #{#port => 4100}
+/// }
+/// client httpServer port   // => 4100
+/// ```
 typed Object subclass: ExduraWorker
 
   /// Boot the supervision tree and return a connected ExduraClient.
@@ -43,4 +57,18 @@ typed Object subclass: ExduraWorker
     // Create client connected to the supervised engine
     client := ExduraClient spawnWith: #{#engine => engine, #eventStore => store}
     client setSupervisor: sup
+
+    // Optional HTTP client API (SPEC.md §7.2)
+    httpConfig := config at: #http ifAbsent: [nil]
+    httpConfig ifNotNil: [
+      port := httpConfig at: #port ifAbsent: [4100]
+      workflowClasses := config at: #workflows ifAbsent: [#()]
+      http := ExduraHttpServer
+        start: port
+        engine: engine
+        store: store
+        workflows: workflowClasses
+      client setHttpServer: http
+    ]
+
     client

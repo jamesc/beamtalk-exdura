@@ -1,0 +1,157 @@
+/// BUnit tests for ExduraHttpServer, the optional REST/JSON HTTP API
+/// (SPEC.md §7.2). Exercises every route against a real HTTP server on
+/// an ephemeral port, backed by a real ExduraClient's engine/eventStore.
+///
+/// Fixtures: test/fixtures/passthrough_workflow.bt, order_workflow.bt,
+///           slow_workflow.bt
+TestCase subclass: ExduraHttpServerTest
+  field: client = nil
+  field: http = nil
+  field: baseUrl = nil
+  field: testDir = "_build/bt-test-tmp/exdura-http"
+
+  setUp =>
+    [File deleteAll: self.testDir] on: Error do: [:e | nil]
+    self.client := ExduraClient connect: #{#dataDir => self.testDir}
+    self.http := ExduraHttpServer
+      start: 0
+      engine: self.client engine
+      store: self.client eventStore
+      workflows: #(PassthroughWorkflow, OrderWorkflow, SlowWorkflow)
+    self.baseUrl := "http://localhost:" ++ self.http port asString
+    self
+
+  tearDown =>
+    [self.http destroy] on: Error do: [:e | nil]
+    [self.http stop] on: Error do: [:e | nil]
+    self.client isNil
+      ifFalse: [
+        [self.client destroy] on: Error do: [:e | nil]
+        [self.client stop] on: Error do: [:e | nil]
+      ]
+    self.client := nil
+    self.http := nil
+
+  // ── Helpers ──
+
+  awaitStatus: workflowId :: String timeout: timeoutMs :: Integer -> WorkflowExecution =>
+    deadline := Time nowMs + timeoutMs
+    [true]
+      whileTrue: [
+        exec := self.client eventStore getExecution: workflowId
+        (exec isNil not
+          and: [
+            exec status =:= #completed or: [
+              exec status =:= #failed or: [exec status =:= #cancelled]
+            ]
+          ]) ifTrue: [^exec]
+        Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+        Timer sleep: 50
+      ]
+    self error: "unreachable"
+
+  // === POST /api/v1/workflows ===
+
+  testStartWorkflowReturns202AndRunsIt =>
+    resp := (HTTPClient
+      post: self.baseUrl ++ "/api/v1/workflows"
+      body: (Json generate: #{"workflowType" => "PassthroughWorkflow", "id" => "http-start-1", "args" => #("hello")})) unwrap
+    self assert: resp status equals: 202
+    body := (Json parse: resp body) unwrap
+    self assert: (body at: "workflowId") equals: "http-start-1"
+
+    exec := self awaitStatus: "http-start-1" timeout: 5000
+    self assert: exec status equals: #completed
+    self assert: exec result equals: "hello"
+
+  testStartWorkflowMissingFieldsReturns400 =>
+    resp := (HTTPClient
+      post: self.baseUrl ++ "/api/v1/workflows"
+      body: (Json generate: #{"workflowType" => "PassthroughWorkflow"})) unwrap
+    self assert: resp status equals: 400
+
+  testStartWorkflowUnknownTypeReturns400 =>
+    resp := (HTTPClient
+      post: self.baseUrl ++ "/api/v1/workflows"
+      body: (Json generate: #{"workflowType" => "NoSuchWorkflow", "id" => "http-start-2"})) unwrap
+    self assert: resp status equals: 400
+
+  // === GET /api/v1/workflows/:id ===
+
+  testGetWorkflowReturnsStatus =>
+    _exec := self.client engine startWorkflow: PassthroughWorkflow id: "http-get-1" args: #("data")
+    self awaitStatus: "http-get-1" timeout: 5000
+
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-get-1") unwrap
+    self assert: resp status equals: 200
+    body := (Json parse: resp body) unwrap
+    self assert: (body at: "workflowId") equals: "http-get-1"
+    self assert: (body at: "status") equals: "completed"
+
+  testGetUnknownWorkflowReturns404 =>
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/does-not-exist") unwrap
+    self assert: resp status equals: 404
+
+  // === GET /api/v1/workflows ===
+
+  testListWorkflowsFiltersByStatus =>
+    self.client engine startWorkflow: PassthroughWorkflow id: "http-list-1" args: #("a")
+    self awaitStatus: "http-list-1" timeout: 5000
+
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows?status=completed") unwrap
+    self assert: resp status equals: 200
+    body := (Json parse: resp body) unwrap
+    workflows := body at: "workflows"
+    ids := workflows collect: [:w | w at: "workflowId"]
+    self assert: (ids includes: "http-list-1")
+
+  // === GET /api/v1/workflows/:id/history ===
+
+  testGetHistoryReturnsEvents =>
+    self.client engine startWorkflow: PassthroughWorkflow id: "http-history-1" args: #("a")
+    self awaitStatus: "http-history-1" timeout: 5000
+
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-history-1/history") unwrap
+    self assert: resp status equals: 200
+    body := (Json parse: resp body) unwrap
+    events := body at: "events"
+    self assert: events isEmpty not
+
+  testGetHistoryUnknownWorkflowReturns404 =>
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/does-not-exist/history") unwrap
+    self assert: resp status equals: 404
+
+  // === GET /api/v1/workflows/:id/query/:name ===
+
+  testQueryWorkflowReturnsResult =>
+    self.client engine startWorkflow: OrderWorkflow id: "http-query-1" args: #("order-1")
+    self awaitStatus: "http-query-1" timeout: 5000
+
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-query-1/query/getStatus") unwrap
+    self assert: resp status equals: 200
+    body := (Json parse: resp body) unwrap
+    self assert: (body at: "result") equals: "completed"
+
+  testQueryUnknownWorkflowReturns404 =>
+    resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/does-not-exist/query/getStatus") unwrap
+    self assert: resp status equals: 404
+
+  // === POST /api/v1/workflows/:id/signal/:name ===
+
+  testSignalWorkflowReturns202 =>
+    self.client engine startWorkflow: PassthroughWorkflow id: "http-signal-1" args: #("a")
+    resp := (HTTPClient
+      post: self.baseUrl ++ "/api/v1/workflows/http-signal-1/signal/approve"
+      body: (Json generate: #{"approvedBy" => "alice"})) unwrap
+    self assert: resp status equals: 202
+
+  // === POST /api/v1/workflows/:id/cancel ===
+
+  testCancelWorkflowStopsIt =>
+    self.client engine startWorkflow: SlowWorkflow id: "http-cancel-1" args: #(5000)
+
+    resp := (HTTPClient post: self.baseUrl ++ "/api/v1/workflows/http-cancel-1/cancel" body: "") unwrap
+    self assert: resp status equals: 202
+
+    exec := self awaitStatus: "http-cancel-1" timeout: 5000
+    self assert: exec status equals: #cancelled

@@ -1,0 +1,199 @@
+/// Optional REST/JSON HTTP API for non-Beamtalk clients (SPEC.md §7.2).
+///
+/// Wraps a beamtalk-http `HTTPServer` with a routed `HTTPRouter`, each
+/// route composed with a `RequestLogger` `Plug` via `PlugChain`. Talks
+/// directly to a `WorkflowEngine` and `EventStore` — the same collaborators
+/// `ExduraClient` uses — so it works whether or not a client is also
+/// attached in-process.
+///
+/// Routes:
+/// ```
+/// POST   /api/v1/workflows                    — Start a workflow
+/// GET    /api/v1/workflows/:id                — Get workflow status
+/// POST   /api/v1/workflows/:id/signal/:name   — Send a signal
+/// GET    /api/v1/workflows/:id/query/:name    — Execute a query
+/// POST   /api/v1/workflows/:id/cancel         — Cancel a workflow
+/// GET    /api/v1/workflows                    — List/search workflows
+/// GET    /api/v1/workflows/:id/history        — Get event history
+/// ```
+///
+/// `POST /api/v1/workflows` looks up its `workflowType` string in a fixed
+/// registry built from the `workflows:` list passed at start time — only
+/// classes named there can be started over HTTP.
+///
+/// ## Examples
+/// ```beamtalk
+/// http := ExduraHttpServer
+///   start: 4100
+///   engine: engine
+///   store: eventStore
+///   workflows: #(OrderWorkflow, ApprovalWorkflow)
+/// http port     // => 4100
+/// http destroy
+/// ```
+typed Actor subclass: ExduraHttpServer
+  state: httpServer :: HTTPServer | Nil = nil
+  state: port :: Integer = 0
+
+  /// Start the HTTP API on `port`, dispatching to `engine`/`store`.
+  /// `workflowClasses` is the set of workflow types startable by name
+  /// via `POST /api/v1/workflows`.
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// http := ExduraHttpServer
+  ///   start: 4100
+  ///   engine: engine
+  ///   store: store
+  ///   workflows: #(OrderWorkflow)
+  /// ```
+  class start: port :: Integer engine: engine :: WorkflowEngine store: eventStore :: EventStore workflows: workflowClasses :: List(Workflow class) -> ExduraHttpServer =>
+    registry := self buildRegistry: workflowClasses
+    router := self buildRouter: engine store: eventStore registry: registry
+    srv := HTTPServer start: port handler: router
+    self spawnWith: #{#httpServer => srv, #port => srv port}
+
+  /// Build a `workflowType` string -> `Workflow class` lookup table.
+  class buildRegistry: workflowClasses :: List(Workflow class) -> Dictionary(String, Workflow class) =>
+    registry := #{}
+    workflowClasses do: [:wc | registry := registry at: wc name asString put: wc]
+    registry
+
+  /// Compile the route table, wrapping every route in `RequestLogger`.
+  class buildRouter: engine :: WorkflowEngine store: store :: EventStore registry: registry :: Dictionary(String, Workflow class) -> HTTPRouter =>
+    HTTPRouter build: [:r |
+      r post: "/api/v1/workflows" handler: (self
+        wrap: [:req | self handleStart: req engine: engine registry: registry])
+      r get: "/api/v1/workflows" handler: (self
+        wrap: [:req | self handleList: req store: store])
+      r get: "/api/v1/workflows/:id" handler: (self
+        wrap: [:req | self handleGet: req store: store])
+      r get: "/api/v1/workflows/:id/history" handler: (self
+        wrap: [:req | self handleHistory: req engine: engine store: store])
+      r post: "/api/v1/workflows/:id/signal/:name" handler: (self
+        wrap: [:req | self handleSignal: req engine: engine])
+      r get: "/api/v1/workflows/:id/query/:name" handler: (self
+        wrap: [:req | self handleQuery: req engine: engine])
+      r post: "/api/v1/workflows/:id/cancel" handler: (self
+        wrap: [:req | self handleCancel: req engine: engine])
+    ]
+
+  /// Wrap a route handler block with the standard plug chain.
+  class wrap: handler :: Block(HTTPRequest, HTTPResponse) -> Block(HTTPRequest, HTTPResponse) =>
+    PlugChain chain: #(RequestLogger new) handler: handler
+
+  // ── Route handlers ──
+
+  /// POST /api/v1/workflows — start a workflow from a JSON body
+  /// `{"workflowType": "...", "id": "...", "args": [...]}`.
+  class handleStart: req :: HTTPRequest engine: engine :: WorkflowEngine registry: registry :: Dictionary(String, Workflow class) -> HTTPResponse =>
+    [
+      data := (Json parse: req body) unwrap
+      workflowType := data at: "workflowType" ifAbsent: [nil]
+      workflowId := data at: "id" ifAbsent: [nil]
+      (workflowType isNil or: [workflowId isNil]) ifTrue: [
+        ^self errorResponse: 400 message: "workflowType and id are required"
+      ]
+      workflowClass := registry at: workflowType ifAbsent: [nil]
+      workflowClass isNil ifTrue: [
+        ^self errorResponse: 400 message: "unknown workflowType: {workflowType}"
+      ]
+      args := data at: "args" ifAbsent: [#()]
+      engine startWorkflow: workflowClass id: workflowId args: args
+      self jsonResponse: 202 body: #{"workflowId" => workflowId, "status" => "running"}
+    ] on: Error do: [:e | self errorResponse: 400 message: e message]
+
+  /// GET /api/v1/workflows — list/search executions via `?status=` / `?workflowType=`.
+  class handleList: req :: HTTPRequest store: store :: EventStore -> HTTPResponse =>
+    statusParam := req queryParams at: "status" ifAbsent: [""]
+    typeParam := req queryParams at: "workflowType" ifAbsent: [""]
+    statusSymbol := self statusSymbolFor: statusParam
+    withStatus := statusSymbol isNil ifTrue: [#{}] ifFalse: [#{#status => statusSymbol}]
+    filter := typeParam isEmpty
+      ifTrue: [withStatus]
+      ifFalse: [withStatus at: #workflowType put: typeParam]
+    executions := store listExecutions: filter
+    self jsonResponse: 200 body: #{"workflows" => executions}
+
+  /// Map a `?status=` query string to the fixed set of execution-status
+  /// symbols. Never turns arbitrary request input into a new atom.
+  class statusSymbolFor: statusParam :: String -> Symbol | Nil =>
+    statusParam =:= "running" ifTrue: [^#running]
+    statusParam =:= "completed" ifTrue: [^#completed]
+    statusParam =:= "failed" ifTrue: [^#failed]
+    statusParam =:= "cancelled" ifTrue: [^#cancelled]
+    nil
+
+  /// GET /api/v1/workflows/:id — get workflow status.
+  class handleGet: req :: HTTPRequest store: store :: EventStore -> HTTPResponse =>
+    workflowId := req param: "id"
+    execution := store getExecution: workflowId
+    execution isNil
+      ifTrue: [self errorResponse: 404 message: "workflow not found: {workflowId}"]
+      ifFalse: [self jsonResponse: 200 body: execution]
+
+  /// GET /api/v1/workflows/:id/history — get event history.
+  class handleHistory: req :: HTTPRequest engine: engine :: WorkflowEngine store: store :: EventStore -> HTTPResponse =>
+    workflowId := req param: "id"
+    execution := store getExecution: workflowId
+    execution isNil ifTrue: [^self errorResponse: 404 message: "workflow not found: {workflowId}"]
+    events := engine getEventHistory: workflowId
+    self jsonResponse: 200 body: #{"workflowId" => workflowId, "events" => events}
+
+  /// POST /api/v1/workflows/:id/signal/:name — send a signal, JSON body is the payload.
+  class handleSignal: req :: HTTPRequest engine: engine :: WorkflowEngine -> HTTPResponse =>
+    workflowId := req param: "id"
+    signalName := req param: "name"
+    [
+      payload := req body isEmpty ifTrue: [nil] ifFalse: [(Json parse: req body) unwrap]
+      engine bufferSignal: workflowId name: signalName payload: payload
+      self jsonResponse: 202 body: #{"status" => "signaled"}
+    ] on: Error do: [:e | self errorResponse: 400 message: e message]
+
+  /// GET /api/v1/workflows/:id/query/:name — execute a registered query handler.
+  class handleQuery: req :: HTTPRequest engine: engine :: WorkflowEngine -> HTTPResponse =>
+    workflowId := req param: "id"
+    queryName := req param: "name"
+    [
+      result := engine handleQuery: workflowId name: queryName
+      self jsonResponse: 200 body: #{"result" => result}
+    ] on: Error do: [:e | self errorResponse: 404 message: e message]
+
+  /// POST /api/v1/workflows/:id/cancel — cancel a running workflow.
+  class handleCancel: req :: HTTPRequest engine: engine :: WorkflowEngine -> HTTPResponse =>
+    workflowId := req param: "id"
+    [
+      engine cancelWorkflow: workflowId
+      self jsonResponse: 202 body: #{"status" => "cancelled"}
+    ] on: Error do: [:e | self errorResponse: 400 message: e message]
+
+  // ── Response helpers ──
+
+  class jsonResponse: status :: Integer body: value :: Object -> HTTPResponse =>
+    HTTPResponse
+      new: #{
+        #status => status,
+        #headers => #(#("content-type", "application/json")),
+        #body => Json generate: value
+      }
+
+  class errorResponse: status :: Integer message: msg :: String -> HTTPResponse =>
+    self jsonResponse: status body: #{"error" => msg}
+
+  // ── Instance API ──
+
+  /// The TCP port this server is listening on.
+  port -> Integer => self.port
+
+  /// Stop the underlying HTTP listener (does not stop this actor itself —
+  /// callers manage that the same way they manage any other Actor, via
+  /// `stop`).
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// http destroy
+  /// http stop
+  /// ```
+  destroy -> Nil =>
+    self.httpServer ifNotNil: [[self.httpServer stop] on: Error do: [:e | nil]]
+    nil
