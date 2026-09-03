@@ -34,10 +34,21 @@
 typed Actor subclass: ExduraHttpServer
   state: httpServer :: HTTPServer | Nil = nil
   state: port :: Integer = 0
+  state: workflowClasses :: List(Workflow class) = #()
+  state: engine :: WorkflowEngine
+  state: store :: EventStore
+
+  /// A crashed HTTP listener must come back up, not silently disappear.
+  class supervisionPolicy -> Symbol => #permanent
 
   /// Start the HTTP API on `port`, dispatching to `engine`/`store`.
   /// `workflowClasses` is the set of workflow types startable by name
   /// via `POST /api/v1/workflows`.
+  ///
+  /// Equivalent to `spawnWith:` with the same keys — provided for a
+  /// readable call site. `ExduraHttpServerSupervisor startChild:` (used by
+  /// `ExduraWorker`) calls `spawnWith:` directly with the same Dictionary
+  /// shape, so both paths converge on `initialize` for the real work.
   ///
   /// ## Examples
   /// ```beamtalk
@@ -48,41 +59,73 @@ typed Actor subclass: ExduraHttpServer
   ///   workflows: #(OrderWorkflow)
   /// ```
   class start: port :: Integer engine: engine :: WorkflowEngine store: eventStore :: EventStore workflows: workflowClasses :: List(Workflow class) -> ExduraHttpServer =>
-    registry := self buildRegistry: workflowClasses
-    router := self buildRouter: engine store: eventStore registry: registry
-    srv := HTTPServer start: port handler: router
-    self spawnWith: #{#httpServer => srv, #port => srv port}
+    self
+      spawnWith: #{
+        #port => port,
+        #engine => engine,
+        #store => eventStore,
+        #workflowClasses => workflowClasses
+      }
 
-  /// Build a `workflowType` string -> `Workflow class` lookup table.
-  class buildRegistry: workflowClasses :: List(Workflow class) -> Dictionary(String, Workflow class) =>
+  /// Build the router and start the real HTTP listener. Runs after every
+  /// spawn — direct `spawnWith:`/`start:engine:store:workflows:`,
+  /// `ExduraHttpServerSupervisor startChild:`, and automatic OTP restart,
+  /// which replays the exact args this actor was started with (BT-3365),
+  /// so a crash brings the listener back on the same port, wired to the
+  /// same engine/store.
+  ///
+  /// Deliberately inlines the registry/router construction (rather than
+  /// calling `ExduraHttpServer someClassMethod: ...`) — `initialize` runs
+  /// synchronously as part of spawning, and spawning this actor's own
+  /// class blocks that class's process until `initialize` returns. Any
+  /// call from here back to `ExduraHttpServer`'s class process (even a
+  /// plain class-method send) would deadlock against that same block. The
+  /// route *handler* methods below remain ordinary class methods — they're
+  /// invoked later, from cowboy's process, once an HTTP request actually
+  /// arrives, long after this method has returned and the class process
+  /// is free again.
+  initialize -> Nil =>
     registry := #{}
-    workflowClasses do: [:wc | registry := registry at: wc name asString put: wc]
-    registry
+    self.workflowClasses do: [:wc | registry := registry at: wc name asString put: wc]
 
-  /// Compile the route table, wrapping every route in `RequestLogger`.
-  class buildRouter: engine :: WorkflowEngine store: store :: EventStore registry: registry :: Dictionary(String, Workflow class) -> HTTPRouter =>
-    HTTPRouter build: [:r |
-      r post: "/api/v1/workflows" handler: (self
-        wrap: [:req | self handleStart: req engine: engine registry: registry])
-      r get: "/api/v1/workflows" handler: (self
-        wrap: [:req | self handleList: req store: store])
-      r get: "/api/v1/workflows/:id" handler: (self
-        wrap: [:req | self handleGet: req store: store])
-      r get: "/api/v1/workflows/:id/history" handler: (self
-        wrap: [:req | self handleHistory: req engine: engine store: store])
-      r post: "/api/v1/workflows/:id/signal/:name" handler: (self
-        wrap: [:req | self handleSignal: req engine: engine])
-      r get: "/api/v1/workflows/:id/query/:name" handler: (self
-        wrap: [:req | self handleQuery: req engine: engine])
-      r post: "/api/v1/workflows/:id/cancel" handler: (self
-        wrap: [:req | self handleCancel: req engine: engine])
+    engine := self.engine
+    store := self.store
+
+    router := HTTPRouter build: [:r |
+      r post: "/api/v1/workflows" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleStart: req engine: engine registry: registry])
+      r get: "/api/v1/workflows" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleList: req store: store])
+      r get: "/api/v1/workflows/:id" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleGet: req store: store])
+      r get: "/api/v1/workflows/:id/history" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleHistory: req engine: engine store: store])
+      r post: "/api/v1/workflows/:id/signal/:name" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleSignal: req engine: engine])
+      r get: "/api/v1/workflows/:id/query/:name" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleQuery: req engine: engine])
+      r post: "/api/v1/workflows/:id/cancel" handler: (PlugChain
+        chain: #(RequestLogger new)
+        handler: [:req | ExduraHttpServer handleCancel: req engine: engine])
     ]
-
-  /// Wrap a route handler block with the standard plug chain.
-  class wrap: handler :: Block(HTTPRequest, HTTPResponse) -> Block(HTTPRequest, HTTPResponse) =>
-    PlugChain chain: #(RequestLogger new) handler: handler
+    srv := HTTPServer start: self.port handler: router
+    self.httpServer := srv
+    self.port := srv port
+    nil
 
   // ── Route handlers ──
+  //
+  // Ordinary class methods. Safe to call each other (and to be called
+  // externally, e.g. `ExduraHttpServer handleStart: ...` from route
+  // closures above) because none of these calls happen during this
+  // actor's own synchronous spawn/initialize window — see `initialize`'s
+  // doc comment for why that distinction matters here.
 
   /// POST /api/v1/workflows — start a workflow from a JSON body
   /// `{"workflowType": "...", "id": "...", "args": [...]}`.
@@ -188,6 +231,14 @@ typed Actor subclass: ExduraHttpServer
   /// Stop the underlying HTTP listener (does not stop this actor itself —
   /// callers manage that the same way they manage any other Actor, via
   /// `stop`).
+  ///
+  /// `supervisionPolicy` is `#permanent`, so a supervised instance (spawned
+  /// via `ExduraHttpServerSupervisor startChild:`) must be torn down with
+  /// `ExduraHttpServerSupervisor terminateChild:`, not `destroy`/`stop`
+  /// directly — OTP treats a direct `stop` as a crash and restarts it.
+  /// `destroy`/`stop` are for instances spawned standalone (e.g. tests
+  /// using `ExduraHttpServer start:engine:store:workflows:` directly,
+  /// outside any supervisor).
   ///
   /// ## Examples
   /// ```beamtalk

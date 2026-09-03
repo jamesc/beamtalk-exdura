@@ -147,10 +147,14 @@ typed Actor subclass: ExduraClient
     nil
 
   /// Return the optional HTTP client API server (nil unless ExduraWorker
-  /// was started with an `#http` config).
+  /// was started with an `#http` config). Read-only: it's a genuine
+  /// `ExduraHttpServerSupervisor`-supervised child now, so lifecycle
+  /// (including shutdown, via `destroy`'s `sup stop`) is the supervisor's
+  /// job, not the client's — this accessor exists for inspection (e.g.
+  /// reading the bound port after starting on an ephemeral `0`).
   httpServer -> ExduraHttpServer | Nil => self.httpServer
 
-  /// Attach the optional HTTP client API server so `destroy` cleans it up.
+  /// Attach the optional HTTP client API server reference for inspection.
   ///
   /// Called by ExduraWorker when `#http` config starts one.
   ///
@@ -165,15 +169,12 @@ typed Actor subclass: ExduraClient
   /// Clean up resources (EventStore ETS tables, worker pool, supervisor).
   ///
   /// If a supervisor is attached (ExduraWorker-managed), stops it which
-  /// terminates all supervised children. Otherwise cleans up components
-  /// individually (ExduraClient connect:-managed).
+  /// terminates all supervised children — including the HTTP server, if
+  /// one was started. Otherwise cleans up components individually
+  /// (ExduraClient connect:-managed, which never has an HTTP server).
   ///
   ///   client destroy
   destroy -> Nil =>
-    self.httpServer ifNotNil: [
-      [self.httpServer destroy] on: Error do: [:e | nil]
-      [self.httpServer stop] on: Error do: [:e | nil]
-    ]
     self.supervisor match: [
       nil -> nil;
       // Supervisor-managed: stop supervisor first (terminates all children),

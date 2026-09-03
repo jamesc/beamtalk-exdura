@@ -1,13 +1,22 @@
 /// Top-level OTP supervision tree for the Exdura durable workflow engine.
 ///
-/// All four components are supervised children in dependency order:
+/// Five components are supervised children in dependency order:
 ///   1. EventStore — durable event persistence
 ///   2. ActivityWorkerPool — supervised activity execution
 ///   3. WorkflowEngine — workflow orchestration (discovers deps via supervisor)
 ///   4. TimerManager — durable timer scheduling
+///   5. ExduraHttpServerSupervisor — optional HTTP client API (SPEC.md §7.2)
 ///
 /// Uses rest_for_one: if EventStore crashes, everything after it restarts.
-/// If WorkflowEngine crashes, TimerManager restarts too.
+/// If WorkflowEngine crashes, TimerManager and the HTTP supervisor restart
+/// too. `ExduraHttpServerSupervisor` is always present (childless is the
+/// normal, cheap default); `ExduraWorker start:` adds the actual
+/// `ExduraHttpServer` child via `startChild:` when `#http` config is given.
+/// A cascade restart triggered by an EventStore/WorkflowEngine crash tears
+/// down that dynamically-added child along with it — same known limitation
+/// `ExduraClient`'s own `engine`/`eventStore` fields already have today
+/// (captured once at construction, never refreshed after a cascade); not
+/// something this change introduces or attempts to fix.
 ///
 ///   beamtalk run                          // starts via beamtalk.toml
 ///
@@ -21,13 +30,18 @@ typed Supervisor subclass: ExduraSupervisor
   class strategy -> Symbol => #restForOne
 
   /// Child specs in dependency order.
-  class children -> List(SupervisionSpec) =>
+  ///
+  /// `ExduraHttpServerSupervisor` is a nested `DynamicSupervisor`, not an
+  /// `Actor` — it's listed as a bare class reference rather than built via
+  /// `supervisionSpec withRestart:` (which only `Actor` subclasses
+  /// support). Nested supervisors default to `#permanent` restart.
+  class children -> List =>
     storeSpec := EventStore supervisionSpec withRestart: #permanent
     poolSpec := ActivityWorkerPool supervisionSpec withRestart: #permanent
     engineSpec := WorkflowEngine supervisionSpec withRestart: #permanent
     timerSpec := TimerManager supervisionSpec withRestart: #permanent
 
-    #(storeSpec, poolSpec, engineSpec, timerSpec)
+    #(storeSpec, poolSpec, engineSpec, timerSpec, ExduraHttpServerSupervisor)
 
   /// Wire children together after all are started.
   /// Re-runs on restart (rest_for_one), so restarted children get fresh refs.

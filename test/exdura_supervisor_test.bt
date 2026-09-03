@@ -50,14 +50,16 @@ TestCase subclass: ExduraSupervisorTest
     self assert: self.client engine notNil
     self assert: self.client eventStore notNil
 
-    // Verify the supervisor started all 4 children
+    // Verify the supervisor started all 5 children (the 4 core components
+    // plus the always-present, childless-by-default ExduraHttpServerSupervisor)
     sup := self.client supervisor
     self assert: sup notNil
-    self assert: sup count equals: 4
+    self assert: sup count equals: 5
     self assert: (sup which: EventStore) isOk
     self assert: (sup which: ActivityWorkerPool) isOk
     self assert: (sup which: WorkflowEngine) isOk
     self assert: (sup which: TimerManager) isOk
+    self assert: (sup which: ExduraHttpServerSupervisor) isOk
 
     // Verify config was applied to the pool
     pool := self.client engine activityPool
@@ -85,3 +87,25 @@ TestCase subclass: ExduraSupervisorTest
     exec := self awaitWorkflow: wfId2 timeout: 10000
     self assert: exec notNil
     self assert: exec result equals: 20
+
+  // === ExduraWorker starts a real, supervised ExduraHttpServer when #http is configured ===
+  testWorkerStartsSupervisedHttpServer =>
+    self.client := ExduraWorker start: #{
+      #workflows => #(PassthroughWorkflow),
+      #http => #{#port => 0}
+    }
+    http := self.client httpServer
+    self assert: http notNil
+    self assert: http port > 0
+
+    // It's a genuine ExduraHttpServerSupervisor child, not a bare sibling actor.
+    sup := self.client supervisor
+    httpSup :: ExduraHttpServerSupervisor := (sup which: ExduraHttpServerSupervisor) unwrap
+    self assert: httpSup count equals: 1
+
+    // Round-trip a real HTTP request through it.
+    baseUrl := "http://localhost:" ++ http port asString
+    resp := (HTTPClient
+      post: baseUrl ++ "/api/v1/workflows"
+      body: (Json generate: #{"workflowType" => "PassthroughWorkflow", "id" => "sup-http-1", "args" => #("hello")})) unwrap
+    self assert: resp status equals: 202

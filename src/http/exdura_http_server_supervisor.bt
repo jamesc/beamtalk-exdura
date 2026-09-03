@@ -1,0 +1,27 @@
+/// DynamicSupervisor for the optional `ExduraHttpServer` child.
+///
+/// A single-child pool, always present in `ExduraSupervisor`'s static
+/// tree — even when HTTP isn't configured, it just stays childless. The
+/// dynamic-supervisor route (rather than a static `SupervisionSpec` on
+/// `ExduraSupervisor` itself) exists because the HTTP server's port and
+/// workflow registry are runtime config from `ExduraWorker start: config`,
+/// not something `ExduraSupervisor class children` (a parameterless class
+/// method, evaluated once at supervisor init) can see.
+///
+/// `startChild: args` bakes those args into the OTP child spec, so a crash
+/// restarts `ExduraHttpServer` with the exact same port/engine/store it
+/// was started with (BT-3365) — the listener comes back up on its own,
+/// same as every other child in the tree, instead of silently staying
+/// down.
+///
+/// ## Examples
+/// ```beamtalk
+/// httpSup := (sup which: ExduraHttpServerSupervisor) unwrap
+/// http := httpSup startChild: #{
+///   #port => 4100, #engine => engine, #store => store, #workflowClasses => #(OrderWorkflow)
+/// }
+/// ```
+///
+/// @see ExduraHttpServer (the supervised child)
+DynamicSupervisor(ExduraHttpServer) subclass: ExduraHttpServerSupervisor
+  class childClass => ExduraHttpServer

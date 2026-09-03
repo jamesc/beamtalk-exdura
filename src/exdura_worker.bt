@@ -58,16 +58,27 @@ typed Object subclass: ExduraWorker
     client := ExduraClient spawnWith: #{#engine => engine, #eventStore => store}
     client setSupervisor: sup
 
-    // Optional HTTP client API (SPEC.md §7.2)
+    // Optional HTTP client API (SPEC.md §7.2). ExduraHttpServerSupervisor
+    // is always a static child of ExduraSupervisor (childless by default);
+    // starting the actual ExduraHttpServer under it here makes it a real
+    // supervised, restart-on-crash child rather than a manually-managed
+    // sibling actor.
     httpConfig := config at: #http ifAbsent: [nil]
     httpConfig ifNotNil: [
       port := httpConfig at: #port ifAbsent: [4100]
       workflowClasses := config at: #workflows ifAbsent: [#()]
-      http := ExduraHttpServer
-        start: port
-        engine: engine
-        store: store
-        workflows: workflowClasses
+      httpSup :: ExduraHttpServerSupervisor := (sup which: ExduraHttpServerSupervisor)
+        valueOrDo: [:e |
+          self error: "ExduraHttpServerSupervisor not found under ExduraSupervisor: {e}"
+        ]
+      http := (httpSup
+        startChild: #{
+          #port => port,
+          #engine => engine,
+          #store => store,
+          #workflowClasses => workflowClasses
+        })
+        valueOrDo: [:e | self error: "Failed to start ExduraHttpServer: {e}"]
       client setHttpServer: http
     ]
 
