@@ -25,14 +25,13 @@ typed Actor subclass: TaskQueueRegistry
   /// registry queueNamed: "orders"   // => TaskQueue actor
   /// ```
   queueNamed: name :: String -> TaskQueue =>
-    existing := self.queues at: name ifAbsent: [nil]
-    existing isNil
-      ifTrue: [
+    (self.queues includesKey: name)
+      ifTrue: [self.queues at: name]
+      ifFalse: [
         q := TaskQueue spawn
         self.queues := self.queues at: name put: q
         q
       ]
-      ifFalse: [existing]
 
   /// Return all registered queue names.
   ///
@@ -49,7 +48,7 @@ typed Actor subclass: TaskQueueRegistry
   /// registry hasQueue: "orders"   // => true
   /// ```
   hasQueue: name :: String -> Boolean =>
-    (self.queues at: name ifAbsent: [nil]) notNil
+    self.queues includesKey: name
 
   /// Destroy all managed queues and clean up.
   destroy -> Nil =>

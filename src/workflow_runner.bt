@@ -105,7 +105,7 @@ typed Actor subclass: WorkflowRunner
     // CancellationError exits early via ^nil.
     // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
     result := [
-      self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)
+      self runWorkflow: ctx
     ]
       on: CancellationError
       do: [:_e |
@@ -134,3 +134,12 @@ typed Actor subclass: WorkflowRunner
       ]
     (AtomicCounter named: self.doneSemName) increment
     nil
+
+  /// Run `self.workflow`'s `run:ctx:` in this runner's own process.
+  ///
+  /// `performLocally:withArguments:` is a reflective dispatch (selector
+  /// passed as a Symbol), so its return type is inherently Dynamic — this
+  /// wrapper is the one place that's true, isolated from `go`.
+  @expect type
+  runWorkflow: ctx :: WorkflowContext -> Object =>
+    self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)

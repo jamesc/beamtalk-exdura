@@ -102,4 +102,4 @@ Object subclass: Workflow
   /// registerQueries: ctx =>
   ///   ctx onQuery: "getStatus" do: [:snap | snap status]
   /// ```
-  class registerQueries: _ctx :: WorkflowContext => nil
+  class registerQueries: _ctx :: WorkflowContext -> Nil => nil

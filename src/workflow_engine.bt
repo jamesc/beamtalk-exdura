@@ -599,8 +599,10 @@ typed Actor subclass: WorkflowEngine
   /// ```
   captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String -> Object =>
     // Stop the previous snapshot Actor to avoid process leaks
-    oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
-    oldSnap ifNotNil: [[oldSnap stop] on: Error do: [:e | nil]]
+    (self.workflowSnapshots includesKey: workflowId) ifTrue: [
+      oldSnap := self.workflowSnapshots at: workflowId
+      [oldSnap stop] on: Error do: [:e | nil]
+    ]
     snap := ActorSnapshot spawnWith: #{#fields => stateDict}
     self.workflowSnapshots := self.workflowSnapshots at: workflowId put: snap
 
@@ -616,18 +618,18 @@ typed Actor subclass: WorkflowEngine
   /// result := engine handleQuery: "wf-1" name: "getStatus"
   /// ```
   handleQuery: workflowId :: String name: queryName :: String -> Object =>
-    handlers := self.workflowQueryHandlers at: workflowId ifAbsent: [nil]
-    handlers isNil ifTrue: [
+    (self.workflowQueryHandlers includesKey: workflowId) ifFalse: [
       self error: "No query handlers registered for workflow '{workflowId}'"
     ]
-    handler := handlers at: queryName ifAbsent: [nil]
-    handler isNil ifTrue: [
+    handlers := self.workflowQueryHandlers at: workflowId
+    (handlers includesKey: queryName) ifFalse: [
       self error: "No query handler '{queryName}' for workflow '{workflowId}'"
     ]
-    snap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
-    snap isNil ifTrue: [
+    handler := handlers at: queryName
+    (self.workflowSnapshots includesKey: workflowId) ifFalse: [
       self error: "No snapshot available for workflow '{workflowId}'"
     ]
+    snap := self.workflowSnapshots at: workflowId
     handler value: snap
 
   /// Return the cached snapshot for a workflow (for testing/inspection).
@@ -637,7 +639,9 @@ typed Actor subclass: WorkflowEngine
   /// engine getSnapshot: "wf-1"
   /// ```
   getSnapshot: workflowId :: String -> ActorSnapshot | Nil =>
-    self.workflowSnapshots at: workflowId ifAbsent: [nil]
+    (self.workflowSnapshots includesKey: workflowId)
+      ifTrue: [self.workflowSnapshots at: workflowId]
+      ifFalse: [nil]
 
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
@@ -801,8 +805,10 @@ typed Actor subclass: WorkflowEngine
     self.eventStore clearEvents: workflowId
 
     // Clean up old query snapshot to prevent stale query results
-    oldSnap := self.workflowSnapshots at: workflowId ifAbsent: [nil]
-    oldSnap ifNotNil: [[oldSnap stop] on: Error do: [:e | nil]]
+    (self.workflowSnapshots includesKey: workflowId) ifTrue: [
+      oldSnap := self.workflowSnapshots at: workflowId
+      [oldSnap stop] on: Error do: [:e | nil]
+    ]
     self.workflowSnapshots := self.workflowSnapshots removeKey: workflowId
 
     // Clean up old query handlers

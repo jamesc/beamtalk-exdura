@@ -30,7 +30,7 @@ TestCase subclass: QueryTest
     ctx onQuery: "getStatus" do: [:snap | snap status]
     handlers := ctx queryHandlers
     self assert: handlers size equals: 1
-    self assert: (handlers at: "getStatus" ifAbsent: [nil]) isNil not
+    self assert: (handlers includesKey: "getStatus")
 
   // === Multiple query handlers can be registered ===
   testMultipleQueryHandlers =>
