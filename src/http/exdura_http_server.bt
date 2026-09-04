@@ -92,27 +92,28 @@ typed Actor subclass: ExduraHttpServer
     store := self.store
 
     router := HTTPRouter build: [:r |
-      r post: "/api/v1/workflows" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleStart: req engine: engine registry: registry])
-      r get: "/api/v1/workflows" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleList: req store: store])
-      r get: "/api/v1/workflows/:id" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleGet: req store: store])
-      r get: "/api/v1/workflows/:id/history" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleHistory: req engine: engine store: store])
-      r post: "/api/v1/workflows/:id/signal/:name" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleSignal: req engine: engine])
-      r get: "/api/v1/workflows/:id/query/:name" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleQuery: req engine: engine])
-      r post: "/api/v1/workflows/:id/cancel" handler: (PlugChain
-        chain: #(RequestLogger new)
-        handler: [:req | ExduraHttpServer handleCancel: req engine: engine])
+      r
+        post: "/api/v1/workflows" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleStart: req engine: engine registry: registry]);
+        get: "/api/v1/workflows" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleList: req store: store]);
+        get: "/api/v1/workflows/:id" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleGet: req store: store]);
+        get: "/api/v1/workflows/:id/history" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleHistory: req engine: engine store: store]);
+        post: "/api/v1/workflows/:id/signal/:name" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleSignal: req engine: engine]);
+        get: "/api/v1/workflows/:id/query/:name" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleQuery: req engine: engine]);
+        post: "/api/v1/workflows/:id/cancel" handler: (PlugChain
+          chain: #(RequestLogger new)
+          handler: [:req | ExduraHttpServer handleCancel: req engine: engine])
     ]
     srv := HTTPServer start: self.port handler: router
     self.httpServer := srv
