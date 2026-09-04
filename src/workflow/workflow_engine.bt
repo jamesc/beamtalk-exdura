@@ -19,6 +19,11 @@
 typed Actor subclass: WorkflowEngine
   state: eventStore :: EventStore | Nil = nil
   state: activityPool :: ActivityWorkerPool | Nil = nil
+  /// Set via `withArgs: #{#supervised => true}` on the ExduraSupervisor
+  /// child spec. Distinguishes a nil `activityPool` that means "look it
+  /// up by name, the supervisor's ActivityWorkerPool is up somewhere"
+  /// from the legitimate standalone case (`withStore:`, no pool at all).
+  state: supervised :: Boolean = false
   state: signalBuffers :: Dictionary(String, List) = #{}
   state: workflowSnapshots :: Dictionary(String, ActorSnapshot) = #{}
   state: workflowQueryHandlers :: Dictionary(String, Dictionary) = #{}
@@ -44,14 +49,6 @@ typed Actor subclass: WorkflowEngine
   class withStore: anEventStore :: EventStore -> WorkflowEngine =>
     self spawnWith: #{#eventStore => anEventStore}
 
-  /// Initialize engine with an EventStore and optional ActivityWorkerPool.
-  /// Called by withStore: for standalone use, or by ExduraWorker after
-  /// the supervisor finishes starting all children.
-  initWithStore: aStore :: EventStore pool: aPool :: ActivityWorkerPool | Nil -> Nil =>
-    self.eventStore := aStore
-    self.activityPool := aPool
-    nil
-
   /// Start a new workflow execution.
   ///
   /// Creates a WorkflowExecution record, records a WorkflowStarted event,
@@ -75,7 +72,7 @@ typed Actor subclass: WorkflowEngine
         #status => #running,
         #startedAt => now
       }
-    self.eventStore createExecution: execution
+    self eventStore createExecution: execution
 
     // Record WorkflowStarted event
     startEvent := ExduraEvent
@@ -88,10 +85,10 @@ typed Actor subclass: WorkflowEngine
           #args => args
         }
       }
-    self.eventStore appendEvents: workflowId events: #(startEvent)
+    self eventStore appendEvents: workflowId events: #(startEvent)
 
     // Load event history
-    history := self.eventStore readEvents: workflowId fromSeq: 1
+    history := self eventStore readEvents: workflowId fromSeq: 1
 
     // Get the input argument for run:
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
@@ -143,8 +140,8 @@ typed Actor subclass: WorkflowEngine
       #workflowId => workflowId,
       #workflowType => workflowClass name asString
     }
-    history := self.eventStore readEvents: workflowId fromSeq: 1
-    snapResult := self.eventStore readEventsFromSnapshot: workflowId
+    history := self eventStore readEvents: workflowId fromSeq: 1
+    snapResult := self eventStore readEventsFromSnapshot: workflowId
     runner := snapResult match: [
       // No snapshot — full replay from event history
       nil -> WorkflowRunner
@@ -213,7 +210,7 @@ typed Actor subclass: WorkflowEngine
           #options => options
         }
       }
-    self.eventStore appendEvents: workflowId events: #(scheduledEvent)
+    self eventStore appendEvents: workflowId events: #(scheduledEvent)
 
     // Build retry policy from options
     rpDict := options at: #retryPolicy ifAbsent: [#{}]
@@ -223,26 +220,22 @@ typed Actor subclass: WorkflowEngine
     ]
 
     // Dispatch through pool if available, otherwise use ActivityRetryExecutor
-    self.activityPool isNil
+    pool := self currentActivityPool
+    pool isNil
       ifTrue: [
         // No pool — use retry executor with direct execution.
-        // self.eventStore is `| Nil` to satisfy supervisor spawn; the
-        // supervisor's initialize: guarantees it is set before any messages.
-        self.eventStore isNil ifTrue: [
-          self error: "eventStore not yet initialized"
-        ]
         ActivityRetryExecutor
           execute: activityClass
           selector: selector
           args: args
-          eventStore: self.eventStore
+          eventStore: self eventStore
           workflowId: workflowId
           retryPolicy: rp
       ]
       ifFalse: [
         // Pool available — supervised worker execution with timeout
         timeout := options at: #startToCloseTimeout ifAbsent: [nil]
-        outcome := self.activityPool
+        outcome := pool
           executeActivity: activityClass
           selector: selector
           args: args
@@ -272,7 +265,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => completedNow,
         #payload => #{#result => result}
       }
-    self.eventStore appendEvents: workflowId events: #(completedEvent)
+    self eventStore appendEvents: workflowId events: #(completedEvent)
     result
 
   /// Record an ActivityFailed event.
@@ -284,7 +277,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => failedNow,
         #payload => #{#error => reason}
       }
-    self.eventStore appendEvents: workflowId events: #(failedEvent)
+    self eventStore appendEvents: workflowId events: #(failedEvent)
 
   /// Record an ActivityTimedOut event.
   recordActivityTimedOut: workflowId :: String -> List(ExduraEvent) =>
@@ -294,7 +287,7 @@ typed Actor subclass: WorkflowEngine
       #timestamp => timedOutNow,
       #payload => #{}
     }
-    self.eventStore appendEvents: workflowId events: #(timedOutEvent)
+    self eventStore appendEvents: workflowId events: #(timedOutEvent)
 
   /// Record a TimerStarted event and sleep for the given duration (ms).
   ///
@@ -317,7 +310,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => nowMs,
         #payload => #{#duration => duration, #fireAt => fireAt}
       }
-    self.eventStore appendEvents: workflowId events: #(startedEvent)
+    self eventStore appendEvents: workflowId events: #(startedEvent)
     // Return fireAt — the context handles the actual sleep
     fireAt
 
@@ -335,7 +328,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => firedNow,
         #payload => #{#duration => duration}
       }
-    self.eventStore appendEvents: workflowId events: #(firedEvent)
+    self eventStore appendEvents: workflowId events: #(firedEvent)
     nil
 
   /// Reconstruct a pending timer on replay: calculate remaining duration and wait.
@@ -362,7 +355,7 @@ typed Actor subclass: WorkflowEngine
   /// engine getEventHistory: "wf-1"
   /// ```
   getEventHistory: workflowId :: String -> List =>
-    self.eventStore readEvents: workflowId fromSeq: 1
+    self eventStore readEvents: workflowId fromSeq: 1
 
   /// Buffer a signal for a workflow and record a SignalReceived event.
   ///
@@ -385,7 +378,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#signalName => signalName, #payload => data}
       }
-    self.eventStore appendEvents: workflowId events: #(signalEvent)
+    self eventStore appendEvents: workflowId events: #(signalEvent)
 
     // Append to per-workflow signal buffer
     existing := self.signalBuffers at: workflowId ifAbsent: [#()]
@@ -433,7 +426,7 @@ typed Actor subclass: WorkflowEngine
   completeWorkflow: workflowId :: String result: result :: Object -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: don't overwrite cancelled status with completed
-    existing := self.eventStore getExecution: workflowId
+    existing := self eventStore getExecution: workflowId
     (existing notNil and: [existing status =:= #cancelled]) ifTrue: [^nil]
     now := Time nowMs div: 1000
     completedEvent := ExduraEvent
@@ -442,26 +435,27 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#result => result}
       }
-    self.eventStore appendEvents: workflowId events: #(completedEvent)
-    self.eventStore
+    self eventStore appendEvents: workflowId events: #(completedEvent)
+    self eventStore
       updateExecution: workflowId
       status: #completed
       result: result
     // Inline: if this is a child workflow, record completion in parent's history
-    exec := self.eventStore getExecution: workflowId
+    exec := self eventStore getExecution: workflowId
     (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
+        parentId :: String := exec parentWorkflowId
         childCompletedEvent := ExduraEvent
           new: #{
             #eventType => #ChildWorkflowCompleted,
             #timestamp => now,
             #payload => #{#childWorkflowId => workflowId, #result => result}
           }
-        self.eventStore appendEvents: exec parentWorkflowId events: #(childCompletedEvent)
+        self eventStore appendEvents: parentId events: #(childCompletedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children := self.childWorkflows at: workflowId ifAbsent: [#()]
-    store := self.eventStore
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
       select: [:childId |
@@ -507,26 +501,27 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#error => reason}
       }
-    self.eventStore appendEvents: workflowId events: #(failedEvent)
-    self.eventStore
+    self eventStore appendEvents: workflowId events: #(failedEvent)
+    self eventStore
       updateExecution: workflowId
       status: #failed
       result: reason
     // Inline: if this is a child workflow, record failure in parent's history
-    exec := self.eventStore getExecution: workflowId
+    exec := self eventStore getExecution: workflowId
     (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
+        parentId :: String := exec parentWorkflowId
         childFailedEvent := ExduraEvent
           new: #{
             #eventType => #ChildWorkflowFailed,
             #timestamp => now,
             #payload => #{#childWorkflowId => workflowId, #error => reason}
           }
-        self.eventStore appendEvents: exec parentWorkflowId events: #(childFailedEvent)
+        self eventStore appendEvents: parentId events: #(childFailedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children := self.childWorkflows at: workflowId ifAbsent: [#()]
-    store := self.eventStore
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
       select: [:childId |
@@ -569,8 +564,8 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#eventId => eventId}
       }
-    self.eventStore appendEvents: workflowId events: #(snapshotEvent)
-    self.eventStore
+    self eventStore appendEvents: workflowId events: #(snapshotEvent)
+    self eventStore
       saveSnapshot: workflowId
       state: state
       eventId: eventId
@@ -681,7 +676,7 @@ typed Actor subclass: WorkflowEngine
           #parentClosePolicy => policy
         }
       }
-    self.eventStore appendEvents: parentId events: #(startedEvent)
+    self eventStore appendEvents: parentId events: #(startedEvent)
 
     // Track parent-child relationship
     existing := self.childWorkflows at: parentId ifAbsent: [#()]
@@ -700,7 +695,7 @@ typed Actor subclass: WorkflowEngine
         #parentWorkflowId => parentId,
         #startedAt => now
       }
-    self.eventStore createExecution: execution
+    self eventStore createExecution: execution
 
     // Record WorkflowStarted event in child's own history
     childStartEvent := ExduraEvent
@@ -713,10 +708,10 @@ typed Actor subclass: WorkflowEngine
           #args => args
         }
       }
-    self.eventStore appendEvents: childWorkflowId events: #(childStartEvent)
+    self eventStore appendEvents: childWorkflowId events: #(childStartEvent)
 
     // Load child's event history and launch asynchronously
-    history := self.eventStore readEvents: childWorkflowId fromSeq: 1
+    history := self eventStore readEvents: childWorkflowId fromSeq: 1
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
     runner := WorkflowRunner
       spawnWith: #{
@@ -729,16 +724,10 @@ typed Actor subclass: WorkflowEngine
     runner go!
 
     // Return a handle for the caller to wait on.
-    // self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
-    // non-nil by ExduraSupervisor initialize: before any messages arrive.
-    store := self.eventStore match: [
-      nil -> self error: "eventStore not yet initialized";
-      s -> s
-    ]
     ChildWorkflowHandle
       for: childWorkflowId
       engine: self
-      eventStore: store
+      eventStore: self eventStore
 
   /// Return the list of child workflow IDs for a parent (for testing).
   ///
@@ -775,7 +764,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#args => args}
       }
-    self.eventStore appendEvents: workflowId events: #(continueEvent)
+    self eventStore appendEvents: workflowId events: #(continueEvent)
 
   /// Handle continue-as-new: mark old execution as continued_as_new
   /// and start a fresh execution with the same workflow_id but a new run_id.
@@ -795,14 +784,14 @@ typed Actor subclass: WorkflowEngine
       #workflowType => workflowClass name asString
     }
     // Mark old execution as continued_as_new
-    self.eventStore
+    self eventStore
       updateExecution: workflowId
       status: #continued_as_new
       result: nil
 
     // Delete old event history from ETS so appendEvents work
     // on a clean slate with the same workflowId
-    self.eventStore clearEvents: workflowId
+    self eventStore clearEvents: workflowId
 
     // Clean up old query snapshot to prevent stale query results
     (self.workflowSnapshots includesKey: workflowId) ifTrue: [
@@ -817,7 +806,7 @@ typed Actor subclass: WorkflowEngine
     // Update the existing execution record to running for the new attempt
     now := Time nowMs div: 1000
     wfType := workflowClass name asString
-    self.eventStore
+    self eventStore
       updateExecution: workflowId
       status: #running
       result: nil
@@ -833,10 +822,10 @@ typed Actor subclass: WorkflowEngine
           #args => args
         }
       }
-    self.eventStore appendEvents: workflowId events: #(startEvent)
+    self eventStore appendEvents: workflowId events: #(startEvent)
 
     // Load fresh history and start the new workflow
-    history := self.eventStore readEvents: workflowId fromSeq: 1
+    history := self eventStore readEvents: workflowId fromSeq: 1
     input := args size > 0 ifTrue: [args at: 1] ifFalse: [nil]
     runner := WorkflowRunner
       spawnWith: #{
@@ -866,7 +855,7 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#name => name, #version => selectedVersion}
       }
-    self.eventStore appendEvents: workflowId events: #(markerEvent)
+    self eventStore appendEvents: workflowId events: #(markerEvent)
 
   /// Cancel a running workflow.
   ///
@@ -882,7 +871,7 @@ typed Actor subclass: WorkflowEngine
   cancelWorkflow: workflowId :: String -> Nil =>
     Tracing setContext: #{#workflowId => workflowId}
     // Guard: only cancel running workflows
-    exec := self.eventStore getExecution: workflowId
+    exec := self eventStore getExecution: workflowId
     (exec isNil or: [(exec status =:= #running) == false]) ifTrue: [^nil]
 
     now := Time nowMs div: 1000
@@ -894,14 +883,14 @@ typed Actor subclass: WorkflowEngine
         #timestamp => now,
         #payload => #{#workflowId => workflowId}
       }
-    self.eventStore appendEvents: workflowId events: #(cancelEvent)
+    self eventStore appendEvents: workflowId events: #(cancelEvent)
 
     // Set cancellation flag for the WorkflowContext to check
     self.cancelledWorkflows := self.cancelledWorkflows at: workflowId put: true
 
     // Cancel child workflows per parent-close policy
-    children := self.childWorkflows at: workflowId ifAbsent: [#()]
-    store := self.eventStore
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    store := self eventStore
     policies := self.parentClosePolicy
     children
       do: [:childId |
@@ -930,15 +919,16 @@ typed Actor subclass: WorkflowEngine
       ]
 
     // Update parent execution status to cancelled
-    self.eventStore
+    self eventStore
       updateExecution: workflowId
       status: #cancelled
       result: "Workflow cancelled"
 
     // If this workflow has a parent, record ChildWorkflowFailed in parent's history
-    exec := self.eventStore getExecution: workflowId
+    exec := self eventStore getExecution: workflowId
     (exec notNil and: [exec parentWorkflowId notNil])
       ifTrue: [
+        parentId :: String := exec parentWorkflowId
         childCancelledEvent := ExduraEvent
           new: #{
             #eventType => #ChildWorkflowFailed,
@@ -948,7 +938,7 @@ typed Actor subclass: WorkflowEngine
               #error => "Workflow cancelled"
             }
           }
-        self.eventStore appendEvents: exec parentWorkflowId events: #(childCancelledEvent)
+        self eventStore appendEvents: parentId events: #(childCancelledEvent)
       ]
     nil
 
@@ -973,20 +963,41 @@ typed Actor subclass: WorkflowEngine
   clearCancellation: workflowId :: String -> Object =>
     self.cancelledWorkflows := self.cancelledWorkflows removeKey: workflowId
 
-  /// Return the underlying EventStore (for testing/inspection).
-  /// self.eventStore is `| Nil` to satisfy supervisor spawn; guaranteed
-  /// non-nil by ExduraSupervisor initialize: before any messages arrive.
+  /// Return the underlying EventStore.
+  ///
+  /// The `self.eventStore` field is nil only for a supervised engine —
+  /// every standalone constructor sets it directly, but the supervised
+  /// child spec instead registers `EventStore` under `#eventStore`
+  /// (ADR 0079) for engine methods to resolve here. Resolving fresh on
+  /// every call, rather than caching the lookup, means a `rest_for_one`
+  /// restart of EventStore is picked up automatically.
   eventStore -> EventStore =>
     self.eventStore match: [
-      nil -> self error: "eventStore not yet initialized";
+      nil -> (EventStore named: #eventStore) unwrap;
       s -> s
     ]
 
-  /// Return the ActivityWorkerPool (for testing/inspection).
-  /// self.activityPool is `| Nil` to satisfy supervisor spawn; guaranteed
-  /// non-nil by ExduraSupervisor initialize: before any messages arrive.
+  /// Return the ActivityWorkerPool (for testing/inspection). Raises if
+  /// genuinely absent — use `currentActivityPool` internally, which
+  /// treats "no pool" as a legitimate outcome.
   activityPool -> ActivityWorkerPool =>
-    self.activityPool match: [
+    self currentActivityPool match: [
       nil -> self error: "activityPool not yet initialized";
+      p -> p
+    ]
+
+  /// The ActivityWorkerPool to dispatch through, or nil if this engine
+  /// genuinely runs without one (Phase 0 standalone mode via
+  /// `WorkflowEngine withStore:`).
+  ///
+  /// A supervised engine (`self.supervised`) always has a pool — it's a
+  /// required, always-present `ExduraSupervisor` child — so a nil field
+  /// there means "not yet resolved," not "no pool," and is looked up by
+  /// name (ADR 0079) instead.
+  currentActivityPool -> ActivityWorkerPool | Nil =>
+    self.activityPool match: [
+      nil -> self.supervised
+        ifTrue: [(ActivityWorkerPool named: #activityWorkerPool) unwrap]
+        ifFalse: [nil];
       p -> p
     ]

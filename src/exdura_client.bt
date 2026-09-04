@@ -53,7 +53,7 @@ typed Actor subclass: ExduraClient
   /// result := handle result
   /// ```
   start: workflowClass :: Workflow class id: workflowId :: String args: args :: List taskQueue: _queueName :: String options: _options :: Dictionary -> WorkflowHandle =>
-    self.engine
+    self currentEngine
       startWorkflow: workflowClass
       id: workflowId
       args: args
@@ -70,7 +70,7 @@ typed Actor subclass: ExduraClient
   /// client signal: "wf-1" name: "approve" payload: #{#user => "alice"}
   /// ```
   signal: workflowId :: String name: signalName :: String payload: data :: Object -> Nil =>
-    self.engine
+    self currentEngine
       bufferSignal: workflowId
       name: signalName
       payload: data
@@ -86,7 +86,7 @@ typed Actor subclass: ExduraClient
   /// status := client query: "wf-1" name: "getStatus"
   /// ```
   query: workflowId :: String name: queryName :: String -> Object =>
-    self.engine handleQuery: workflowId name: queryName
+    self currentEngine handleQuery: workflowId name: queryName
 
   /// Cancel a running workflow.
   ///
@@ -101,7 +101,7 @@ typed Actor subclass: ExduraClient
   /// ```beamtalk
   /// client cancel: "wf-1"
   /// ```
-  cancel: workflowId :: String -> Nil => self.engine cancelWorkflow: workflowId
+  cancel: workflowId :: String -> Nil => self currentEngine cancelWorkflow: workflowId
 
   /// List workflow executions matching a filter.
   ///
@@ -113,7 +113,7 @@ typed Actor subclass: ExduraClient
   /// client list: #{#status => #running}
   /// client list: #{}   // all executions
   /// ```
-  list: filter :: Dictionary -> List => self.eventStore listExecutions: filter
+  list: filter :: Dictionary -> List => self currentEventStore listExecutions: filter
 
   /// Retrieve a workflow execution by ID (used by WorkflowHandle).
   ///
@@ -122,13 +122,35 @@ typed Actor subclass: ExduraClient
   /// client getExecution: "wf-1"
   /// ```
   getExecution: workflowId :: String -> WorkflowExecution | Nil =>
-    self.eventStore getExecution: workflowId
+    self currentEventStore getExecution: workflowId
 
   /// Return the underlying WorkflowEngine (for testing/inspection).
-  engine -> WorkflowEngine => self.engine
+  engine -> WorkflowEngine => self currentEngine
 
   /// Return the underlying EventStore (for testing/inspection).
-  eventStore -> EventStore => self.eventStore
+  eventStore -> EventStore => self currentEventStore
+
+  /// The `WorkflowEngine` to use for this call.
+  ///
+  /// Standalone (`connect:`) clients have no supervisor, so nothing ever
+  /// restarts `self.engine` out from under them — the cached reference is
+  /// always current. Supervised (`ExduraWorker`-managed) clients instead
+  /// re-resolve `#workflowEngine` by name (ADR 0079) on every call, so a
+  /// `rest_for_one` restart triggered by an EventStore/WorkflowEngine
+  /// crash is picked up automatically instead of leaving `self.engine`
+  /// pointing at a dead pid.
+  currentEngine -> WorkflowEngine =>
+    self.supervisor match: [
+      nil -> self.engine;
+      _ -> (WorkflowEngine named: #workflowEngine) unwrap
+    ]
+
+  /// The `EventStore` to use for this call — see `currentEngine`.
+  currentEventStore -> EventStore =>
+    self.supervisor match: [
+      nil -> self.eventStore;
+      _ -> (EventStore named: #eventStore) unwrap
+    ]
 
   /// Return the underlying Supervisor (for testing/lifecycle management).
   supervisor -> Supervisor | Nil => self.supervisor

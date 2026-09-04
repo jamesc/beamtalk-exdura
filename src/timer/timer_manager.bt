@@ -6,11 +6,16 @@
 ///
 /// ## Examples
 /// ```beamtalk
-/// manager := TimerManager spawn
-/// manager initWith: engine eventStore: store
+/// manager := TimerManager spawnWith: #{#engine => engine, #eventStore => store}
 /// manager reconstructPendingTimers: #("wf-1", "wf-2")
 /// ```
 typed Actor subclass: TimerManager
+  /// nil only for a supervised TimerManager — the `ExduraSupervisor` child
+  /// spec registers `WorkflowEngine`/`EventStore` under fixed names
+  /// (ADR 0079) instead of passing live refs, since neither exists yet
+  /// when the child spec is built. `engine`/`eventStore` below resolve
+  /// fresh by name in that case, so a `rest_for_one` restart of either is
+  /// picked up automatically instead of leaving a nil/stale field.
   state: engine :: WorkflowEngine | Nil = nil
   state: eventStore :: EventStore | Nil = nil
   state: status :: Symbol = #ready
@@ -85,16 +90,21 @@ typed Actor subclass: TimerManager
   /// ```
   pendingCount -> Integer => self.pendingCount
 
-  /// Initialize the timer manager with an engine and event store.
-  ///
-  /// ## Examples
-  /// ```beamtalk
-  /// manager initWith: engine eventStore: store
-  /// ```
-  initWith: anEngine :: WorkflowEngine eventStore: aStore :: EventStore -> Nil =>
-    self.engine := anEngine
-    self.eventStore := aStore
-    nil
+  /// The WorkflowEngine to use — resolves by name (ADR 0079) when
+  /// supervised and not yet cached; see the class doc comment.
+  engine -> WorkflowEngine =>
+    self.engine match: [
+      nil -> (WorkflowEngine named: #workflowEngine) unwrap;
+      e -> e
+    ]
+
+  /// The EventStore to use — resolves by name (ADR 0079) when supervised
+  /// and not yet cached; see the class doc comment.
+  eventStore -> EventStore =>
+    self.eventStore match: [
+      nil -> (EventStore named: #eventStore) unwrap;
+      s -> s
+    ]
 
   /// Scan event histories for unresolved timers and reconstruct them.
   ///
@@ -110,18 +120,20 @@ typed Actor subclass: TimerManager
   /// ```
   reconstructPendingTimers: workflowIds :: List(String) -> Integer =>
     self.status := #scanning
+    store := self eventStore
+    engine := self engine
     count := workflowIds
       inject: 0
       into: [:acc :wfId |
-        pending := TimerManager findPendingTimers: (self.eventStore readEvents: wfId fromSeq: 1)
+        pending := TimerManager findPendingTimers: (store readEvents: wfId fromSeq: 1)
         pending
           do: [:timerInfo |
-            remaining := self.engine
+            remaining := engine
               reconstructTimer: timerInfo duration
               fireAt: timerInfo fireAt
               workflowId: wfId
             remaining > 0 ifTrue: [Timer sleep: remaining]
-            self.engine recordTimerFired: timerInfo duration workflowId: wfId
+            engine recordTimerFired: timerInfo duration workflowId: wfId
           ]
         acc + pending size
       ]

@@ -6,6 +6,12 @@
 TestCase subclass: ExduraSupervisorTest
   field: client = nil
 
+  /// EventStore/WorkflowEngine register under fixed names (ADR 0079) while
+  /// supervised — only one ExduraSupervisor may be alive at a time per
+  /// node, so this class can't run concurrently with another that also
+  /// spawns one.
+  class serial -> Boolean => true
+
   setUp => self
 
   tearDown =>
@@ -87,6 +93,52 @@ TestCase subclass: ExduraSupervisorTest
     exec := self awaitWorkflow: wfId2 timeout: 10000
     self assert: exec notNil
     self assert: exec result equals: 20
+
+  // === A rest_for_one cascade restart leaves WorkflowEngine/TimerManager/
+  // ActivityWorkerPool functional, not wired to nil/dead refs ===
+  //
+  // Regression test: WorkflowEngine/TimerManager used to be wired up once
+  // via `ExduraSupervisor class initialize:`, which only runs at the
+  // initial `supervise` call — not on OTP-driven restarts. A restarted
+  // WorkflowEngine came back with a nil eventStore and crashed on the next
+  // workflow call. Fixed by having WorkflowEngine/TimerManager resolve
+  // EventStore/WorkflowEngine/ActivityWorkerPool by name (ADR 0079) at
+  // use-time instead of caching a pid.
+  testEngineSurvivesEventStoreCrashCascade =>
+    self.client := ExduraWorker start: #{}
+    sup := self.client supervisor
+
+    storeBefore := (sup which: EventStore) unwrap
+    engineBefore := (sup which: WorkflowEngine) unwrap
+    poolBefore := (sup which: ActivityWorkerPool) unwrap
+    timerBefore := (sup which: TimerManager) unwrap
+
+    // Force-crash EventStore; rest_for_one restarts everything after it.
+    (Erlang erlang) exit: storeBefore pid reason: #kill
+    Timer sleep: 300
+
+    // Confirm the cascade actually restarted the downstream children —
+    // otherwise this test would trivially pass without exercising anything.
+    self assert: (storeBefore pid =:= (sup which: EventStore) unwrap pid) equals: false
+    self assert: (engineBefore pid =:= (sup which: WorkflowEngine) unwrap pid) equals: false
+    self assert: (poolBefore pid =:= (sup which: ActivityWorkerPool) unwrap pid) equals: false
+    self assert: (timerBefore pid =:= (sup which: TimerManager) unwrap pid) equals: false
+
+    // A workflow using an activity (exercises WorkflowEngine's EventStore
+    // and ActivityWorkerPool) must still complete after the restart.
+    wfId := "cascade-restart-" ++ Time nowMs asString
+    self.client
+      start: TwoActivityWorkflow
+      id: wfId
+      args: #(5)
+      taskQueue: "default"
+      options: #{}
+    exec := self awaitWorkflow: wfId timeout: 10000
+    self assert: exec notNil
+    self assert: exec result equals: 20
+
+    // TimerManager (resolves engine/eventStore by name) must still work.
+    (sup which: TimerManager) unwrap reconstructPendingTimers: #()
 
   // === ExduraWorker starts a real, supervised ExduraHttpServer when #http is configured ===
   testWorkerStartsSupervisedHttpServer =>
