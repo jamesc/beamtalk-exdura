@@ -84,7 +84,6 @@ If the process crashes after step 3, the engine replays events 1-3 (skipping the
 - **Queries** — read workflow state without affecting execution
 - **Timers** — durable sleep that reconstructs remaining time on replay
 - **Child workflows** — fan-out/fan-in patterns with parent-close policies
-- **Sagas** — compensation-based rollback for distributed transactions
 - **Continue-as-new** — reset event history for long-running workflows
 - **Versioning** — safe code changes for in-flight workflows
 - **Cancellation** — propagates through child workflows with cleanup hooks
