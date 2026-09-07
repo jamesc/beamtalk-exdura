@@ -33,7 +33,6 @@ TestCase subclass: ExduraHttpServerTest
     self.http := nil
 
   // ── Helpers ──
-
   awaitStatus: workflowId :: String timeout: timeoutMs :: Integer -> WorkflowExecution =>
     deadline := Time nowMs + timeoutMs
     [true]
@@ -45,17 +44,23 @@ TestCase subclass: ExduraHttpServerTest
               exec status =:= #failed or: [exec status =:= #cancelled]
             ]
           ]) ifTrue: [^exec]
-        Time nowMs >= deadline ifTrue: [self error: "Timed out waiting for {workflowId}"]
+        Time nowMs >= deadline ifTrue: [
+          self error: "Timed out waiting for {workflowId}"
+        ]
         Timer sleep: 50
       ]
     self error: "unreachable"
 
   // === POST /api/v1/workflows ===
-
   testStartWorkflowReturns202AndRunsIt =>
     resp := (HTTPClient
       post: self.baseUrl ++ "/api/v1/workflows"
-      body: (Json generate: #{"workflowType" => "PassthroughWorkflow", "id" => "http-start-1", "args" => #("hello")})) unwrap
+      body: (Json
+        generate: #{
+          "workflowType" => "PassthroughWorkflow",
+          "id" => "http-start-1",
+          "args" => #("hello")
+        })) unwrap
     self assert: resp status equals: 202
     body := (Json parse: resp body) unwrap
     self assert: (body at: "workflowId") equals: "http-start-1"
@@ -65,21 +70,24 @@ TestCase subclass: ExduraHttpServerTest
     self assert: exec result equals: "hello"
 
   testStartWorkflowMissingFieldsReturns400 =>
-    resp := (HTTPClient
-      post: self.baseUrl ++ "/api/v1/workflows"
-      body: (Json generate: #{"workflowType" => "PassthroughWorkflow"})) unwrap
+    resp := (HTTPClient post: self.baseUrl ++ "/api/v1/workflows" body: (Json generate: #{
+      "workflowType" => "PassthroughWorkflow"
+    })) unwrap
     self assert: resp status equals: 400
 
   testStartWorkflowUnknownTypeReturns400 =>
-    resp := (HTTPClient
-      post: self.baseUrl ++ "/api/v1/workflows"
-      body: (Json generate: #{"workflowType" => "NoSuchWorkflow", "id" => "http-start-2"})) unwrap
+    resp := (HTTPClient post: self.baseUrl ++ "/api/v1/workflows" body: (Json generate: #{
+      "workflowType" => "NoSuchWorkflow",
+      "id" => "http-start-2"
+    })) unwrap
     self assert: resp status equals: 400
 
   // === GET /api/v1/workflows/:id ===
-
   testGetWorkflowReturnsStatus =>
-    _exec := self.client engine startWorkflow: PassthroughWorkflow id: "http-get-1" args: #("data")
+    _exec := self.client engine
+      startWorkflow: PassthroughWorkflow
+      id: "http-get-1"
+      args: #("data")
     self awaitStatus: "http-get-1" timeout: 5000
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-get-1") unwrap
@@ -93,9 +101,11 @@ TestCase subclass: ExduraHttpServerTest
     self assert: resp status equals: 404
 
   // === GET /api/v1/workflows ===
-
   testListWorkflowsFiltersByStatus =>
-    self.client engine startWorkflow: PassthroughWorkflow id: "http-list-1" args: #("a")
+    self.client engine
+      startWorkflow: PassthroughWorkflow
+      id: "http-list-1"
+      args: #("a")
     self awaitStatus: "http-list-1" timeout: 5000
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows?status=completed") unwrap
@@ -106,9 +116,11 @@ TestCase subclass: ExduraHttpServerTest
     self assert: (ids includes: "http-list-1")
 
   // === GET /api/v1/workflows/:id/history ===
-
   testGetHistoryReturnsEvents =>
-    self.client engine startWorkflow: PassthroughWorkflow id: "http-history-1" args: #("a")
+    self.client engine
+      startWorkflow: PassthroughWorkflow
+      id: "http-history-1"
+      args: #("a")
     self awaitStatus: "http-history-1" timeout: 5000
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-history-1/history") unwrap
@@ -122,9 +134,11 @@ TestCase subclass: ExduraHttpServerTest
     self assert: resp status equals: 404
 
   // === GET /api/v1/workflows/:id/query/:name ===
-
   testQueryWorkflowReturnsResult =>
-    self.client engine startWorkflow: OrderWorkflow id: "http-query-1" args: #("order-1")
+    self.client engine
+      startWorkflow: OrderWorkflow
+      id: "http-query-1"
+      args: #("order-1")
     self awaitStatus: "http-query-1" timeout: 5000
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-query-1/query/getStatus") unwrap
@@ -137,18 +151,22 @@ TestCase subclass: ExduraHttpServerTest
     self assert: resp status equals: 404
 
   // === POST /api/v1/workflows/:id/signal/:name ===
-
   testSignalWorkflowReturns202 =>
-    self.client engine startWorkflow: PassthroughWorkflow id: "http-signal-1" args: #("a")
-    resp := (HTTPClient
-      post: self.baseUrl ++ "/api/v1/workflows/http-signal-1/signal/approve"
-      body: (Json generate: #{"approvedBy" => "alice"})) unwrap
+    self.client engine
+      startWorkflow: PassthroughWorkflow
+      id: "http-signal-1"
+      args: #("a")
+    resp := (HTTPClient post: self.baseUrl ++ "/api/v1/workflows/http-signal-1/signal/approve" body: (Json generate: #{
+      "approvedBy" => "alice"
+    })) unwrap
     self assert: resp status equals: 202
 
   // === POST /api/v1/workflows/:id/cancel ===
-
   testCancelWorkflowStopsIt =>
-    self.client engine startWorkflow: SlowWorkflow id: "http-cancel-1" args: #(5000)
+    self.client engine
+      startWorkflow: SlowWorkflow
+      id: "http-cancel-1"
+      args: #(5000)
 
     resp := (HTTPClient post: self.baseUrl ++ "/api/v1/workflows/http-cancel-1/cancel" body: "") unwrap
     self assert: resp status equals: 202

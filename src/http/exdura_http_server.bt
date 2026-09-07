@@ -67,59 +67,6 @@ typed Actor subclass: ExduraHttpServer
         #workflowClasses => workflowClasses
       }
 
-  /// Build the router and start the real HTTP listener. Runs after every
-  /// spawn — direct `spawnWith:`/`start:engine:store:workflows:`,
-  /// `ExduraHttpServerSupervisor startChild:`, and automatic OTP restart,
-  /// which replays the exact args this actor was started with (BT-3365),
-  /// so a crash brings the listener back on the same port, wired to the
-  /// same engine/store.
-  ///
-  /// Deliberately inlines the registry/router construction (rather than
-  /// calling `ExduraHttpServer someClassMethod: ...`) — `initialize` runs
-  /// synchronously as part of spawning, and spawning this actor's own
-  /// class blocks that class's process until `initialize` returns. Any
-  /// call from here back to `ExduraHttpServer`'s class process (even a
-  /// plain class-method send) would deadlock against that same block. The
-  /// route *handler* methods below remain ordinary class methods — they're
-  /// invoked later, from cowboy's process, once an HTTP request actually
-  /// arrives, long after this method has returned and the class process
-  /// is free again.
-  initialize -> Nil =>
-    registry := #{}
-    self.workflowClasses do: [:wc | registry := registry at: wc name asString put: wc]
-
-    engine := self.engine
-    store := self.store
-
-    router := HTTPRouter build: [:r |
-      r
-        post: "/api/v1/workflows" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleStart: req engine: engine registry: registry]);
-        get: "/api/v1/workflows" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleList: req store: store]);
-        get: "/api/v1/workflows/:id" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleGet: req store: store]);
-        get: "/api/v1/workflows/:id/history" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleHistory: req engine: engine store: store]);
-        post: "/api/v1/workflows/:id/signal/:name" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleSignal: req engine: engine]);
-        get: "/api/v1/workflows/:id/query/:name" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleQuery: req engine: engine]);
-        post: "/api/v1/workflows/:id/cancel" handler: (PlugChain
-          chain: #(RequestLogger new)
-          handler: [:req | ExduraHttpServer handleCancel: req engine: engine])
-    ]
-    srv := HTTPServer start: self.port handler: router
-    self.httpServer := srv
-    self.port := srv port
-    nil
-
   // ── Route handlers ──
   //
   // Ordinary class methods. Safe to call each other (and to be called
@@ -135,7 +82,9 @@ typed Actor subclass: ExduraHttpServer
       data := (Json parse: req body) unwrap
       workflowType := data at: "workflowType" ifAbsent: [nil]
       workflowId := data at: "id" ifAbsent: [nil]
-      (workflowType isNil or: [workflowId isNil]) ifTrue: [
+      (workflowType isNil or: [
+        workflowId isNil
+      ]) ifTrue: [
         ^self errorResponse: 400 message: "workflowType and id are required"
       ]
       workflowClass := registry at: workflowType ifAbsent: [nil]
@@ -143,8 +92,14 @@ typed Actor subclass: ExduraHttpServer
         ^self errorResponse: 400 message: "unknown workflowType: {workflowType}"
       ]
       args := data at: "args" ifAbsent: [#()]
-      engine startWorkflow: workflowClass id: workflowId args: args
-      self jsonResponse: 202 body: #{"workflowId" => workflowId, "status" => "running"}
+      engine
+        startWorkflow: workflowClass
+        id: workflowId
+        args: args
+      self jsonResponse: 202 body: #{
+        "workflowId" => workflowId,
+        "status" => "running"
+      }
     ] on: Error do: [:e | self errorResponse: 400 message: e message]
 
   /// GET /api/v1/workflows — list/search executions via `?status=` / `?workflowType=`.
@@ -152,10 +107,12 @@ typed Actor subclass: ExduraHttpServer
     statusParam := req queryParams at: "status" ifAbsent: [""]
     typeParam := req queryParams at: "workflowType" ifAbsent: [""]
     statusSymbol := self statusSymbolFor: statusParam
-    withStatus := statusSymbol isNil ifTrue: [#{}] ifFalse: [#{#status => statusSymbol}]
-    filter := typeParam isEmpty
-      ifTrue: [withStatus]
-      ifFalse: [withStatus at: #workflowType put: typeParam]
+    withStatus := statusSymbol isNil ifTrue: [
+      #{}
+    ] ifFalse: [#{#status => statusSymbol}]
+    filter := typeParam isEmpty ifTrue: [
+      withStatus
+    ] ifFalse: [withStatus at: #workflowType put: typeParam]
     executions := store listExecutions: filter
     self jsonResponse: 200 body: #{"workflows" => executions}
 
@@ -172,25 +129,35 @@ typed Actor subclass: ExduraHttpServer
   class handleGet: req :: HTTPRequest store: store :: EventStore -> HTTPResponse =>
     workflowId := req param: "id"
     execution := store getExecution: workflowId
-    execution isNil
-      ifTrue: [self errorResponse: 404 message: "workflow not found: {workflowId}"]
-      ifFalse: [self jsonResponse: 200 body: execution]
+    execution isNil ifTrue: [
+      self errorResponse: 404 message: "workflow not found: {workflowId}"
+    ] ifFalse: [self jsonResponse: 200 body: execution]
 
   /// GET /api/v1/workflows/:id/history — get event history.
   class handleHistory: req :: HTTPRequest engine: engine :: WorkflowEngine store: store :: EventStore -> HTTPResponse =>
     workflowId := req param: "id"
     execution := store getExecution: workflowId
-    execution isNil ifTrue: [^self errorResponse: 404 message: "workflow not found: {workflowId}"]
+    execution isNil ifTrue: [
+      ^self errorResponse: 404 message: "workflow not found: {workflowId}"
+    ]
     events := engine getEventHistory: workflowId
-    self jsonResponse: 200 body: #{"workflowId" => workflowId, "events" => events}
+    self jsonResponse: 200 body: #{
+      "workflowId" => workflowId,
+      "events" => events
+    }
 
   /// POST /api/v1/workflows/:id/signal/:name — send a signal, JSON body is the payload.
   class handleSignal: req :: HTTPRequest engine: engine :: WorkflowEngine -> HTTPResponse =>
     workflowId := req param: "id"
     signalName := req param: "name"
     [
-      payload := req body isEmpty ifTrue: [nil] ifFalse: [(Json parse: req body) unwrap]
-      engine bufferSignal: workflowId name: signalName payload: payload
+      payload := req body isEmpty ifTrue: [
+        nil
+      ] ifFalse: [(Json parse: req body) unwrap]
+      engine
+        bufferSignal: workflowId
+        name: signalName
+        payload: payload
       self jsonResponse: 202 body: #{"status" => "signaled"}
     ] on: Error do: [:e | self errorResponse: 400 message: e message]
 
@@ -212,7 +179,6 @@ typed Actor subclass: ExduraHttpServer
     ] on: Error do: [:e | self errorResponse: 400 message: e message]
 
   // ── Response helpers ──
-
   class jsonResponse: status :: Integer body: value :: Object -> HTTPResponse =>
     HTTPResponse
       new: #{
@@ -223,6 +189,73 @@ typed Actor subclass: ExduraHttpServer
 
   class errorResponse: status :: Integer message: msg :: String -> HTTPResponse =>
     self jsonResponse: status body: #{"error" => msg}
+
+  /// Build the router and start the real HTTP listener. Runs after every
+  /// spawn — direct `spawnWith:`/`start:engine:store:workflows:`,
+  /// `ExduraHttpServerSupervisor startChild:`, and automatic OTP restart,
+  /// which replays the exact args this actor was started with (BT-3365),
+  /// so a crash brings the listener back on the same port, wired to the
+  /// same engine/store.
+  ///
+  /// Deliberately inlines the registry/router construction (rather than
+  /// calling `ExduraHttpServer someClassMethod: ...`) — `initialize` runs
+  /// synchronously as part of spawning, and spawning this actor's own
+  /// class blocks that class's process until `initialize` returns. Any
+  /// call from here back to `ExduraHttpServer`'s class process (even a
+  /// plain class-method send) would deadlock against that same block. The
+  /// route *handler* methods below remain ordinary class methods — they're
+  /// invoked later, from cowboy's process, once an HTTP request actually
+  /// arrives, long after this method has returned and the class process
+  /// is free again.
+  initialize -> Nil =>
+    registry := #{}
+    self.workflowClasses do: [:wc |
+      registry := registry at: wc name asString put: wc
+    ]
+
+    engine := self.engine
+    store := self.store
+
+    router := HTTPRouter
+      build: [:r |
+        r
+          post: "/api/v1/workflows"
+          handler: (PlugChain
+            chain: #(RequestLogger new)
+            handler: [:req |
+              ExduraHttpServer
+                handleStart: req
+                engine: engine
+                registry: registry
+            ]);
+          get: "/api/v1/workflows" handler: (PlugChain chain: #(RequestLogger new) handler: [:req |
+            ExduraHttpServer handleList: req store: store
+          ]);
+          get: "/api/v1/workflows/:id" handler: (PlugChain chain: #(RequestLogger new) handler: [:req |
+            ExduraHttpServer handleGet: req store: store
+          ]);
+          get: "/api/v1/workflows/:id/history" handler: (PlugChain
+            chain: #(RequestLogger new)
+            handler: [:req |
+              ExduraHttpServer
+                handleHistory: req
+                engine: engine
+                store: store
+            ]);
+          post: "/api/v1/workflows/:id/signal/:name" handler: (PlugChain chain: #(RequestLogger new) handler: [:req |
+            ExduraHttpServer handleSignal: req engine: engine
+          ]);
+          get: "/api/v1/workflows/:id/query/:name" handler: (PlugChain chain: #(RequestLogger new) handler: [:req |
+            ExduraHttpServer handleQuery: req engine: engine
+          ]);
+          post: "/api/v1/workflows/:id/cancel" handler: (PlugChain chain: #(RequestLogger new) handler: [:req |
+            ExduraHttpServer handleCancel: req engine: engine
+          ])
+      ]
+    srv := HTTPServer start: self.port handler: router
+    self.httpServer := srv
+    self.port := srv port
+    nil
 
   // ── Instance API ──
 

@@ -24,4 +24,5 @@
 ///
 /// @see ExduraHttpServer (the supervised child)
 DynamicSupervisor(ExduraHttpServer) subclass: ExduraHttpServerSupervisor
+
   class childClass => ExduraHttpServer

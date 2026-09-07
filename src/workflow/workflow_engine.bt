@@ -454,7 +454,9 @@ typed Actor subclass: WorkflowEngine
         self eventStore appendEvents: parentId events: #(childCompletedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
+      #()
+    ]
     store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
@@ -520,7 +522,9 @@ typed Actor subclass: WorkflowEngine
         self eventStore appendEvents: parentId events: #(childFailedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
+      #()
+    ]
     store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
@@ -594,10 +598,11 @@ typed Actor subclass: WorkflowEngine
   /// ```
   captureSnapshot: stateDict :: Dictionary forWorkflow: workflowId :: String -> Object =>
     // Stop the previous snapshot Actor to avoid process leaks
-    (self.workflowSnapshots includesKey: workflowId) ifTrue: [
-      oldSnap := self.workflowSnapshots at: workflowId
-      [oldSnap stop] on: Error do: [:e | nil]
-    ]
+    (self.workflowSnapshots includesKey: workflowId)
+      ifTrue: [
+        oldSnap := self.workflowSnapshots at: workflowId
+        [oldSnap stop] on: Error do: [:e | nil]
+      ]
     snap := ActorSnapshot spawnWith: #{#fields => stateDict}
     self.workflowSnapshots := self.workflowSnapshots at: workflowId put: snap
 
@@ -634,9 +639,9 @@ typed Actor subclass: WorkflowEngine
   /// engine getSnapshot: "wf-1"
   /// ```
   getSnapshot: workflowId :: String -> ActorSnapshot | Nil =>
-    (self.workflowSnapshots includesKey: workflowId)
-      ifTrue: [self.workflowSnapshots at: workflowId]
-      ifFalse: [nil]
+    (self.workflowSnapshots includesKey: workflowId) ifTrue: [
+      self.workflowSnapshots at: workflowId
+    ] ifFalse: [nil]
 
   /// Start a child workflow and return a ChildWorkflowHandle.
   ///
@@ -794,10 +799,11 @@ typed Actor subclass: WorkflowEngine
     self eventStore clearEvents: workflowId
 
     // Clean up old query snapshot to prevent stale query results
-    (self.workflowSnapshots includesKey: workflowId) ifTrue: [
-      oldSnap := self.workflowSnapshots at: workflowId
-      [oldSnap stop] on: Error do: [:e | nil]
-    ]
+    (self.workflowSnapshots includesKey: workflowId)
+      ifTrue: [
+        oldSnap := self.workflowSnapshots at: workflowId
+        [oldSnap stop] on: Error do: [:e | nil]
+      ]
     self.workflowSnapshots := self.workflowSnapshots removeKey: workflowId
 
     // Clean up old query handlers
@@ -889,7 +895,9 @@ typed Actor subclass: WorkflowEngine
     self.cancelledWorkflows := self.cancelledWorkflows at: workflowId put: true
 
     // Cancel child workflows per parent-close policy
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [#()]
+    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
+      #()
+    ]
     store := self eventStore
     policies := self.parentClosePolicy
     children
@@ -996,8 +1004,8 @@ typed Actor subclass: WorkflowEngine
   /// name (ADR 0079) instead.
   currentActivityPool -> ActivityWorkerPool | Nil =>
     self.activityPool match: [
-      nil -> self.supervised
-        ifTrue: [(ActivityWorkerPool named: #activityWorkerPool) unwrap]
-        ifFalse: [nil];
+      nil -> self.supervised ifTrue: [
+        (ActivityWorkerPool named: #activityWorkerPool) unwrap
+      ] ifFalse: [nil];
       p -> p
     ]
