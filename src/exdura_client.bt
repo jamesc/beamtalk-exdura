@@ -101,7 +101,8 @@ typed Actor subclass: ExduraClient
   /// ```beamtalk
   /// client cancel: "wf-1"
   /// ```
-  cancel: workflowId :: String -> Nil => self currentEngine cancelWorkflow: workflowId
+  cancel: workflowId :: String -> Nil =>
+    self currentEngine cancelWorkflow: workflowId
 
   /// List workflow executions matching a filter.
   ///
@@ -113,7 +114,8 @@ typed Actor subclass: ExduraClient
   /// client list: #{#status => #running}
   /// client list: #{}   // all executions
   /// ```
-  list: filter :: Dictionary -> List => self currentEventStore listExecutions: filter
+  list: filter :: Dictionary -> List =>
+    self currentEventStore listExecutions: filter
 
   /// Retrieve a workflow execution by ID (used by WorkflowHandle).
   ///

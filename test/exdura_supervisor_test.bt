@@ -159,5 +159,10 @@ TestCase subclass: ExduraSupervisorTest
     baseUrl := "http://localhost:" ++ http port asString
     resp := (HTTPClient
       post: baseUrl ++ "/api/v1/workflows"
-      body: (Json generate: #{"workflowType" => "PassthroughWorkflow", "id" => "sup-http-1", "args" => #("hello")})) unwrap
+      body: (Json
+        generate: #{
+          "workflowType" => "PassthroughWorkflow",
+          "id" => "sup-http-1",
+          "args" => #("hello")
+        })) unwrap
     self assert: resp status equals: 202
