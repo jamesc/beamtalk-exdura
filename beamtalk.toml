@@ -9,4 +9,4 @@ version = "0.1.0"
 supervisor = "ExduraSupervisor"
 
 [dependencies]
-http = "0.1.4"
+http = "0.1.6"
