@@ -251,10 +251,9 @@ typed Actor subclass: EventStore
   setHttpConfig: config :: Dictionary -> Nil =>
     binary := Binary serialize: config
     result := File writeBinary: (self httpConfigFilePath) contents: binary
-    result isError
-      ifTrue: [
-        self error: "Failed to write http config: " ++ (result error) printString
-      ]
+    result isError ifTrue: [
+      self error: "Failed to write http config: " ++ (result error) printString
+    ]
     nil
 
   /// Read back the durable HTTP config written by `setHttpConfig:`, or nil
@@ -274,8 +273,7 @@ typed Actor subclass: EventStore
 
   /// Path to the durable HTTP config file, if the HTTP API was ever
   /// configured for this deployment.
-  httpConfigFilePath -> String =>
-    self.dataDir ++ "/http_config.etf"
+  httpConfigFilePath -> String => self.dataDir ++ "/http_config.etf"
 
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).

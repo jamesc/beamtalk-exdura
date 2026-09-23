@@ -75,11 +75,10 @@ typed Object subclass: ExduraWorker
         // directly — see ExduraHttpServer>>resolveWorkflowClassNames:'s doc
         // for why (a Beamtalk class is itself a live actor process, not
         // serializable data).
-        store
-          setHttpConfig: #{
-            #port => port,
-            #workflowClasses => (workflowClasses collect: [:wc | wc name])
-          }
+        store setHttpConfig: #{
+          #port => port,
+          #workflowClasses => (workflowClasses collect: [:wc | wc name])
+        }
         http :: ExduraHttpServer := (sup which: ExduraHttpServer) valueOrDo: [:e |
           self error: "ExduraHttpServer not found under ExduraSupervisor: {e}"
         ]

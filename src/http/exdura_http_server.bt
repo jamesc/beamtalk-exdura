@@ -218,7 +218,9 @@ typed Actor subclass: ExduraHttpServer
   /// — matching `WorkflowEngine`/`TimerManager`'s own collaborator
   /// resolution — then delegates to `startListening` for the rest.
   initialize -> Nil =>
-    self.engine := self.engine ifNil: [(WorkflowEngine named: #workflowEngine) unwrap]
+    self.engine := self.engine ifNil: [
+      (WorkflowEngine named: #workflowEngine) unwrap
+    ]
     self.store := self.store ifNil: [(EventStore named: #eventStore) unwrap]
     self startListening
 
@@ -292,16 +294,17 @@ typed Actor subclass: ExduraHttpServer
     ]
 
     resolvedFromDurableConfig := self.port isNil
-    resolvedFromDurableConfig ifTrue: [
-      config := store getHttpConfig
-      config ifNil: [^nil]
-      self.port := config at: #port
-      // Durable config stores class NAMES (Symbols), never class objects
-      // directly — a Beamtalk class is itself a live actor process, not
-      // serializable data; `Binary deserialize:` refuses to reconstruct an
-      // atom it doesn't already recognize from arbitrary stored bytes.
-      self.workflowClasses := self resolveWorkflowClassNames: (config at: #workflowClasses)
-    ]
+    resolvedFromDurableConfig
+      ifTrue: [
+        config := store getHttpConfig
+        config ifNil: [^nil]
+        self.port := config at: #port
+        // Durable config stores class NAMES (Symbols), never class objects
+        // directly — a Beamtalk class is itself a live actor process, not
+        // serializable data; `Binary deserialize:` refuses to reconstruct an
+        // atom it doesn't already recognize from arbitrary stored bytes.
+        self.workflowClasses := self resolveWorkflowClassNames: (config at: #workflowClasses)
+      ]
 
     port :: Integer := self.port match: [
       nil -> self error: "ExduraHttpServer startListening: port not resolved";
@@ -360,9 +363,7 @@ typed Actor subclass: ExduraHttpServer
     // try to bind the second one on top of the first and collide with
     // themselves. Guarded on `self.listening`, not `hasField: #httpServer`
     // — see `listening`'s own field doc for why.
-    self.listening ifTrue: [
-      [self.httpServer stop] on: Error do: [:e | nil]
-    ]
+    self.listening ifTrue: [[self.httpServer stop] on: Error do: [:e | nil]]
     srv := HTTPServer start: port handler: router
     self.httpServer := srv
     self.port := srv port
@@ -466,5 +467,7 @@ typed Actor subclass: ExduraHttpServer
   /// `httpServer` genuinely can stay unassigned for this instance's whole
   /// life, not just a transient window before `initialize` finishes.
   stopListener -> Nil =>
-    (self hasField: #httpServer) ifTrue: [[self.httpServer stop] on: Error do: [:e | nil]]
+    (self hasField: #httpServer) ifTrue: [
+      [self.httpServer stop] on: Error do: [:e | nil]
+    ]
     nil
