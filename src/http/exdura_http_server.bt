@@ -32,7 +32,7 @@
 /// http destroy
 /// ```
 typed Actor subclass: ExduraHttpServer
-  state: httpServer :: HTTPServer | Nil = nil
+  late state: httpServer :: HTTPServer
   state: port :: Integer = 0
   state: workflowClasses :: List(Workflow class) = #()
   state: engine :: WorkflowEngine
@@ -280,5 +280,5 @@ typed Actor subclass: ExduraHttpServer
   /// http stop
   /// ```
   destroy -> Nil =>
-    self.httpServer ifNotNil: [[self.httpServer stop] on: Error do: [:e | nil]]
+    [self.httpServer stop] on: Error do: [:e | nil]
     nil
