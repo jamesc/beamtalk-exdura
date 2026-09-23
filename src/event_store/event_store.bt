@@ -233,6 +233,50 @@ typed Actor subclass: EventStore
     path := self snapshotFilePath: workflowId
     File isFile: path
 
+  // --- HTTP server config persistence ---
+
+  /// Durably record `ExduraHttpServer`'s port/workflowClasses config, so it
+  /// survives any restart of the actor that holds it — including a
+  /// `rest_for_one` cascade that tears down and rebuilds `ExduraHttpServer`
+  /// itself (a static, `#permanent`, named `ExduraSupervisor` child) from
+  /// scratch. `ExduraHttpServer>>initialize`/`startListening` reads it back
+  /// on every restart, exactly like `WorkflowEngine`/`TimerManager` resolve
+  /// their own collaborators by name (ADR 0079) rather than caching a pid.
+  /// Called once by `ExduraWorker start:` when `#http` config is given.
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// store setHttpConfig: #{#port => 4100, #workflowClasses => #(OrderWorkflow)}
+  /// ```
+  setHttpConfig: config :: Dictionary -> Nil =>
+    binary := Binary serialize: config
+    result := File writeBinary: (self httpConfigFilePath) contents: binary
+    result isError
+      ifTrue: [
+        self error: "Failed to write http config: " ++ (result error) printString
+      ]
+    nil
+
+  /// Read back the durable HTTP config written by `setHttpConfig:`, or nil
+  /// if HTTP was never configured for this deployment.
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// store getHttpConfig   // => #{#port => 4100, #workflowClasses => #(OrderWorkflow)} or nil
+  /// ```
+  getHttpConfig -> Dictionary | Nil =>
+    readResult := File readBinary: (self httpConfigFilePath)
+    readResult isError ifTrue: [^nil]
+    content := readResult unwrap
+    content byteSize =:= 0 ifTrue: [^nil]
+    result :: Dictionary := Binary deserialize: content
+    result
+
+  /// Path to the durable HTTP config file, if the HTTP API was ever
+  /// configured for this deployment.
+  httpConfigFilePath -> String =>
+    self.dataDir ++ "/http_config.etf"
+
   /// Delete ETS tables and clean up resources.
   /// Does NOT delete on-disk files (use destroyWithFiles for that).
   destroy -> Nil =>

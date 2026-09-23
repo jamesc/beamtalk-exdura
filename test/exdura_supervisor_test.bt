@@ -21,6 +21,13 @@ TestCase subclass: ExduraSupervisorTest
         [self.client stop] on: Error do: [:e | nil]
       ]
     self.client := nil
+    // This class relies on EventStore's default (shared, relative-to-cwd)
+    // "data" dir — ExduraSupervisor's own EventStore child spec has no
+    // #dataDir passthrough today, unlike the standalone ExduraClient
+    // connect: path. Delete only what THIS class can leave behind (the
+    // durable HTTP config a #http-configured ExduraWorker start: writes)
+    // so it never leaks into a later run of these same tests.
+    [File delete: "data/http_config.etf"] on: Error do: [:e | nil]
 
   // ── Helpers ──
 
@@ -57,7 +64,8 @@ TestCase subclass: ExduraSupervisorTest
     self assert: self.client eventStore notNil
 
     // Verify the supervisor started all 5 children (the 4 core components
-    // plus the always-present, childless-by-default ExduraHttpServerSupervisor)
+    // plus the always-present ExduraHttpServer, bound to nothing until
+    // `#http` config is given)
     sup := self.client supervisor
     self assert: sup notNil
     self assert: sup count equals: 5
@@ -65,7 +73,7 @@ TestCase subclass: ExduraSupervisorTest
     self assert: (sup which: ActivityWorkerPool) isOk
     self assert: (sup which: WorkflowEngine) isOk
     self assert: (sup which: TimerManager) isOk
-    self assert: (sup which: ExduraHttpServerSupervisor) isOk
+    self assert: (sup which: ExduraHttpServer) isOk
 
     // Verify config was applied to the pool
     pool := self.client engine activityPool
@@ -150,10 +158,9 @@ TestCase subclass: ExduraSupervisorTest
     self assert: http notNil
     self assert: http port > 0
 
-    // It's a genuine ExduraHttpServerSupervisor child, not a bare sibling actor.
+    // It's the genuine, static ExduraSupervisor child, not a bare sibling actor.
     sup := self.client supervisor
-    httpSup :: ExduraHttpServerSupervisor := (sup which: ExduraHttpServerSupervisor) unwrap
-    self assert: httpSup count equals: 1
+    self assert: (sup which: ExduraHttpServer) unwrap == http
 
     // Round-trip a real HTTP request through it.
     baseUrl := "http://localhost:" ++ http port asString
@@ -166,3 +173,66 @@ TestCase subclass: ExduraSupervisorTest
           "args" => #("hello")
         })) unwrap
     self assert: resp status equals: 202
+
+  // === A rest_for_one cascade restart brings ExduraHttpServer back up,
+  // still listening and still wired to the (restarted) engine/store ===
+  //
+  // Regression test for the "known, still-open limitation" ExduraSupervisor's
+  // own doc used to describe: ExduraHttpServer previously lived under a
+  // nested DynamicSupervisor (ExduraHttpServerSupervisor), whose own
+  // one-shot `startChild:` args were lost — with nothing re-adding the
+  // child — whenever a rest_for_one cascade tore that nested supervisor
+  // down. Fixed by making ExduraHttpServer a plain static ExduraSupervisor
+  // child that durably records its own port/workflowClasses config on
+  // EventStore (setHttpConfig:) and re-reads it in `initialize` on every
+  // restart — cascade or direct crash — the same way WorkflowEngine/
+  // TimerManager already resolve their own collaborators by name instead
+  // of caching a pid. `#port => 0` rebinds to a fresh OS-assigned port on
+  // every restart rather than a fixed one — see
+  // ExduraHttpServer>>startListening's doc for why self-correcting the
+  // durable config to the actual bound port turned out to be unsafe.
+  testHttpServerSurvivesEventStoreCrashCascade =>
+    self.client := ExduraWorker start: #{
+      #workflows => #(PassthroughWorkflow),
+      #http => #{#port => 0}
+    }
+    sup := self.client supervisor
+    httpBefore := (sup which: ExduraHttpServer) unwrap
+
+    storeBefore := (sup which: EventStore) unwrap
+
+    // Force-crash EventStore; rest_for_one restarts everything after it,
+    // including ExduraHttpServer.
+    (Erlang erlang) exit: storeBefore pid reason: #kill
+    Timer sleep: 300
+
+    // Confirm the cascade actually restarted ExduraHttpServer too —
+    // otherwise this test would trivially pass without exercising anything.
+    httpAfter := (sup which: ExduraHttpServer) unwrap
+    self assert: (httpBefore pid =:= httpAfter pid) equals: false
+
+    // It must have come back up listening (a fresh OS-assigned port),
+    // not silently missing.
+    self assert: httpAfter port > 0
+
+    // A real HTTP request must still round-trip through the restarted
+    // listener, wired to the (also-restarted) engine/store.
+    baseUrl := "http://localhost:" ++ httpAfter port asString
+    resp := (HTTPClient
+      post: baseUrl ++ "/api/v1/workflows"
+      body: (Json
+        generate: #{
+          "workflowType" => "PassthroughWorkflow",
+          "id" => "cascade-http-" ++ Time nowMs asString,
+          "args" => #("hello")
+        })) unwrap
+    self assert: resp status equals: 202
+
+    // The OLD, pre-cascade instance is not part of the tree anymore and
+    // `ExduraSupervisor terminate:`'s Actor>>terminate: hook is only
+    // reliably invoked for a supervisor's own graceful `stop` — not for a
+    // rest_for_one cascade tearing a sibling away mid-tree (a real,
+    // separate beamtalk-runtime gap outside this repo's scope). Stop its
+    // listener explicitly so this test doesn't leak a bound socket into
+    // whichever test runs next.
+    [httpBefore destroy] on: Error do: [:e | nil]

@@ -21,6 +21,18 @@
 /// registry built from the `workflows:` list passed at start time — only
 /// classes named there can be started over HTTP.
 ///
+/// A static, named, `#permanent` `ExduraSupervisor` child (like the other
+/// four core components) — always present, whether or not `#http` was
+/// configured, the same "always present, not-yet-doing-anything is the
+/// normal resting state" shape `ExduraSupervisor`'s own doc describes for
+/// its tree as a whole. `ExduraWorker start:` durably records the
+/// port/workflowClasses config on `EventStore` (`setHttpConfig:`) and
+/// triggers `refreshFromDurableConfig`, the first time `#http` is given; from
+/// then on, `initialize` re-reads that same durable config and re-binds on
+/// every restart — initial boot, a direct crash, or a `rest_for_one`
+/// cascade from an earlier sibling — with no special-casing needed for
+/// any of the three. See `startListening`'s own doc for the full mechanism.
+///
 /// ## Examples
 /// ```beamtalk
 /// http := ExduraHttpServer
@@ -33,10 +45,17 @@
 /// ```
 typed Actor subclass: ExduraHttpServer
   late state: httpServer :: HTTPServer
-  state: port :: Integer = 0
-  state: workflowClasses :: List(Workflow class) = #()
-  state: engine :: WorkflowEngine
-  state: store :: EventStore
+  state: port :: Integer | Nil = nil
+  state: workflowClasses :: List(Workflow class) | Nil = nil
+  state: engine :: WorkflowEngine | Nil = nil
+  state: store :: EventStore | Nil = nil
+  // Plain (non-`late`) guard for `startListening`'s idempotent rebind check
+  // below — deliberately NOT `hasField: #httpServer` there: that check
+  // needs to run from *inside* `initialize`'s own synchronous execution
+  // (see `startListening`'s doc), and empirically, checking a `late`
+  // field's presence that early deadlocks the spawn itself. An ordinary
+  // Boolean field has no such restriction.
+  state: listening :: Boolean = false
 
   /// A crashed HTTP listener must come back up, not silently disappear.
   class supervisionPolicy -> Symbol => #permanent
@@ -46,9 +65,10 @@ typed Actor subclass: ExduraHttpServer
   /// via `POST /api/v1/workflows`.
   ///
   /// Equivalent to `spawnWith:` with the same keys — provided for a
-  /// readable call site. `ExduraHttpServerSupervisor startChild:` (used by
-  /// `ExduraWorker`) calls `spawnWith:` directly with the same Dictionary
-  /// shape, so both paths converge on `initialize` for the real work.
+  /// readable call site. Spawns a genuinely standalone instance, outside
+  /// any `ExduraSupervisor` tree (used directly by tests) — `engine`/
+  /// `store` are used exactly as given, never resolved by name. See
+  /// `initialize`'s doc for how the supervised, no-args shape differs.
   ///
   /// ## Examples
   /// ```beamtalk
@@ -190,31 +210,112 @@ typed Actor subclass: ExduraHttpServer
   class errorResponse: status :: Integer message: msg :: String -> HTTPResponse =>
     self jsonResponse: status body: #{"error" => msg}
 
-  /// Build the router and start the real HTTP listener. Runs after every
-  /// spawn — direct `spawnWith:`/`start:engine:store:workflows:`,
-  /// `ExduraHttpServerSupervisor startChild:`, and automatic OTP restart,
-  /// which replays the exact args this actor was started with (BT-3365),
-  /// so a crash brings the listener back on the same port, wired to the
-  /// same engine/store.
+  /// Runs after every spawn — the very first thing this actor does,
+  /// whether started standalone (`spawnWith:`/`start:engine:store:workflows:`,
+  /// explicit args) or as a bare, no-args `ExduraSupervisor` static child.
+  ///
+  /// Resolves `engine`/`store` by name (ADR 0079) when not given explicitly
+  /// — matching `WorkflowEngine`/`TimerManager`'s own collaborator
+  /// resolution — then delegates to `startListening` for the rest.
+  initialize -> Nil =>
+    self.engine := self.engine ifNil: [(WorkflowEngine named: #workflowEngine) unwrap]
+    self.store := self.store ifNil: [(EventStore named: #eventStore) unwrap]
+    self startListening
+
+  /// Build the router and start the real HTTP listener — or, if this
+  /// instance has no `port`/`workflowClasses` of its own yet, read them
+  /// from `EventStore`'s durable config (`setHttpConfig:`) first.
+  ///
+  /// Called from two places:
+  ///  - `initialize`, on EVERY restart (initial boot, a direct crash, or a
+  ///    `rest_for_one` cascade from an earlier sibling) — this actor is a
+  ///    static, named, `#permanent` `ExduraSupervisor` child, so there is
+  ///    no more "the thing holding my start args got torn down and nothing
+  ///    re-adds me" gap: reading durable config back here on every restart
+  ///    IS the re-add, every time, uniformly.
+  ///  - `refreshFromDurableConfig`, which `ExduraWorker start:` calls once,
+  ///    immediately after it durably writes a fresh `#http` config —
+  ///    needed because THIS actor's own `initialize` already ran (and, in
+  ///    the common case, found no config yet, so stayed unbound) before
+  ///    `ExduraWorker start:` gets a chance to write anything, since
+  ///    `ExduraSupervisor`'s static children all start as part of the very
+  ///    first line of `ExduraWorker start:`, not after it. See
+  ///    `refreshFromDurableConfig`'s own doc for why it can't just call
+  ///    `startListening` directly.
+  ///
+  /// A standalone instance (`start:engine:store:workflows:`) always has its
+  /// own `port`/`workflowClasses` already (explicit constructor args), so
+  /// the durable-config lookup never runs for it — matching today's
+  /// behavior exactly. No durable config AND no explicit args means HTTP
+  /// was never configured for this deployment: stays unbound (the `late`
+  /// `httpServer` field), the same "present but not doing anything yet" —
+  /// resting state `ExduraSupervisor`'s own doc describes for its tree as a
+  /// whole, one level in.
+  ///
+  /// Deliberately does NOT re-persist the REAL bound port after a `0`
+  /// ("any free port") bind — a restart re-reads the ORIGINAL `0` and picks
+  /// a fresh port again, rather than a fixed one. Tried the opposite
+  /// (self-correcting the durable config to the actual bound port) and hit
+  /// a real bind collision: the OLD listener's socket is not always fully
+  /// released by the time the restarted actor tries to rebind the SAME
+  /// port, and a failed bind here — inside `initialize`, on every retry —
+  /// exhausts `ExduraSupervisor`'s restart intensity, which (since `class
+  /// supervise`'s `startLink: self` links the supervised tree to
+  /// `ExduraSupervisor`'s OWN class process) took the whole class down with
+  /// it. A fresh OS-assigned port every restart is a real but narrow
+  /// behavior change from the pre-#3581 DynamicSupervisor design; a fixed,
+  /// explicitly-configured (non-zero) `port` is unaffected either way.
   ///
   /// Deliberately inlines the registry/router construction (rather than
-  /// calling `ExduraHttpServer someClassMethod: ...`) — `initialize` runs
-  /// synchronously as part of spawning, and spawning this actor's own
-  /// class blocks that class's process until `initialize` returns. Any
-  /// call from here back to `ExduraHttpServer`'s class process (even a
-  /// plain class-method send) would deadlock against that same block. The
-  /// route *handler* methods below remain ordinary class methods — they're
-  /// invoked later, from cowboy's process, once an HTTP request actually
-  /// arrives, long after this method has returned and the class process
-  /// is free again.
-  initialize -> Nil =>
-    registry := #{}
-    self.workflowClasses do: [:wc |
-      registry := registry at: wc name asString put: wc
+  /// calling `ExduraHttpServer someClassMethod: ...`) — this runs
+  /// synchronously as part of spawning (via `initialize`), and spawning
+  /// this actor's own class blocks that class's process until `initialize`
+  /// returns. Any call from here back to `ExduraHttpServer`'s class process
+  /// (even a plain class-method send) would deadlock against that same
+  /// block. The route *handler* methods below remain ordinary class
+  /// methods — they're invoked later, from cowboy's process, once an HTTP
+  /// request actually arrives, long after this method has returned and the
+  /// class process is free again.
+  startListening -> Nil =>
+    // Narrows the `T | Nil` fields to definite locals — `initialize`
+    // always resolves `engine`/`store` before this runs (whether called
+    // from `initialize` itself or, later, explicitly by `ExduraWorker
+    // start:`), so the `nil` arm is unreachable in practice; typed exactly
+    // like `WorkflowEngine>>eventStore`/`activityPool`.
+    store :: EventStore := self.store match: [
+      nil -> self error: "ExduraHttpServer startListening called before initialize resolved store";
+      s -> s
+    ]
+    engine :: WorkflowEngine := self.engine match: [
+      nil -> self error: "ExduraHttpServer startListening called before initialize resolved engine";
+      e -> e
     ]
 
-    engine := self.engine
-    store := self.store
+    resolvedFromDurableConfig := self.port isNil
+    resolvedFromDurableConfig ifTrue: [
+      config := store getHttpConfig
+      config ifNil: [^nil]
+      self.port := config at: #port
+      // Durable config stores class NAMES (Symbols), never class objects
+      // directly — a Beamtalk class is itself a live actor process, not
+      // serializable data; `Binary deserialize:` refuses to reconstruct an
+      // atom it doesn't already recognize from arbitrary stored bytes.
+      self.workflowClasses := self resolveWorkflowClassNames: (config at: #workflowClasses)
+    ]
+
+    port :: Integer := self.port match: [
+      nil -> self error: "ExduraHttpServer startListening: port not resolved";
+      p -> p
+    ]
+    workflowClasses :: List(Workflow class) := self.workflowClasses match: [
+      nil -> self error: "ExduraHttpServer startListening: workflowClasses not resolved";
+      wc -> wc
+    ]
+
+    registry := #{}
+    workflowClasses do: [:wc |
+      registry := registry at: wc name asString put: wc
+    ]
 
     router := HTTPRouter
       build: [:r |
@@ -252,23 +353,88 @@ typed Actor subclass: ExduraHttpServer
             ExduraHttpServer handleCancel: req engine: engine
           ])
       ]
-    srv := HTTPServer start: self.port handler: router
+
+    // Idempotent: stop any listener this instance already has bound before
+    // binding again. Without this, two `startListening` calls in the same
+    // boot (see `refreshFromDurableConfig`'s doc for why that happens) would
+    // try to bind the second one on top of the first and collide with
+    // themselves. Guarded on `self.listening`, not `hasField: #httpServer`
+    // — see `listening`'s own field doc for why.
+    self.listening ifTrue: [
+      [self.httpServer stop] on: Error do: [:e | nil]
+    ]
+    srv := HTTPServer start: port handler: router
     self.httpServer := srv
     self.port := srv port
+    self.listening := true
     nil
+
+  /// Force `startListening` to re-resolve from `EventStore`'s durable
+  /// config, even if this instance already resolved (or attempted to
+  /// resolve) a port once before.
+  ///
+  /// `ExduraWorker start:` calls this — not `startListening` directly —
+  /// right after durably writing a fresh `#http` config. It has to: this
+  /// actor's own `initialize` already ran as part of `ExduraSupervisor
+  /// supervise`'s very first line, before `ExduraWorker start:` gets a
+  /// chance to write anything, and `initialize` reads whatever config
+  /// happens to already be on `EventStore`'s (shared) data dir at that
+  /// moment — nothing, ordinarily, but a stale file leftover from an
+  /// earlier run sharing the same dir if one exists. `startListening`
+  /// itself only re-reads config when `self.port` is still nil (the right
+  /// behavior for a real OTP restart, where a fresh actor instance's state
+  /// starts nil again) — so a stale early resolve here would otherwise
+  /// "stick", and the later, authoritative config write would never win.
+  /// Resetting both fields back to nil first forces that authoritative
+  /// config to be the one `startListening` actually reads.
+  refreshFromDurableConfig -> Nil =>
+    self.port := nil
+    self.workflowClasses := nil
+    self startListening
+
+  /// Resolve durably-stored class names (Symbols) back to `Workflow class`
+  /// objects, the inverse of `setHttpConfig:`'s `wc name` conversion above.
+  /// A name that no longer resolves (e.g. a class removed from a later
+  /// deploy of this same app) is a genuine configuration error, not
+  /// something to silently drop — a route handler silently missing a
+  /// workflow type is worse than failing loudly at startup.
+  ///
+  /// `(Erlang beamtalk_interface) findClass:` rather than `Beamtalk
+  /// classNamed:` — `classNamed:` requires a literal symbol argument at
+  /// compile time (a real, enforced restriction — see
+  /// `beamtalk_interface.erl`'s own `findClass/1` doc, "Alias for
+  /// classNamed/1 — used because classNamed: selector triggers
+  /// compile-time validation"), and `Beamtalk` itself is a workspace/REPL
+  /// global not available in a plain compiled build. `findClass:` is the
+  /// same underlying lookup with neither restriction: a genuinely dynamic,
+  /// runtime-value class name, usable from ordinary compiled app code.
+  resolveWorkflowClassNames: names :: List(Symbol) -> List(Workflow class) =>
+    names
+      collect: [:aName |
+        raw :: Workflow class | Nil := (Erlang beamtalk_interface) findClass: aName
+        found :: Workflow class := raw match: [
+          nil -> self error: "ExduraHttpServer: configured workflow class not found: {aName}";
+          c -> c
+        ]
+        found
+      ]
 
   // ── Instance API ──
 
   /// The TCP port this server is listening on.
-  port -> Integer => self.port
+  port -> Integer =>
+    self.port match: [
+      nil -> self error: "ExduraHttpServer port: not yet listening";
+      p -> p
+    ]
 
   /// Stop the underlying HTTP listener (does not stop this actor itself —
   /// callers manage that the same way they manage any other Actor, via
   /// `stop`).
   ///
-  /// `supervisionPolicy` is `#permanent`, so a supervised instance (spawned
-  /// via `ExduraHttpServerSupervisor startChild:`) must be torn down with
-  /// `ExduraHttpServerSupervisor terminateChild:`, not `destroy`/`stop`
+  /// `supervisionPolicy` is `#permanent`, so a supervised instance (a
+  /// static `ExduraSupervisor` child) must be torn down with
+  /// `ExduraSupervisor terminate: ExduraHttpServer`, not `destroy`/`stop`
   /// directly — OTP treats a direct `stop` as a crash and restarts it.
   /// `destroy`/`stop` are for instances spawned standalone (e.g. tests
   /// using `ExduraHttpServer start:engine:store:workflows:` directly,
@@ -279,6 +445,26 @@ typed Actor subclass: ExduraHttpServer
   /// http destroy
   /// http stop
   /// ```
-  destroy -> Nil =>
-    [self.httpServer stop] on: Error do: [:e | nil]
+  destroy -> Nil => self stopListener
+
+  /// `Actor`'s own graceful-shutdown hook (see `Actor>>terminate:`'s doc):
+  /// runs automatically whenever OTP tears this actor down normally —
+  /// `ExduraSupervisor` stopping, or `ExduraSupervisor terminate:
+  /// ExduraHttpServer` — unlike `destroy`, which is only ever called
+  /// manually. Without this, a supervised instance's underlying
+  /// `HTTPServer`/cowboy listener could leak past its own actor's death.
+  /// Mirrors Symphony's `HttpServer>>terminate:` (`(self hasField:
+  /// #server) ifTrue: [self.server stop]`) — the reference shape ADR 0124's
+  /// own evidence section cites for exactly this "durable resource
+  /// release" pattern.
+  terminate: _reason :: Object -> Nil => self stopListener
+
+  /// Shared by `destroy` (manual, standalone use) and `terminate:` (OTP's
+  /// own automatic graceful-shutdown hook, supervised use) — `hasField:`
+  /// guarded (ADR 0124): a supervised instance with no durable `#http`
+  /// config ever written (see `startListening`) never binds at all, so
+  /// `httpServer` genuinely can stay unassigned for this instance's whole
+  /// life, not just a transient window before `initialize` finishes.
+  stopListener -> Nil =>
+    (self hasField: #httpServer) ifTrue: [[self.httpServer stop] on: Error do: [:e | nil]]
     nil

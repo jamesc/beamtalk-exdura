@@ -171,11 +171,11 @@ typed Actor subclass: ExduraClient
     nil
 
   /// Return the optional HTTP client API server (nil unless ExduraWorker
-  /// was started with an `#http` config). Read-only: it's a genuine
-  /// `ExduraHttpServerSupervisor`-supervised child now, so lifecycle
-  /// (including shutdown, via `destroy`'s `sup stop`) is the supervisor's
-  /// job, not the client's — this accessor exists for inspection (e.g.
-  /// reading the bound port after starting on an ephemeral `0`).
+  /// was started with an `#http` config). Read-only: it's a genuine static
+  /// `ExduraSupervisor` child now, so lifecycle (including shutdown, via
+  /// `destroy`'s `sup stop`) is the supervisor's job, not the client's —
+  /// this accessor exists for inspection (e.g. reading the bound port
+  /// after starting on an ephemeral `0`).
   httpServer -> ExduraHttpServer | Nil => self.httpServer
 
   /// Attach the optional HTTP client API server reference for inspection.

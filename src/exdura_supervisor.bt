@@ -5,28 +5,40 @@
 ///   2. ActivityWorkerPool — supervised activity execution
 ///   3. WorkflowEngine — workflow orchestration (resolves deps by name)
 ///   4. TimerManager — durable timer scheduling (resolves deps by name)
-///   5. ExduraHttpServerSupervisor — optional HTTP client API (SPEC.md §7.2)
+///   5. ExduraHttpServer — optional HTTP client API (SPEC.md §7.2)
 ///
 /// Uses rest_for_one: if EventStore crashes, everything after it restarts.
-/// If WorkflowEngine crashes, TimerManager and the HTTP supervisor restart
-/// too. `ExduraHttpServerSupervisor` is always present (childless is the
-/// normal, cheap default); `ExduraWorker start:` adds the actual
-/// `ExduraHttpServer` child via `startChild:` when `#http` config is given.
-/// A cascade restart triggered by an EventStore/WorkflowEngine crash tears
-/// down that dynamically-added child along with it, and nothing currently
-/// re-adds it — a known, still-open limitation.
+/// If WorkflowEngine crashes, TimerManager and ExduraHttpServer restart too.
+/// `ExduraHttpServer` is always present (bound to nothing is the normal,
+/// cheap default, same as every other still-childless-equivalent resting
+/// state in this tree); `ExduraWorker start:` durably records the
+/// port/workflowClasses config on `EventStore` (`setHttpConfig:`) and
+/// triggers `refreshFromDurableConfig` when `#http` config is given. Because that
+/// config is durable rather than held in a process that a `rest_for_one`
+/// cascade can wipe, ANY restart — cascade or a direct crash of
+/// `ExduraHttpServer` itself — re-reads it and re-binds automatically; see
+/// `ExduraHttpServer>>startListening` for the full mechanism. (An earlier
+/// design routed this through a nested `DynamicSupervisor`
+/// (`ExduraHttpServerSupervisor`) with args passed only once via
+/// `startChild:` — a `rest_for_one` cascade tore down that dynamically-added
+/// child with nothing to re-add it. Replaced once `ExduraHttpServer` could
+/// resolve its own config durably, the same way the other four resolve
+/// their collaborators by name below, instead of needing a second
+/// supervisor layer to route runtime args around `class children`'s own
+/// parameterless, once-evaluated signature.)
 ///
-/// All four core components are registered under fixed names (ADR 0079)
-/// and resolve each other by name at use-time rather than caching pids —
-/// see `WorkflowEngine>>eventStore`/`activityPool` and
-/// `TimerManager>>engine`/`eventStore`. This is deliberate: an earlier
-/// version wired dependencies once via a `class initialize: sup` hook,
-/// documented as "re-runs on restart (rest_for_one)" — that claim was
-/// wrong. `initialize:` fires exactly once, at the initial `supervise`
-/// call; OTP-driven restarts start each child directly and never call it
-/// again. A restarted `WorkflowEngine` came back with a nil `eventStore`
-/// and crashed on the next workflow call. Named lookup sidesteps the
-/// problem entirely — nothing needs to notice a restart happened.
+/// All five components are registered under fixed names (ADR 0079) and
+/// resolve each other by name at use-time rather than caching pids — see
+/// `WorkflowEngine>>eventStore`/`activityPool`,
+/// `TimerManager>>engine`/`eventStore`, and `ExduraHttpServer>>initialize`.
+/// This is deliberate: an earlier version wired dependencies once via a
+/// `class initialize: sup` hook, documented as "re-runs on restart
+/// (rest_for_one)" — that claim was wrong. `initialize:` fires exactly
+/// once, at the initial `supervise` call; OTP-driven restarts start each
+/// child directly and never call it again. A restarted `WorkflowEngine`
+/// came back with a nil `eventStore` and crashed on the next workflow
+/// call. Named lookup sidesteps the problem entirely — nothing needs to
+/// notice a restart happened.
 ///
 ///   beamtalk run                          // starts via beamtalk.toml
 ///
@@ -41,19 +53,17 @@ typed Supervisor subclass: ExduraSupervisor
 
   /// Child specs in dependency order.
   ///
-  /// `ExduraHttpServerSupervisor` is a nested `DynamicSupervisor`, not an
-  /// `Actor` — it's listed as a bare class reference rather than built via
-  /// `supervisionSpec withRestart:` (which only `Actor` subclasses
-  /// support). Nested supervisors default to `#permanent` restart.
-  ///
-  /// The other four register under fixed names (ADR 0079) so siblings —
-  /// and external consumers like `ExduraClient`/`ExduraHttpServer` — can
-  /// resolve them fresh after a restart instead of holding a pid captured
-  /// at construction. `WorkflowEngine` additionally gets `#supervised =>
-  /// true` in its args: unlike EventStore, a nil `activityPool` field is
-  /// also a legitimate standalone state (Phase 0, no-pool mode via
-  /// `WorkflowEngine withStore:`), so it needs an explicit signal to know
-  /// "nil means look it up by name" applies here.
+  /// All five register under fixed names (ADR 0079) so siblings — and
+  /// external consumers like `ExduraClient` — can resolve them fresh after
+  /// a restart instead of holding a pid captured at construction.
+  /// `WorkflowEngine` additionally gets `#supervised => true` in its args:
+  /// unlike EventStore, a nil `activityPool` field is also a legitimate
+  /// standalone state (Phase 0, no-pool mode via `WorkflowEngine
+  /// withStore:`), so it needs an explicit signal to know "nil means look
+  /// it up by name" applies here. `ExduraHttpServer` needs no such args at
+  /// all — a nil `engine`/`store`/`port`/`workflowClasses` always means
+  /// "resolve me" for it (see its own `initialize`/`startListening`), no
+  /// disambiguating flag required.
   ///
   /// Only one `ExduraSupervisor` may be alive at a time per node as a
   /// result of the fixed names; tests that spawn one must run serially
@@ -66,5 +76,6 @@ typed Supervisor subclass: ExduraSupervisor
       withRestart: #permanent
       withArgs: #{#supervised => true}
     timerSpec := TimerManager supervisionSpec withName: #timerManager withRestart: #permanent
+    httpSpec := ExduraHttpServer supervisionSpec withName: #exduraHttpServer withRestart: #permanent
 
-    #(storeSpec, poolSpec, engineSpec, timerSpec, ExduraHttpServerSupervisor)
+    #(storeSpec, poolSpec, engineSpec, timerSpec, httpSpec)

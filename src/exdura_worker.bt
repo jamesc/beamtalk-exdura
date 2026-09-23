@@ -58,29 +58,32 @@ typed Object subclass: ExduraWorker
     client := ExduraClient spawnWith: #{#engine => engine, #eventStore => store}
     client setSupervisor: sup
 
-    // Optional HTTP client API (SPEC.md §7.2). ExduraHttpServerSupervisor
-    // is always a static child of ExduraSupervisor (childless by default);
-    // starting the actual ExduraHttpServer under it here makes it a real
-    // supervised, restart-on-crash child rather than a manually-managed
-    // sibling actor.
+    // Optional HTTP client API (SPEC.md §7.2). ExduraHttpServer is always a
+    // static child of ExduraSupervisor, started (but not yet listening) as
+    // part of `ExduraSupervisor supervise` above — before this method ever
+    // sees `#http` config. Durably recording the config on EventStore and
+    // triggering `refreshFromDurableConfig` here is what makes it actually bind; from
+    // then on, ExduraHttpServer's own `initialize` re-reads that same
+    // config and re-binds on every future restart with no further help
+    // from this method (see ExduraHttpServer>>startListening).
     httpConfig := config at: #http ifAbsent: [nil]
     httpConfig
       ifNotNil: [
         port := httpConfig at: #port ifAbsent: [4100]
         workflowClasses := config at: #workflows ifAbsent: [#()]
-        httpSup :: ExduraHttpServerSupervisor := (sup which: ExduraHttpServerSupervisor)
-          valueOrDo: [:e |
-            self error: "ExduraHttpServerSupervisor not found under ExduraSupervisor: {e}"
-          ]
-        http := (httpSup
-          startChild: #{
+        // Durable config stores class NAMES (Symbols), never class objects
+        // directly — see ExduraHttpServer>>resolveWorkflowClassNames:'s doc
+        // for why (a Beamtalk class is itself a live actor process, not
+        // serializable data).
+        store
+          setHttpConfig: #{
             #port => port,
-            #engine => engine,
-            #store => store,
-            #workflowClasses => workflowClasses
-          }) valueOrDo: [:e |
-          self error: "Failed to start ExduraHttpServer: {e}"
+            #workflowClasses => (workflowClasses collect: [:wc | wc name])
+          }
+        http :: ExduraHttpServer := (sup which: ExduraHttpServer) valueOrDo: [:e |
+          self error: "ExduraHttpServer not found under ExduraSupervisor: {e}"
         ]
+        http refreshFromDurableConfig
         client setHttpServer: http
       ]
 
