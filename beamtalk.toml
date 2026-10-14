@@ -8,5 +8,9 @@ version = "0.1.0"
 [application]
 supervisor = "ExduraSupervisor"
 
+[release]
+console = true
+include-compiler = true
+
 [dependencies]
 http = "0.1.7"

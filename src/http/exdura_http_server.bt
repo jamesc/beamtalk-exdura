@@ -399,25 +399,14 @@ typed Actor subclass: ExduraHttpServer
   /// deploy of this same app) is a genuine configuration error, not
   /// something to silently drop — a route handler silently missing a
   /// workflow type is worse than failing loudly at startup.
-  ///
-  /// `(Erlang beamtalk_interface) findClass:` rather than `Beamtalk
-  /// classNamed:` — `classNamed:` requires a literal symbol argument at
-  /// compile time (a real, enforced restriction — see
-  /// `beamtalk_interface.erl`'s own `findClass/1` doc, "Alias for
-  /// classNamed/1 — used because classNamed: selector triggers
-  /// compile-time validation"), and `Beamtalk` itself is a workspace/REPL
-  /// global not available in a plain compiled build. `findClass:` is the
-  /// same underlying lookup with neither restriction: a genuinely dynamic,
-  /// runtime-value class name, usable from ordinary compiled app code.
   resolveWorkflowClassNames: names :: List(Symbol) -> List(Workflow class) =>
     names
       collect: [:aName |
-        raw :: Workflow class | Nil := (Erlang beamtalk_interface) findClass: aName
-        found :: Workflow class := raw match: [
+        raw := Beamtalk classNamed: aName
+        raw match: [
           nil -> self error: "ExduraHttpServer: configured workflow class not found: {aName}";
           c -> c
         ]
-        found
       ]
 
   // ── Instance API ──
