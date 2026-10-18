@@ -200,16 +200,24 @@ value match: [
 | `File` | Filesystem operations |
 | `Json` / `Yaml` | Serialization |
 
-### Critical Gotcha — Block Mutations
+### Block Mutations
+
+Blocks given to control-flow and collection messages (`do:`, `collect:`,
+`inject:into:`, `ifTrue:`/`ifNotNil:`, `and:`/`or:`, `on:do:`, `Result tryDo:`,
+`at:ifAbsent:`, ...) write the enclosing method's locals, in Object, Value and
+Actor methods alike (beamtalk ADR 0131). No accumulator dict, tuple fold or
+recursive helper is needed:
 
 ```beamtalk
-// WRONG on Value/Object — assignment inside block doesn't propagate
 count := 0
-items do: [:x | count := count + 1]  // count is still 0!
-
-// CORRECT — use inject:into:
-count := items inject: 0 into: [:acc :x | acc + 1]
+items do: [:x | x isValid ifTrue: [count := count + 1]]
+count  // the number of valid items
 ```
+
+Where a write cannot be handed back, the compiler rejects it rather than
+dropping it silently: a block that writes a local and is passed to a
+user-defined method (e.g. `Result andThen:`), stored, or returned is a compile
+error. Return the value from the block instead.
 
 ## Not Smalltalk — Common Pitfalls
 
