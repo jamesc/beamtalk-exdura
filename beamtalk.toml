@@ -13,4 +13,4 @@ console = true
 include-compiler = true
 
 [dependencies]
-http = "0.1.7"
+http = "0.1.10"
