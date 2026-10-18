@@ -29,34 +29,23 @@ typed Actor subclass: EventStore
   state: dataDir :: String = "data"
 
   /// Parse consecutive ETF terms from a binary, returning a list of ExduraEvents.
-  /// Class method to avoid self-capture issues when called from blocks.
-  class parseEtfBinary: binary :: Binary offset: offset :: Integer size: totalSize :: Integer acc: acc :: List -> List =>
-    offset >= totalSize ifTrue: [^acc]
-    remaining := binary part: offset size: totalSize - offset
-    // Parse next ETF term and get bytes consumed
-    parseResult := [
-      Binary deserializeWithUsed: remaining
-    ] on: Error do: [:e | ^acc]
-    {dict, used} := parseResult
-    evt := ExduraEvent new: dict
-    self
-      parseEtfBinary: binary
-      offset: offset + used
-      size: totalSize
-      acc: (acc add: evt)
-
-  /// Stamp events with sequential eventIds starting at nextId.
-  /// Class method (not inject:into: with a mixed-shape accumulator) so the
-  /// accumulator stays a plain List(ExduraEvent) throughout the recursion,
-  /// rather than the { #id => Integer, #list => List } dict the old
-  /// inject:into: used, which the type checker can't type consistently.
-  class stampEvents: events :: List(ExduraEvent) nextId: nextId :: Integer acc: acc :: List(ExduraEvent) -> List(ExduraEvent) =>
-    events isEmpty ifTrue: [^acc]
-    numbered := events first withEventId: nextId
-    self
-      stampEvents: events rest
-      nextId: nextId + 1
-      acc: (acc add: numbered)
+  /// Stops at the first term that does not decode (a truncated tail), keeping
+  /// the events parsed before it.
+  class parseEtfBinary: binary :: Binary -> List(ExduraEvent) =>
+    totalSize := binary byteSize
+    offset := 0
+    events := #()
+    [offset < totalSize]
+      whileTrue: [
+        remaining := binary part: offset size: totalSize - offset
+        parseResult := [
+          Binary deserializeWithUsed: remaining
+        ] on: Error do: [:e | ^events]
+        {dict, used} := parseResult
+        events := events add: (ExduraEvent new: dict)
+        offset := offset + used
+      ]
+    events
 
   initialize -> Nil =>
     uid := System uniqueId
@@ -140,11 +129,12 @@ typed Actor subclass: EventStore
   /// ```
   appendEvents: workflowId :: String events: newEvents :: List(ExduraEvent) -> List(ExduraEvent) =>
     existing := self.events at: workflowId ifAbsent: [#()]
-    startId := existing size + 1
-    stampedEvents := EventStore
-      stampEvents: newEvents
-      nextId: startId
-      acc: #()
+    nextId := existing size
+    stampedEvents := newEvents
+      collect: [:e |
+        nextId := nextId + 1
+        e withEventId: nextId
+      ]
     self.events at: workflowId put: (existing ++ stampedEvents)
     // Persist to disk
     self persistEvents: workflowId events: stampedEvents
@@ -355,11 +345,7 @@ typed Actor subclass: EventStore
             contentSize := content byteSize
             contentSize > 0
               ifTrue: [
-                events := EventStore
-                  parseEtfBinary: content
-                  offset: 0
-                  size: contentSize
-                  acc: #()
+                events := EventStore parseEtfBinary: content
                 events isEmpty ifFalse: [eventsTable at: wfId put: events]
               ]
           ]

@@ -123,11 +123,7 @@ TestCase subclass: EventStorePersistenceTest
       })
     // Parse the file directly to verify all 3 events are there
     content := (File readBinary: (self.testDir ++ "/events/wf-multi.etf")) unwrap
-    events := EventStore
-      parseEtfBinary: content
-      offset: 0
-      size: content byteSize
-      acc: #()
+    events := EventStore parseEtfBinary: content
     self assert: events size equals: 3
     self assert: (events at: 1) eventId equals: 1
     self assert: (events at: 2) eventId equals: 2

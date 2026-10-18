@@ -34,23 +34,15 @@ typed Actor subclass: TimerManager
   class findPendingTimers: events :: List(ExduraEvent) -> List(TimerInfo) =>
     // Count TimerStarted and TimerFired events.
     // If started > fired, the last (started - fired) timers are pending.
-    counts := events
-      inject: #{#started => 0, #fired => 0}
-      into: [:acc :evt |
-        evt eventType match: [
-          #TimerStarted -> #{
-            #started => (acc at: #started) + 1,
-            #fired => (acc at: #fired)
-          };
-          #TimerFired -> #{
-            #started => (acc at: #started),
-            #fired => (acc at: #fired) + 1
-          };
-          _ -> acc
+    startedCount := 0
+    firedCount := 0
+    events
+      do: [:evt |
+        evt eventType =:= #TimerStarted ifTrue: [
+          startedCount := startedCount + 1
         ]
+        evt eventType =:= #TimerFired ifTrue: [firedCount := firedCount + 1]
       ]
-    startedCount := counts at: #started
-    firedCount := counts at: #fired
     pendingCount := startedCount - firedCount
     pendingCount <= 0 ifTrue: [^#()]
     // Collect all TimerStarted events, take the last pendingCount.
@@ -122,9 +114,9 @@ typed Actor subclass: TimerManager
     self.status := #scanning
     store := self eventStore
     engine := self engine
-    count := workflowIds
-      inject: 0
-      into: [:acc :wfId |
+    count := 0
+    workflowIds
+      do: [:wfId |
         pending := TimerManager findPendingTimers: (store readEvents: wfId fromSeq: 1)
         pending
           do: [:timerInfo |
@@ -135,7 +127,7 @@ typed Actor subclass: TimerManager
             remaining > 0 ifTrue: [Timer sleep: remaining]
             engine recordTimerFired: timerInfo duration workflowId: wfId
           ]
-        acc + pending size
+        count := count + pending size
       ]
     self.pendingCount := count
     self.status := #ready
