@@ -63,35 +63,26 @@ typed Actor subclass: WorkflowContext
   /// WorkflowContext collectReplaySignalsFrom: 4 history: events
   /// ```
   class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> List(Signal) =>
-    self
-      collectReplaySignalsFrom: fromIdx
-      history: eventHistory
-      acc: #()
-
-  /// Recursive helper to collect consecutive SignalReceived events.
-  class collectReplaySignalsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) acc: acc :: List(Signal) -> List(Signal) =>
-    fromIdx > eventHistory size ifTrue: [^acc]
-    event := eventHistory at: fromIdx
-    eventType := event eventType
-    isSignal := eventType =:= #SignalReceived
-    newAcc := isSignal
-      ifTrue: [
-        sigPayload := event payload
-        acc
-          ++ #(Signal new: #{
-            #name => (sigPayload at: #signalName),
-            #payload => (sigPayload at: #payload)
-          })
+    signals := #()
+    idx := fromIdx
+    scanning := true
+    [scanning and: [idx <= eventHistory size]]
+      whileTrue: [
+        event := eventHistory at: idx
+        eventType := event eventType
+        eventType =:= #SignalReceived
+          ifTrue: [
+            sigPayload := event payload
+            signals := signals
+              add: (Signal new: #{
+                #name => (sigPayload at: #signalName),
+                #payload => (sigPayload at: #payload)
+              })
+          ]
+          ifFalse: [scanning := eventType =:= #StateSnapshot]
+        idx := idx + 1
       ]
-      ifFalse: [acc]
-    (isSignal or: [eventType =:= #StateSnapshot])
-      ifTrue: [
-        self
-          collectReplaySignalsFrom: fromIdx + 1
-          history: eventHistory
-          acc: newAcc
-      ]
-      ifFalse: [acc]
+    signals
 
   /// Count consecutive non-command events (StateSnapshot, SignalReceived)
   /// starting from a given index.
@@ -101,23 +92,14 @@ typed Actor subclass: WorkflowContext
   /// WorkflowContext countSkippableEventsFrom: 5 history: events
   /// ```
   class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) -> Integer =>
-    self
-      countSkippableEventsFrom: fromIdx
-      history: eventHistory
-      count: 0
-
-  /// Recursive helper for counting skippable events.
-  class countSkippableEventsFrom: fromIdx :: Integer history: eventHistory :: List(ExduraEvent) count: count :: Integer -> Integer =>
-    fromIdx > eventHistory size ifTrue: [^count]
-    eventType := (eventHistory at: fromIdx) eventType
-    ((eventType =:= #StateSnapshot) or: [eventType =:= #SignalReceived])
-      ifTrue: [
-        self
-          countSkippableEventsFrom: fromIdx + 1
-          history: eventHistory
-          count: count + 1
+    idx := fromIdx
+    skippable := #(#StateSnapshot, #SignalReceived)
+    [
+      idx <= eventHistory size and: [
+        skippable includes: (eventHistory at: idx) eventType
       ]
-      ifFalse: [count]
+    ] whileTrue: [idx := idx + 1]
+    idx - fromIdx
 
   /// Find a signal by name in a list. Returns a SignalSearchResult.
   ///
