@@ -24,18 +24,20 @@
 /// child with nothing to re-add it. Replaced once `ExduraHttpServer` could
 /// resolve its own config durably, the same way the other four resolve
 /// their collaborators by name below, instead of needing a second
-/// supervisor layer to route runtime args around `class children`'s own
-/// parameterless, once-evaluated signature.)
+/// supervisor layer to route runtime args around the then class-side
+/// `children`'s parameterless, once-evaluated signature.)
 ///
 /// All five components are registered under fixed names (ADR 0079) and
 /// resolve each other by name at use-time rather than caching pids — see
 /// `WorkflowEngine>>eventStore`/`activityPool`,
 /// `TimerManager>>engine`/`eventStore`, and `ExduraHttpServer>>initialize`.
 /// This is deliberate: an earlier version wired dependencies once via a
-/// `class initialize: sup` hook, documented as "re-runs on restart
-/// (rest_for_one)" — that claim was wrong. `initialize:` fires exactly
-/// once, at the initial `supervise` call; OTP-driven restarts start each
-/// child directly and never call it again. A restarted `WorkflowEngine`
+/// post-start hook (then `class initialize: sup`, now instance-side
+/// `initialize` under ADR 0135), documented as "re-runs on restart
+/// (rest_for_one)" — that claim was wrong, and still is. The hook runs
+/// exactly once per top-level start, in the caller after the initial
+/// `supervise`; OTP-driven restarts start each child directly and never
+/// call it again. A restarted `WorkflowEngine`
 /// came back with a nil `eventStore` and crashed on the next workflow
 /// call. Named lookup sidesteps the problem entirely — nothing needs to
 /// notice a restart happened.
@@ -49,7 +51,7 @@
 typed Supervisor subclass: ExduraSupervisor
 
   /// rest_for_one: if a child crashes, all children after it restart.
-  class strategy -> Symbol => #restForOne
+  strategy -> Symbol => #restForOne
 
   /// Child specs in dependency order.
   ///
@@ -68,7 +70,7 @@ typed Supervisor subclass: ExduraSupervisor
   /// Only one `ExduraSupervisor` may be alive at a time per node as a
   /// result of the fixed names; tests that spawn one must run serially
   /// (`class serial -> Boolean => true`).
-  class children -> List =>
+  childSpecs -> List =>
     storeSpec := EventStore supervisionSpec withName: #eventStore withRestart: #permanent
     poolSpec := ActivityWorkerPool supervisionSpec withName: #activityWorkerPool withRestart: #permanent
     engineSpec := (WorkflowEngine supervisionSpec)

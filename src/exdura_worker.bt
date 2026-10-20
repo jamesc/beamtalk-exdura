@@ -37,7 +37,7 @@ typed Object subclass: ExduraWorker
       self error: "Failed to start ExduraSupervisor: {e}"
     ]
 
-    // Sibling wiring is handled by ExduraSupervisor class initialize:.
+    // Siblings resolve each other by name (ADR 0079); see ExduraSupervisor.
     // sup which: is typed -> Result(Object, Error); typing the local asserts
     // the concrete class so downstream method sends type-check cleanly.
     engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |

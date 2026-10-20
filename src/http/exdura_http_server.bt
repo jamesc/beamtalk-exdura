@@ -261,11 +261,13 @@ typed Actor subclass: ExduraHttpServer
   /// a real bind collision: the OLD listener's socket is not always fully
   /// released by the time the restarted actor tries to rebind the SAME
   /// port, and a failed bind here — inside `initialize`, on every retry —
-  /// exhausts `ExduraSupervisor`'s restart intensity, which (since `class
-  /// supervise`'s `startLink: self` links the supervised tree to
-  /// `ExduraSupervisor`'s OWN class process) took the whole class down with
-  /// it. A fresh OS-assigned port every restart is a real but narrow
-  /// behavior change from the pre-#3581 DynamicSupervisor design; a fixed,
+  /// exhausts `ExduraSupervisor`'s restart intensity. At the time,
+  /// `supervise` linked the supervised tree to `ExduraSupervisor`'s OWN
+  /// class process, so that took the whole class down with it; since ADR
+  /// 0135 `supervise` no longer links the tree to the class process, so
+  /// only the tree itself stops. A fresh OS-assigned port every restart is
+  /// a real but narrow behavior change from the pre-#3581 DynamicSupervisor
+  /// design; a fixed,
   /// explicitly-configured (non-zero) `port` is unaffected either way.
   ///
   /// Deliberately inlines the registry/router construction (rather than

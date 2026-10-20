@@ -13,8 +13,10 @@
 /// ```
 DynamicSupervisor subclass: ActivityWorkerSupervisor
 
-  class childClass => ActivityWorker
+  childClass => ActivityWorker
 
   /// High restart limit since all pools share this singleton supervisor
   /// and worker crash tests accumulate restarts across parallel test runs.
-  class maxRestarts -> Integer => 1000
+  /// (ADR 0135 allows one supervisor per pool via `spawnWith:`, which would
+  /// let this drop to a per-pool limit; left as a follow-up to BT-3962.)
+  maxRestarts -> Integer => 1000
