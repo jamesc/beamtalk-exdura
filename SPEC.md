@@ -1079,8 +1079,8 @@ application's own supervision tree. No external process to operate.
 ```beamtalk
 // Your application IS the workflow engine
 Supervisor subclass: MyApp
-  class strategy => #oneForOne
-  class children => #(ExduraSupervisor, MyHttpServer, MyMetrics)
+  strategy => #oneForOne
+  childSpecs => #(ExduraSupervisor, MyHttpServer, MyMetrics)
 ```
 
 ### 13.2 Actor State Is Workflow State

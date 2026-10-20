@@ -22,9 +22,12 @@ jobs:
         with:
           otp-version: '28.5'
 
+      # --edge installs the rolling build of beamtalk main, needed for ADR 0135
+      # (instance-side supervisor configuration). Go back to --nightly once
+      # nightlies publish again (BT-3980).
       - name: Install beamtalk
         run: |
-          curl -fsSL https://beamtalk.dev/install.sh | sudo sh -s -- --nightly --prefix /usr/local
+          curl -fsSL https://beamtalk.dev/install.sh | sudo sh -s -- --edge --prefix /usr/local
           beamtalk --version
 
       - name: Format check

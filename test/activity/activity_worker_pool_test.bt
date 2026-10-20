@@ -57,7 +57,8 @@ TestCase subclass: ActivityWorkerPoolTest
     self assert: ActivityWorkerSupervisor isSupervisor
 
   testActivityWorkerSupervisorChildClass =>
-    self assert: ActivityWorkerSupervisor childClass equals: ActivityWorker
+    sup := ActivityWorkerSupervisor supervise unwrap
+    self assert: sup childClass equals: ActivityWorker
 
   // === ActivityWorker: basic execution ===
   testWorkerExecutesActivityAndReturnsResult =>

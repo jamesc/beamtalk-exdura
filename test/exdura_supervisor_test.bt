@@ -51,9 +51,10 @@ TestCase subclass: ExduraSupervisorTest
       ]
     self error: "unreachable"
 
-  // === ExduraSupervisor class-side config ===
+  // === ExduraSupervisor config (instance-side, ADR 0135) ===
   testSupervisorStrategyIsRestForOne =>
-    self assert: ExduraSupervisor strategy equals: #restForOne
+    self.client := ExduraWorker start: #{}
+    self assert: self.client supervisor strategy equals: #restForOne
 
   // === ExduraWorker boots supervision tree and runs workflows ===
   testWorkerBootsAndRunsWorkflows =>
@@ -106,8 +107,9 @@ TestCase subclass: ExduraSupervisorTest
   // ActivityWorkerPool functional, not wired to nil/dead refs ===
   //
   // Regression test: WorkflowEngine/TimerManager used to be wired up once
-  // via `ExduraSupervisor class initialize:`, which only runs at the
-  // initial `supervise` call — not on OTP-driven restarts. A restarted
+  // via a post-start hook (then `ExduraSupervisor class initialize:`, now
+  // instance-side `initialize`), which only runs at the initial `supervise`
+  // call — not on OTP-driven restarts. A restarted
   // WorkflowEngine came back with a nil eventStore and crashed on the next
   // workflow call. Fixed by having WorkflowEngine/TimerManager resolve
   // EventStore/WorkflowEngine/ActivityWorkerPool by name (ADR 0079) at
