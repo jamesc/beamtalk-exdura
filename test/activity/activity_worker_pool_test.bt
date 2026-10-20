@@ -52,24 +52,75 @@ TestCase subclass: ActivityWorkerPoolTest
         Timer sleep: 50
       ]
 
+  /// The pid behind a supervisor handle
+  /// (`{beamtalk_supervisor, Class, Module, Pid}`).
+  pidOf: sup => (Erlang erlang) element: 4 tuple: sup
+
+  /// Whether a supervisor handle's process is still running.
+  isAlive: sup => (Erlang erlang) is_process_alive: (self pidOf: sup)
+
   // === ActivityWorkerSupervisor ===
   testActivityWorkerSupervisorIsSupervisor =>
     self assert: ActivityWorkerSupervisor isSupervisor
 
   testActivityWorkerSupervisorChildClass =>
-    sup := ActivityWorkerSupervisor supervise unwrap
-    self assert: sup childClass equals: ActivityWorker
+    self assert: self.pool supervisor childClass equals: ActivityWorker
 
   // === ActivityWorker: basic execution ===
   testWorkerExecutesActivityAndReturnsResult =>
-    sup := ActivityWorkerSupervisor supervise unwrap
-    worker := sup startChild unwrap
+    worker := self.pool supervisor startChild unwrap
     worker
       initWith: PoolTestActivities
       selector: #doubleIt:
       args: #(7)
     result := worker execute
+    [worker stop] on: Error do: [:e | nil]
     self assert: result equals: 14
+
+  // === Per-pool supervisors (ADR 0135, BT-3989) ===
+  testPoolSupervisorDefaultRestartLimits =>
+    sup := self.pool supervisor
+    self assert: sup maxRestarts equals: 10
+    self assert: sup restartWindow equals: 60
+
+  testPoolSupervisorArgsOverrideRestartLimits =>
+    other := ActivityWorkerPool spawnWith: #{
+      #supervisorArgs => #{#maxRestarts => 3, #restartWindow => 5}
+    }
+    sup := other supervisor
+    maxRestarts := sup maxRestarts
+    restartWindow := sup restartWindow
+    other stop
+    self assert: maxRestarts equals: 3
+    self assert: restartWindow equals: 5
+
+  testPoolsHaveIndependentSupervisors =>
+    other := ActivityWorkerPool spawn
+    otherSup := other supervisor
+    self deny: otherSup == self.pool supervisor
+    // Simulate the other pool's supervisor exceeding its restart limit:
+    // it dies, as an OTP supervisor does when it gives up. (ActivityWorkers
+    // are #temporary, so worker crashes alone never count toward it.)
+    (Erlang erlang) exit: (self pidOf: otherSup) reason: #kill
+    Timer sleep: 50
+    self deny: (self isAlive: otherSup)
+    // This pool's supervisor and workers are unaffected.
+    self assert: (self isAlive: self.pool supervisor)
+    outcome := self.pool
+      executeActivity: PoolTestActivities
+      selector: #doubleIt:
+      args: #(4)
+      timeout: nil
+    [other stop] on: Error do: [:e | nil]
+    self assert: outcome status equals: #completed
+    self assert: outcome result equals: 8
+
+  testStoppingPoolStopsItsSupervisor =>
+    other := ActivityWorkerPool spawn
+    otherSup := other supervisor
+    self assert: (self isAlive: otherSup)
+    other stop
+    self deny: (self isAlive: otherSup)
 
   // === ActivityWorkerPool: successful execution ===
   testPoolExecutesActivitySuccessfully =>
@@ -193,13 +244,13 @@ TestCase subclass: ActivityWorkerPoolTest
       timeout: 100
     self assert: self.pool activeCount equals: 0
 
-  // === ActivityWorkerPool: one-shot workers don't leak under the shared
-  // ActivityWorkerSupervisor singleton. Regression coverage: a worker left
+  // === ActivityWorkerPool: one-shot workers don't leak under the pool's
+  // ActivityWorkerSupervisor. Regression coverage: a worker left
   // running after executeActivity: returns accumulates as a permanent
   // supervisor child, and enough of them starve later activity dispatches
   // (observed as unrelated tests timing out under load). ===
   testPoolDoesNotLeakWorkerAfterSuccess =>
-    sup := ActivityWorkerSupervisor supervise unwrap
+    sup := self.pool supervisor
     before := sup count
     self.pool
       executeActivity: PoolTestActivities
@@ -209,7 +260,7 @@ TestCase subclass: ActivityWorkerPoolTest
     self assert: sup count equals: before
 
   testPoolDoesNotLeakWorkerAfterCrash =>
-    sup := ActivityWorkerSupervisor supervise unwrap
+    sup := self.pool supervisor
     before := sup count
     self.pool
       executeActivity: PoolTestActivities

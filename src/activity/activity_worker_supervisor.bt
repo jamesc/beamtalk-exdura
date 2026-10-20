@@ -4,9 +4,13 @@
 /// automatically cleaned up by the supervisor without affecting other
 /// workers or the parent pool.
 ///
+/// Each ActivityWorkerPool spawns its own instance with `spawnWith:`
+/// (ADR 0135), so restart limits are per pool. A pool can override them
+/// with the `#maxRestarts` / `#restartWindow` start args.
+///
 /// ## Examples
 /// ```beamtalk
-/// sup := ActivityWorkerSupervisor supervise
+/// sup := ActivityWorkerSupervisor spawnWith: #{#maxRestarts => 3}
 /// worker := sup startChild
 /// worker initWith: MyAct selector: #go: args: #(1)
 /// sup count   // => 1
@@ -15,8 +19,10 @@ DynamicSupervisor subclass: ActivityWorkerSupervisor
 
   childClass => ActivityWorker
 
-  /// High restart limit since all pools share this singleton supervisor
-  /// and worker crash tests accumulate restarts across parallel test runs.
-  /// (ADR 0135 allows one supervisor per pool via `spawnWith:`, which would
-  /// let this drop to a per-pool limit; left as a follow-up to BT-3962.)
-  maxRestarts -> Integer => 1000
+  /// Restarts allowed within `restartWindow` before this pool's
+  /// supervisor gives up. Start arg `#maxRestarts`, default 10.
+  maxRestarts -> Integer => self args at: #maxRestarts ifAbsent: [10]
+
+  /// Window in seconds for `maxRestarts`. Start arg `#restartWindow`,
+  /// default 60.
+  restartWindow -> Integer => self args at: #restartWindow ifAbsent: [60]

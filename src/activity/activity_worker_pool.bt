@@ -5,6 +5,11 @@
 /// maxConcurrentActivities limit, provides timeout enforcement via Timer,
 /// and catches worker crashes.
 ///
+/// Each pool spawns its own ActivityWorkerSupervisor (ADR 0135), so one
+/// pool's supervisor giving up never affects another pool. The pool stops
+/// its supervisor when it terminates. Pass `#supervisorArgs` to override
+/// the supervisor's restart limits.
+///
 /// The pool exposes a synchronous executeActivity: interface that spawns
 /// a supervised worker, executes the activity, and returns a result
 /// dictionary describing the outcome.
@@ -13,6 +18,7 @@
 /// ```beamtalk
 /// pool := ActivityWorkerPool spawn
 /// pool setMaxConcurrent: 5
+/// strict := ActivityWorkerPool spawnWith: #{#supervisorArgs => #{#maxRestarts => 3}}
 /// result := pool executeActivity: TestActivities selector: #doubleIt:
 ///   args: #(5) timeout: nil
 /// // => #{#status => #completed, #result => 10}
@@ -20,14 +26,27 @@
 typed Actor subclass: ActivityWorkerPool
   state: maxConcurrent :: Integer = 10
   state: activeCount :: Integer = 0
+  state: supervisorArgs :: Dictionary = #{}
   state: supervisor :: ActivityWorkerSupervisor
 
-  /// Initialize the pool by starting the underlying DynamicSupervisor.
+  /// Initialize the pool by spawning its own DynamicSupervisor.
   initialize -> Nil =>
-    self.supervisor := ActivityWorkerSupervisor supervise valueOrDo: [:e |
-      self error: "Failed to start ActivityWorkerSupervisor: {e}"
-    ]
+    self.supervisor := ActivityWorkerSupervisor spawnWith: self.supervisorArgs
     nil
+
+  /// Stop this pool's supervisor (and its workers) with the pool. The
+  /// supervisor is spawned unlinked, so nothing else would stop it.
+  terminate: _reason :: Object -> Nil =>
+    [self.supervisor stop] on: Error do: [:e | nil]
+    nil
+
+  /// Return this pool's ActivityWorkerSupervisor (for testing/inspection).
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// pool supervisor count   // => 0
+  /// ```
+  supervisor -> ActivityWorkerSupervisor => self.supervisor
 
   /// Set the maximum number of concurrent activity workers.
   ///
@@ -116,7 +135,7 @@ typed Actor subclass: ActivityWorkerPool
         self.activeCount := self.activeCount - 1
         // Worker survives a caught activity crash (safe_dispatch returns it
         // as a normal reply) — stop it so it doesn't leak as a permanent
-        // child of the shared ActivityWorkerSupervisor singleton. A
+        // child of this pool's ActivityWorkerSupervisor. A
         // timeout-killed worker is already dead; stop then just no-ops/errors.
         [worker stop] on: Error do: [:e2 | nil]
         firedByTimeout ifTrue: [
@@ -127,9 +146,9 @@ typed Actor subclass: ActivityWorkerPool
     self.activeCount := self.activeCount - 1
     timer cancel
     // One-shot worker: stop it now rather than leaking it as a permanent
-    // child of the shared ActivityWorkerSupervisor singleton (BT-1495 pool
-    // docs). Left running, these accumulate across every activity dispatch
-    // in the suite and can starve later tests that also need the supervisor.
+    // child of this pool's ActivityWorkerSupervisor (BT-1495 pool docs).
+    // Left running, these accumulate across every activity dispatch and can
+    // starve later dispatches through the same supervisor.
     [worker stop] on: Error do: [:e2 | nil]
     ActivityOutcome completed: outcome
 
@@ -141,8 +160,8 @@ typed Actor subclass: ActivityWorkerPool
       t :: Integer -> Timer after: t do: [worker kill]
     ]
 
-  /// Clean up the pool. Does NOT stop the shared DynamicSupervisor
-  /// singleton since other pools may still reference it.
+  /// Clean up the pool. The pool's own supervisor is stopped when the
+  /// pool stops (see `terminate:`).
   ///
   ///   pool destroy
   destroy -> Nil => nil
