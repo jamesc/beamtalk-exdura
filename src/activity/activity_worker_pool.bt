@@ -7,8 +7,10 @@
 ///
 /// Each pool spawns its own ActivityWorkerSupervisor (ADR 0135), so one
 /// pool's supervisor giving up never affects another pool. The pool stops
-/// its supervisor when it terminates. Pass `#supervisorArgs` to override
-/// the supervisor's restart limits.
+/// its supervisor when it terminates, and an `onExit:` watcher stops it if
+/// the pool dies without running `terminate:` (a `kill` exit), so a dead
+/// pool never leaks its worker tree (BT-3997). Pass `#supervisorArgs` to
+/// override the supervisor's restart limits.
 ///
 /// The pool exposes a synchronous executeActivity: interface that spawns
 /// a supervised worker, executes the activity, and returns a result
@@ -30,12 +32,22 @@ typed Actor subclass: ActivityWorkerPool
   state: supervisor :: ActivityWorkerSupervisor
 
   /// Initialize the pool by spawning its own DynamicSupervisor.
+  ///
+  /// The supervisor is spawned unlinked (ADR 0135), and `terminate:` does
+  /// not run when the pool is killed, so a watcher process monitors the
+  /// pool and stops the supervisor (and its workers) when the pool exits
+  /// for any reason. The watch is one-way: a supervisor that gives up does
+  /// not take the pool down, as a link would (the pool traps exits, so a
+  /// linked non-normal exit stops it).
   initialize -> Nil =>
-    self.supervisor := ActivityWorkerSupervisor spawnWith: self.supervisorArgs
+    sup := ActivityWorkerSupervisor spawnWith: self.supervisorArgs
+    self.supervisor := sup
+    self onExit: [:_reason | [sup stop] on: Error do: [:e | nil]]
     nil
 
-  /// Stop this pool's supervisor (and its workers) with the pool. The
-  /// supervisor is spawned unlinked, so nothing else would stop it.
+  /// Stop this pool's supervisor (and its workers) with the pool, before
+  /// the pool exits. The `onExit:` watcher set up in `initialize` covers
+  /// exits that skip this method.
   terminate: _reason :: Object -> Nil =>
     [self.supervisor stop] on: Error do: [:e | nil]
     nil
