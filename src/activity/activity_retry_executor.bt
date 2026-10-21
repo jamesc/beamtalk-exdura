@@ -10,7 +10,7 @@
 ///   eventStore: store workflowId: "wf-1"
 ///   retryPolicy: (RetryPolicy new: #{#maximumAttempts => 3})
 /// ```
-Object subclass: ActivityRetryExecutor
+typed Object subclass: ActivityRetryExecutor
 
   /// Execute an activity with retry policy, recording events.
   class execute: activityClass :: Activity class selector: selector :: Symbol args: args :: List eventStore: eventStore :: EventStore workflowId: workflowId :: String retryPolicy: rp :: RetryPolicy -> Object =>
@@ -86,11 +86,13 @@ Object subclass: ActivityRetryExecutor
     delay := (config initialInterval * (config backoffCoefficient raisedTo: attempt - 1)) ceiling
     config maximumInterval ifNil: [
       delay
-    ] ifNotNil: [:maxInterval | delay min: maxInterval]
+    ] ifNotNil: [:maxInterval |
+      (delay < maxInterval) ifTrue: [delay] ifFalse: [maxInterval]
+    ]
 
   /// Record an ActivityFailed event for `config`'s workflow and raise the
   /// error message.
-  class recordFailedAndRaise: config :: ActivityRetryConfig payload: payload :: Dictionary(Symbol, JsonValue) =>
+  class recordFailedAndRaise: config :: ActivityRetryConfig payload: payload :: Dictionary(Symbol, JsonValue) -> Never =>
     failedEvent := ExduraEvent
       new: #{
         #eventType => #ActivityFailed,

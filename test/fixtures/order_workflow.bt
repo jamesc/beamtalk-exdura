@@ -11,7 +11,7 @@
 Workflow subclass: OrderWorkflow
 
   /// Register query handlers for order status and full order info.
-  class registerQueries: ctx =>
+  class registerQueries: ctx :: WorkflowContext -> Nil =>
     ctx setState: #status to: "pending";
       setState: #orderId to: "";
       onQuery: "getStatus" do: [:snap | snap status]
@@ -20,7 +20,7 @@ Workflow subclass: OrderWorkflow
     ]
 
   /// Process an order: set status through stages with activities between.
-  class run: orderId ctx: ctx =>
+  class run: orderId :: String ctx: ctx :: WorkflowContext -> Dictionary =>
     ctx setState: #orderId to: orderId; setState: #status to: "processing"
     ctx
       runActivity: TestActivities

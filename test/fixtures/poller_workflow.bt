@@ -7,7 +7,7 @@
 ///   // Workflow completes with "done"
 Workflow subclass: PollerWorkflow
 
-  class run: cursor ctx: ctx -> String =>
+  class run: cursor :: String ctx: ctx :: WorkflowContext -> String =>
     result := ctx
       runActivity: BatchActivities
       method: #fetchBatch:

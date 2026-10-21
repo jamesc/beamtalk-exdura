@@ -9,9 +9,10 @@
 /// ```
 Workflow subclass: SingleChildParent
 
-  class run: value ctx: ctx -> Integer =>
+  class run: value :: Integer ctx: ctx :: WorkflowContext -> Integer =>
     handle := ctx
       startChildWorkflow: ChildDoubler
       method: #run:
       with: #(value)
-    handle result
+    doubled :: Integer := handle result
+    doubled

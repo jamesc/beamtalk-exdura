@@ -15,7 +15,7 @@ Activity subclass: NonRetryableActivity
   /// ```beamtalk
   /// NonRetryableActivity doWork: #(#{#input => "bad"})
   /// ```
-  class doWork: args :: List =>
+  class doWork: args :: List -> Never =>
     dict := args at: 1
     input := dict at: #input
     NonRetryableError signal: "Invalid input: {input}"

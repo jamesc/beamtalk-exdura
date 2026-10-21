@@ -151,7 +151,7 @@ typed Actor subclass: WorkflowRunner
   ///
   /// `performLocally:withArguments:` is a reflective dispatch (selector
   /// passed as a Symbol), so its return type is inherently Dynamic — this
-  /// wrapper is the one place that's true, isolated from `go`.
+  /// wrapper is the one place that's true, isolated from `go` (BT-4044).
   @expect type
   runWorkflow: ctx :: WorkflowContext -> Object =>
     self.workflow performLocally: #run:ctx: withArguments: #(self.input, ctx)

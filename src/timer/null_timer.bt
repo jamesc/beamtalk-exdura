@@ -11,7 +11,7 @@
 /// token cancel      // => false
 /// token isActive    // => true
 /// ```
-Value subclass: NullTimer
+typed Value subclass: NullTimer
 
   cancel -> Boolean => false
 

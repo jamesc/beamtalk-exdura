@@ -15,9 +15,9 @@
 /// worker initWith: MyAct selector: #go: args: #(1)
 /// sup count   // => 1
 /// ```
-DynamicSupervisor subclass: ActivityWorkerSupervisor
+typed DynamicSupervisor subclass: ActivityWorkerSupervisor
 
-  childClass => ActivityWorker
+  childClass -> Class => ActivityWorker
 
   /// Restarts allowed within `restartWindow` before this pool's
   /// supervisor gives up. Start arg `#maxRestarts`, default 10.

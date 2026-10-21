@@ -11,7 +11,7 @@ Activity subclass: OrderActivities
   /// OrderActivities reserveInventory: #(#{#itemId => "SKU-42", #amount => 2999})
   /// // => #{#status => "reserved", #itemId => "SKU-42"}
   /// ```
-  class reserveInventory: args :: List =>
+  class reserveInventory: args :: List -> Dictionary =>
     order := args at: 1
     #{#status => "reserved", #itemId => (order at: #itemId)}
 
@@ -22,6 +22,6 @@ Activity subclass: OrderActivities
   /// OrderActivities chargePayment: #(#{#itemId => "SKU-42", #amount => 2999})
   /// // => #{#status => "charged", #amount => 2999}
   /// ```
-  class chargePayment: args :: List =>
+  class chargePayment: args :: List -> Dictionary =>
     order := args at: 1
     #{#status => "charged", #amount => (order at: #amount)}

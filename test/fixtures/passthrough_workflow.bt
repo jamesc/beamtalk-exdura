@@ -9,4 +9,4 @@
 Workflow subclass: PassthroughWorkflow
 
   /// Return input unchanged.
-  class run: input ctx: _ctx => input
+  class run: input :: Object ctx: _ctx :: WorkflowContext -> Object => input

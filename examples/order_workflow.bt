@@ -22,7 +22,7 @@
 /// ```
 Workflow subclass: OrderWorkflow
 
-  class run: order ctx: ctx =>
+  class run: order :: Dictionary ctx: ctx :: WorkflowContext -> Dictionary =>
     inventory := ctx
       runActivity: OrderActivities
       method: #reserveInventory:
