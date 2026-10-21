@@ -216,3 +216,31 @@ TestCase subclass: WorkflowEngineTest
     self assert: (events at: 1) eventType equals: #WorkflowFailed
     updated := self.store getExecution: "wf-fail-1"
     self assert: updated status equals: #failed
+
+  testFailWorkflowKeepsClosedStatus =>
+    exec := WorkflowExecution
+      new: #{
+        #workflowId => "wf-fail-2",
+        #runId => "run-1",
+        #workflowType => "TestWorkflow",
+        #taskQueue => "default",
+        #status => #cancelled,
+        #startedAt => 1710000000
+      }
+    self.store createExecution: exec
+    self.engine failWorkflow: "wf-fail-2" reason: "late raise"
+    self assert: (self.store readEvents: "wf-fail-2" fromSeq: 1) size equals: 0
+    self assert: (self.store getExecution: "wf-fail-2") status equals: #cancelled
+
+  /// A workflow body that raises is recorded as failed, not left running
+  /// behind a crashed runner (BT-3961, ADR 0134).
+  testRaisingWorkflowIsRecordedAsFailed =>
+    self.engine
+      startWorkflow: FailingWorkflow
+      id: "wf-raise-1"
+      args: #("workflow boom")
+    exec := self awaitWorkflow: "wf-raise-1" timeout: 5000
+    self assert: exec status equals: #failed
+    self assert: exec result equals: "workflow boom"
+    events := self.store readEvents: "wf-raise-1" fromSeq: 1
+    self assert: (events last) eventType equals: #WorkflowFailed
