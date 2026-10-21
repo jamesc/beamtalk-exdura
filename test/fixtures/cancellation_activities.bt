@@ -17,7 +17,7 @@ Activity subclass: CancellationActivities
   /// CancellationActivities longTask: #("data")
   /// // => #{#status => "completed", #data => "data"}
   /// ```
-  class longTask: args :: List =>
+  class longTask: args :: List -> Dictionary =>
     data := args at: 1
     Timer sleep: 5000
     #{#status => "completed", #data => data}
@@ -29,7 +29,7 @@ Activity subclass: CancellationActivities
   /// CancellationActivities quickTask: #("data")
   /// // => #{#status => "done", #data => "data"}
   /// ```
-  class quickTask: args :: List =>
+  class quickTask: args :: List -> Dictionary =>
     data := args at: 1
     #{#status => "done", #data => data}
 
@@ -40,6 +40,6 @@ Activity subclass: CancellationActivities
   /// CancellationActivities compensate: #("reservation-123")
   /// // => #{#compensated => true, #ref => "reservation-123"}
   /// ```
-  class compensate: args :: List =>
+  class compensate: args :: List -> Dictionary =>
     ref := args at: 1
     #{#compensated => true, #ref => ref}

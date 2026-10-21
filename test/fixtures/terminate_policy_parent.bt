@@ -9,7 +9,7 @@
 /// ```
 Workflow subclass: TerminatePolicyParent
 
-  class run: value ctx: ctx =>
+  class run: value :: Integer ctx: ctx :: WorkflowContext -> String =>
     _handle := ctx
       startChildWorkflow: ChildDoubler
       method: #run:

@@ -11,7 +11,7 @@
 /// ```
 Object subclass: VersionedWorkflowV1
 
-  class run: _args ctx: ctx -> String =>
+  class run: _args ctx: ctx :: WorkflowContext -> String =>
     v := ctx
       version: "payment-flow"
       defaultVersion: 1

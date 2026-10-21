@@ -70,6 +70,19 @@ Type annotations use `::` (double colon): `field: x :: Integer = 0`,
 `add: n :: Integer -> Integer => ...`. A `typed` class
 (`typed Value subclass: Point`) asks the checker to warn on missing annotations.
 
+**Every class is `typed`; one-shot lifecycle slots are `late`.** Annotate
+every slot, parameter and return type, and keep builds free of type
+warnings. A slot acquired exactly once by a lifecycle step (opening a
+subprocess, starting a server, attaching a collaborator) is
+`late state: proc :: Subprocess`, not `proc :: Subprocess | Nil = nil`. Where
+it may still be unassigned (`terminate:`, `handleInfo:`, shutdown paths),
+guard it with `(self hasField: #proc) ifTrue: [...]` and release it with
+`clearField:`. Keep `T | Nil` only when nil is a real state: an optional
+value, a slot that empties and refills while the actor runs, or one
+re-resolved by name so a restarted dependency is never held stale. Use
+`@expect type` only for a genuine Beamtalk limitation, with a comment
+naming the issue that tracks it.
+
 ## Class Kinds
 
 The data keyword states the mutability contract, and using the wrong one is a
@@ -159,7 +172,7 @@ Useful `evaluate` expressions: `Beamtalk help: Counter` (class docs),
 - State: `state: count :: Integer = 0`
 - Parameters: `createExecution: execution :: WorkflowExecution =>`
 - Return types: `count -> Integer => self.count`
-- Nullable fields with `= nil` may omit the type if genuinely untyped
+- Nullable fields: `state: x :: T | Nil = nil` (see the `late` rule above for lifecycle slots)
 - **Always add doc comments** (`///`) on all classes and meaningful methods, with examples
 - Class-level: describe purpose, responsibility, and key invariants
 - Method-level: describe behavior, params, return value, and include a usage example

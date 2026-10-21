@@ -14,7 +14,7 @@ Workflow subclass: CancellableParentWorkflow
   /// The child is started with default (#terminate) policy. After starting
   /// the child, the parent enters a long activity — this provides the
   /// window for cancellation during testing.
-  class run: value ctx: ctx =>
+  class run: value :: Object ctx: ctx :: WorkflowContext -> Dictionary =>
     handle := ctx
       startChildWorkflow: SlowWorkflow
       method: #run:

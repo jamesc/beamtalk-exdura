@@ -11,12 +11,13 @@
 Workflow subclass: TwoActivityWorkflow
 
   /// Run two activities: double the input, then add the result to itself.
-  class run: input ctx: ctx -> Integer =>
+  class run: input :: Integer ctx: ctx :: WorkflowContext -> Integer =>
     doubled := ctx
       runActivity: TestActivities
       method: #doubleIt:
       with: #(input)
-    ctx
+    sum :: Integer := ctx
       runActivity: TestActivities
       method: #addNumbers:
       with: #(#{#a => doubled, #b => doubled})
+    sum

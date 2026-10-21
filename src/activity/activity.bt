@@ -26,4 +26,4 @@
 /// ```beamtalk
 /// ctx runActivity: OrderActivities method: #reserveInventory: with: args
 /// ```
-Object subclass: Activity
+typed Object subclass: Activity

@@ -14,4 +14,4 @@
 ///   e signal   // Re-raise cancellation
 /// ]
 /// ```
-Error subclass: CancellationError
+typed Error subclass: CancellationError

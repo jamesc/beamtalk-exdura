@@ -29,4 +29,4 @@ typed Value subclass: ActivityRetryConfig
   field: initialInterval :: Integer = 1000
   field: backoffCoefficient :: Float = 2.0
   field: maximumInterval :: Integer | Nil = nil
-  field: nonRetryableErrors :: List = #()
+  field: nonRetryableErrors :: List(String) = #()

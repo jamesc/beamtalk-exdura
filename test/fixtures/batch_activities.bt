@@ -17,7 +17,7 @@ Activity subclass: BatchActivities
   /// ```beamtalk
   /// BatchActivities fetchBatch: #("batch-1")
   /// ```
-  class fetchBatch: args :: List =>
+  class fetchBatch: args :: List -> Dictionary =>
     cursor := args at: 1
     cursor =:= "last" ifTrue: [
       #{#nextCursor => nil, #processed => 5}
