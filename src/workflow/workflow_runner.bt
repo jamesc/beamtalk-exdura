@@ -104,15 +104,29 @@ typed Actor subclass: WorkflowRunner
     // Run the workflow in the runner's process (not the class object's).
     // CancellationError exits early via ^nil.
     // ContinueAsNewRequest is a Value returned by ctx continueAsNew:.
-    result := [self runWorkflow: ctx]
-      on: CancellationError
-      do: [:_e |
-        // Engine already recorded WorkflowCancelled and updated status.
-        self.engine isAlive
-          ifTrue: [
-            self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
-            self.engine clearCancellation: self.workflowId
-          ]
+    // Any other error (an activity that exhausted its retries, a signal
+    // wait that timed out, a raise in the workflow body) fails the
+    // workflow: `go` is a cast, so an unhandled error would crash this
+    // runner (ADR 0134) and leave the execution `#running` forever.
+    result := [
+      [self runWorkflow: ctx]
+        on: CancellationError
+        do: [:_e |
+          // Engine already recorded WorkflowCancelled and updated status.
+          self.engine isAlive
+            ifTrue: [
+              self.engine captureSnapshot: ctx workflowState forWorkflow: self.workflowId
+              self.engine clearCancellation: self.workflowId
+            ]
+          (AtomicCounter named: self.doneSemName) increment
+          ^nil
+        ]
+    ]
+      on: Error
+      do: [:e |
+        self.engine isAlive ifTrue: [
+          self.engine failWorkflow: self.workflowId reason: e message
+        ]
         (AtomicCounter named: self.doneSemName) increment
         ^nil
       ]

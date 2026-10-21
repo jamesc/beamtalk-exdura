@@ -485,6 +485,10 @@ typed Actor subclass: WorkflowEngine
 
   /// Record a WorkflowFailed event and update execution status.
   ///
+  /// Only a running workflow is failed: one already closed (e.g. cancelled
+  /// while an activity was in flight, whose runner then raises) keeps its
+  /// status.
+  ///
   /// If this workflow has a parent, records a ChildWorkflowFailed event
   /// in the parent's history. Enforces parent-close policies on any child
   /// workflows of this workflow.
@@ -497,6 +501,9 @@ typed Actor subclass: WorkflowEngine
   /// ```
   failWorkflow: workflowId :: String reason: reason :: String -> Object =>
     Tracing setContext: #{#workflowId => workflowId}
+    // Guard: only fail running workflows
+    current := self eventStore getExecution: workflowId
+    (current isNil or: [(current status =:= #running) == false]) ifTrue: [^nil]
     now := Time nowMs div: 1000
     failedEvent := ExduraEvent
       new: #{

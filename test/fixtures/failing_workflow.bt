@@ -1,0 +1,14 @@
+/// Workflow whose body raises (BT-3961).
+///
+/// Used by WorkflowEngineTest to verify that a raising workflow is
+/// recorded as failed instead of crashing its runner.
+///
+/// ## Examples
+/// ```beamtalk
+/// engine startWorkflow: FailingWorkflow id: "wf-1" args: #("boom")
+/// // Execution status becomes #failed with result "boom"
+/// ```
+Workflow subclass: FailingWorkflow
+
+  /// Raise an Error carrying the input as its message.
+  class run: input ctx: _ctx -> Object => Error signal: input
