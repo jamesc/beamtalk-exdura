@@ -14,8 +14,9 @@
 /// result := worker execute   // => 10
 /// ```
 typed Actor subclass: ActivityWorker
-  state: activityClass :: Activity class | Nil = nil
-  state: selector :: Symbol | Nil = nil
+  // Assigned once by `initWith:selector:args:`, before `execute`.
+  late state: activityClass :: Activity class
+  late state: selector :: Symbol
   state: args :: List = #()
 
   /// Initialize the worker with activity details.
@@ -25,6 +26,9 @@ typed Actor subclass: ActivityWorker
   /// worker initWith: TestActivities selector: #doubleIt: args: #(5)
   /// ```
   initWith: anActivityClass :: Activity class selector: aSelector :: Symbol args: someArgs :: List -> Nil =>
+    // A metaclass-typed slot rejects a value of its own declared type
+    // ("declared as Activity class, got Activity class"): BT-4043.
+    @expect type
     self.activityClass := anActivityClass
     self.selector := aSelector
     self.args := someArgs
@@ -39,5 +43,9 @@ typed Actor subclass: ActivityWorker
   /// ```beamtalk
   /// worker execute   // => 10
   /// ```
+  ///
+  /// `perform:withArguments:` is a reflective dispatch that declares no
+  /// return type, so its result reads as Dynamic (BT-4044).
+  @expect type
   execute -> Object =>
     self.activityClass perform: self.selector withArguments: #(self.args)

@@ -10,7 +10,7 @@
 /// ```
 Object subclass: MultiVersionWorkflow
 
-  class run: _args ctx: ctx -> String =>
+  class run: _args ctx: ctx :: WorkflowContext -> String =>
     payV := ctx
       version: "payment-flow"
       defaultVersion: 1

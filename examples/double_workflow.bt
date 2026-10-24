@@ -17,12 +17,13 @@
 /// ```
 Workflow subclass: DoubleWorkflow
 
-  class run: value ctx: ctx =>
+  class run: value :: Integer ctx: ctx :: WorkflowContext -> Integer =>
     doubled := ctx
       runActivity: MathActivities
       method: #doubleIt:
       with: #(value)
-    ctx
+    sum :: Integer := ctx
       runActivity: MathActivities
       method: #addNumbers:
       with: #(#{#a => doubled, #b => doubled})
+    sum

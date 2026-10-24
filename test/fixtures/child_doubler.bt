@@ -9,8 +9,9 @@
 /// ```
 Workflow subclass: ChildDoubler
 
-  class run: value ctx: ctx -> Integer =>
-    ctx
+  class run: value :: Integer ctx: ctx :: WorkflowContext -> Integer =>
+    doubled :: Integer := ctx
       runActivity: TestActivities
       method: #doubleIt:
       with: #(value)
+    doubled

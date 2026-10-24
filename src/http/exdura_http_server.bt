@@ -47,14 +47,17 @@ typed Actor subclass: ExduraHttpServer
   late state: httpServer :: HTTPServer
   state: port :: Integer | Nil = nil
   state: workflowClasses :: List(Workflow class) | Nil = nil
-  state: engine :: WorkflowEngine | Nil = nil
-  state: store :: EventStore | Nil = nil
+  // Acquired once, in `initialize` (injected via `spawnWith:` or resolved
+  // by name), and current for this instance's whole life: under
+  // `ExduraSupervisor`'s `rest_for_one` this server is the last child, so
+  // a restart of either dependency restarts it too and re-resolves both.
+  late state: engine :: WorkflowEngine
+  late state: store :: EventStore
   // Plain (non-`late`) guard for `startListening`'s idempotent rebind check
-  // below — deliberately NOT `hasField: #httpServer` there: that check
-  // needs to run from *inside* `initialize`'s own synchronous execution
-  // (see `startListening`'s doc), and empirically, checking a `late`
-  // field's presence that early deadlocks the spawn itself. An ordinary
-  // Boolean field has no such restriction.
+  // below. It was introduced because `hasField: #httpServer` from inside
+  // `initialize` once deadlocked the spawn; that no longer happens
+  // (`initialize` itself now tests `hasField: #engine`/`#store`), so this
+  // could become a `hasField:` test.
   state: listening :: Boolean = false
 
   /// A crashed HTTP listener must come back up, not silently disappear.
@@ -218,10 +221,12 @@ typed Actor subclass: ExduraHttpServer
   /// — matching `WorkflowEngine`/`TimerManager`'s own collaborator
   /// resolution — then delegates to `startListening` for the rest.
   initialize -> Nil =>
-    self.engine := self.engine ifNil: [
-      (WorkflowEngine named: #workflowEngine) unwrap
+    (self hasField: #engine) ifFalse: [
+      self.engine := (WorkflowEngine named: #workflowEngine) unwrap
     ]
-    self.store := self.store ifNil: [(EventStore named: #eventStore) unwrap]
+    (self hasField: #store) ifFalse: [
+      self.store := (EventStore named: #eventStore) unwrap
+    ]
     self startListening
 
   /// Build the router and start the real HTTP listener — or, if this
@@ -281,19 +286,11 @@ typed Actor subclass: ExduraHttpServer
   /// request actually arrives, long after this method has returned and the
   /// class process is free again.
   startListening -> Nil =>
-    // Narrows the `T | Nil` fields to definite locals — `initialize`
-    // always resolves `engine`/`store` before this runs (whether called
-    // from `initialize` itself or, later, explicitly by `ExduraWorker
-    // start:`), so the `nil` arm is unreachable in practice; typed exactly
-    // like `WorkflowEngine>>eventStore`/`activityPool`.
-    store :: EventStore := self.store match: [
-      nil -> self error: "ExduraHttpServer startListening called before initialize resolved store";
-      s -> s
-    ]
-    engine :: WorkflowEngine := self.engine match: [
-      nil -> self error: "ExduraHttpServer startListening called before initialize resolved engine";
-      e -> e
-    ]
+    // `initialize` always assigns the `late` `engine`/`store` before this
+    // runs (whether called from `initialize` itself or, later, explicitly
+    // by `ExduraWorker start:`).
+    store := self.store
+    engine := self.engine
 
     resolvedFromDurableConfig := self.port isNil
     resolvedFromDurableConfig

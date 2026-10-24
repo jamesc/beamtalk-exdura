@@ -11,4 +11,5 @@
 Workflow subclass: FailingWorkflow
 
   /// Raise an Error carrying the input as its message.
-  class run: input ctx: _ctx -> Object => Error signal: input
+  class run: input :: String ctx: _ctx :: WorkflowContext -> Object =>
+    Error signal: input

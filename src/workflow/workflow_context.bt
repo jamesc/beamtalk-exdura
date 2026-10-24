@@ -208,7 +208,7 @@ typed Actor subclass: WorkflowContext
   /// ```beamtalk
   /// ctx onSignal: "approve" do: [:payload :vars | vars at: #approved put: true]
   /// ```
-  onSignal: name :: String do: block :: Block -> Nil =>
+  onSignal: name :: String do: block :: Block(Object, Dictionary(Symbol, Object), Dictionary(Symbol, Object)) -> Nil =>
     self.signalHandlers := self.signalHandlers at: name put: block
     nil
 
@@ -218,7 +218,7 @@ typed Actor subclass: WorkflowContext
   /// ```beamtalk
   /// ctx onQuery: "getStatus" do: [:snap | snap status]
   /// ```
-  onQuery: queryName :: String do: handlerBlock :: Block -> Nil =>
+  onQuery: queryName :: String do: handlerBlock :: Block(ActorSnapshot, Object) -> Nil =>
     self.queryHandlers := self.queryHandlers at: queryName put: handlerBlock
     nil
 
@@ -569,7 +569,7 @@ typed Actor subclass: WorkflowContext
   /// ```beamtalk
   /// ctx waitForCondition: [:vars | vars at: #approved] timeout: 86400000
   /// ```
-  waitForCondition: block :: Block timeout: ms :: Integer -> Nil =>
+  waitForCondition: block :: Block(Dictionary(Symbol, Object), Object) timeout: ms :: Integer -> Nil =>
     deadline := (Time nowMs) + ms
     (block value: self.workflowVars) ifTrue: [^nil]
     [true]

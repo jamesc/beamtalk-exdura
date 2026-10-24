@@ -7,7 +7,7 @@ Activity subclass: MathActivities
   /// ```beamtalk
   /// MathActivities doubleIt: #(5)   // => 10
   /// ```
-  class doubleIt: args =>
+  class doubleIt: args :: List -> Integer =>
     val := args at: 1
     val * 2
 
@@ -17,6 +17,6 @@ Activity subclass: MathActivities
   /// ```beamtalk
   /// MathActivities addNumbers: #(#{#a => 3, #b => 4})   // => 7
   /// ```
-  class addNumbers: args =>
+  class addNumbers: args :: List -> Integer =>
     dict := args at: 1
     (dict at: #a) + (dict at: #b)

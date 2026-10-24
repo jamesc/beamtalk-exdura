@@ -27,7 +27,7 @@ Activity subclass: PoolTestActivities
   /// ```beamtalk
   /// PoolTestActivities crashIt: #("boom")   // raises user_error
   /// ```
-  class crashIt: args :: List =>
+  class crashIt: args :: List -> Never =>
     msg := args at: 1
     self error: msg
 

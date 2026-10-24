@@ -9,7 +9,7 @@
 /// ```
 Workflow subclass: BatchProcessor
 
-  class run: items ctx: ctx -> List =>
+  class run: items :: List(Integer) ctx: ctx :: WorkflowContext -> List =>
     handles := items
       collect: [:item |
         ctx
