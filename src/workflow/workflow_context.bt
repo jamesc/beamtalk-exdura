@@ -448,7 +448,7 @@ typed Actor subclass: WorkflowContext
             self.replayCursor := secondIdx + skipCount
             self.deliveredSignals := self.deliveredSignals ++ replaySignals
             self.engine captureSnapshot: self.workflowState forWorkflow: self.workflowId
-            childId :: String := (startedEvent payload at: #childWorkflowId) match: [
+            childId := (startedEvent payload at: #childWorkflowId) match: [
               c :: String -> c;
               _ -> self error: "childWorkflowId payload is not a String"
             ]

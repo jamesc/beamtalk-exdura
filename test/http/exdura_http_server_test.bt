@@ -62,7 +62,7 @@ TestCase subclass: ExduraHttpServerTest
           "args" => #("hello")
         })) unwrap
     self assert: resp status equals: 202
-    body := (Json parse: resp body) unwrap
+    body :: Dictionary := (Json parse: resp body) unwrap
     self assert: (body at: "workflowId") equals: "http-start-1"
 
     exec := self awaitStatus: "http-start-1" timeout: 5000
@@ -92,7 +92,7 @@ TestCase subclass: ExduraHttpServerTest
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-get-1") unwrap
     self assert: resp status equals: 200
-    body := (Json parse: resp body) unwrap
+    body :: Dictionary := (Json parse: resp body) unwrap
     self assert: (body at: "workflowId") equals: "http-get-1"
     self assert: (body at: "status") equals: "completed"
 
@@ -110,8 +110,8 @@ TestCase subclass: ExduraHttpServerTest
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows?status=completed") unwrap
     self assert: resp status equals: 200
-    body := (Json parse: resp body) unwrap
-    workflows := body at: "workflows"
+    body :: Dictionary := (Json parse: resp body) unwrap
+    workflows :: List(Dictionary) := body at: "workflows"
     ids := workflows collect: [:w | w at: "workflowId"]
     self assert: (ids includes: "http-list-1")
 
@@ -125,8 +125,8 @@ TestCase subclass: ExduraHttpServerTest
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-history-1/history") unwrap
     self assert: resp status equals: 200
-    body := (Json parse: resp body) unwrap
-    events := body at: "events"
+    body :: Dictionary := (Json parse: resp body) unwrap
+    events :: List := body at: "events"
     self assert: events isEmpty not
 
   testGetHistoryUnknownWorkflowReturns404 =>
@@ -143,7 +143,7 @@ TestCase subclass: ExduraHttpServerTest
 
     resp := (HTTPClient get: self.baseUrl ++ "/api/v1/workflows/http-query-1/query/getStatus") unwrap
     self assert: resp status equals: 200
-    body := (Json parse: resp body) unwrap
+    body :: Dictionary := (Json parse: resp body) unwrap
     self assert: (body at: "result") equals: "completed"
 
   testQueryUnknownWorkflowReturns404 =>

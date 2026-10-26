@@ -30,9 +30,10 @@ TestCase subclass: WorkflowEngineTest
 
   /// Wait for a workflow to reach a terminal status (completed/failed/cancelled).
   /// Polls every 50ms up to the given timeout in milliseconds.
-  awaitWorkflow: workflowId timeout: timeoutMs :: Integer =>
+  awaitWorkflow: workflowId timeout: timeoutMs :: Integer -> WorkflowExecution =>
     deadline := Time nowMs + timeoutMs
-    [true]
+    found :: WorkflowExecution | Nil := nil
+    [found isNil]
       whileTrue: [
         exec := self.store getExecution: workflowId
         (exec isNil not
@@ -40,12 +41,19 @@ TestCase subclass: WorkflowEngineTest
             exec status =:= #completed or: [
               exec status =:= #failed or: [exec status =:= #cancelled]
             ]
-          ]) ifTrue: [^exec]
-        Time nowMs >= deadline ifTrue: [
-          self error: "Timed out waiting for {workflowId}"
-        ]
-        Timer sleep: 50
+          ]) ifTrue: [found := exec]
+        found isNil
+          ifTrue: [
+            Time nowMs >= deadline ifTrue: [
+              self error: "Timed out waiting for {workflowId}"
+            ]
+            Timer sleep: 50
+          ]
       ]
+    found match: [
+      e :: WorkflowExecution -> e;
+      _ -> self error: "unreachable"
+    ]
 
   // === Activity base class ===
   testActivityIsObjectSubclass => self assert: (Activity inheritsFrom: Object)

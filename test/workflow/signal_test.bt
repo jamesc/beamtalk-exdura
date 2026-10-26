@@ -71,8 +71,9 @@ TestCase subclass: SignalTest
     ctx
       onSignal: "approve"
       do: [:payload :vars |
+        payloadDict :: Dictionary := payload
         updated := vars at: #approved put: true
-        updated at: #approver put: (payload at: #name)
+        updated at: #approver put: (payloadDict at: #name)
       ]
 
     // Buffer a signal

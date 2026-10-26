@@ -8,7 +8,7 @@
 Workflow subclass: PollerWorkflow
 
   class run: cursor :: String ctx: ctx :: WorkflowContext -> String =>
-    result := ctx
+    result :: Dictionary := ctx
       runActivity: BatchActivities
       method: #fetchBatch:
       with: #(cursor)

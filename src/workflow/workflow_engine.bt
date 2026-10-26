@@ -455,9 +455,7 @@ typed Actor subclass: WorkflowEngine
         self eventStore appendEvents: parentId events: #(childCompletedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
-      #()
-    ]
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
@@ -530,9 +528,7 @@ typed Actor subclass: WorkflowEngine
         self eventStore appendEvents: parentId events: #(childFailedEvent)
       ]
     // Inline: enforce parent-close policies on our children
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
-      #()
-    ]
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self eventStore
     policies := self.parentClosePolicy
     toTerminate := children
@@ -903,9 +899,7 @@ typed Actor subclass: WorkflowEngine
     self.cancelledWorkflows := self.cancelledWorkflows at: workflowId put: true
 
     // Cancel child workflows per parent-close policy
-    children :: List(String) := self.childWorkflows at: workflowId ifAbsent: [
-      #()
-    ]
+    children := self.childWorkflows at: workflowId ifAbsent: [#()]
     store := self eventStore
     policies := self.parentClosePolicy
     children

@@ -26,9 +26,6 @@ typed Actor subclass: ActivityWorker
   /// worker initWith: TestActivities selector: #doubleIt: args: #(5)
   /// ```
   initWith: anActivityClass :: Activity class selector: aSelector :: Symbol args: someArgs :: List -> Nil =>
-    // A metaclass-typed slot rejects a value of its own declared type
-    // ("declared as Activity class, got Activity class"): BT-4043.
-    @expect type
     self.activityClass := anActivityClass
     self.selector := aSelector
     self.args := someArgs
@@ -45,7 +42,6 @@ typed Actor subclass: ActivityWorker
   /// ```
   ///
   /// `perform:withArguments:` is a reflective dispatch that declares no
-  /// return type, so its result reads as Dynamic (BT-4044).
-  @expect type
+  /// return type, so its result reads as Dynamic.
   execute -> Object =>
     self.activityClass perform: self.selector withArguments: #(self.args)

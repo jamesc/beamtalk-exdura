@@ -305,11 +305,11 @@ typed Actor subclass: ExduraHttpServer
         self.workflowClasses := self resolveWorkflowClassNames: (config at: #workflowClasses)
       ]
 
-    port :: Integer := self.port match: [
+    port := self.port match: [
       nil -> self error: "ExduraHttpServer startListening: port not resolved";
       p -> p
     ]
-    workflowClasses :: List(Workflow class) := self.workflowClasses match: [
+    workflowClasses := self.workflowClasses match: [
       nil -> self error: "ExduraHttpServer startListening: workflowClasses not resolved";
       wc -> wc
     ]

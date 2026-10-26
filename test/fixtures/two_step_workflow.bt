@@ -17,7 +17,7 @@ Workflow subclass: TwoStepWorkflow
       d :: Dictionary -> d;
       _ -> #{#input => input}
     ]
-    a := ctx
+    a :: Dictionary := ctx
       runActivity: CountingActivity
       method: #doWork:
       with: #(args)

@@ -14,8 +14,9 @@ Workflow subclass: ApprovalWorkflow
     ctx setVar: #approved to: false;
       setVar: #approver to: nil;
       onSignal: "approve" do: [:payload :vars |
+        payloadDict :: Dictionary := payload
         updated := vars at: #approved put: true
-        updated at: #approver put: (payload at: #approver)
+        updated at: #approver put: (payloadDict at: #approver)
       ]
     // Block until approved or timeout (10 seconds for testing)
     [
