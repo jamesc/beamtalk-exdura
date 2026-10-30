@@ -32,7 +32,7 @@ typed Actor subclass: EventStore
   /// Stops at the first term that does not decode (a truncated tail), keeping
   /// the events parsed before it.
   class parseEtfBinary: binary :: Binary -> List(ExduraEvent) =>
-    totalSize := binary byteSize
+    totalSize := binary size
     offset := 0
     events := #()
     [offset < totalSize]
@@ -205,7 +205,7 @@ typed Actor subclass: EventStore
     readResult := File readBinary: path
     readResult isError ifTrue: [^nil]
     content := readResult unwrap
-    contentSize := content byteSize
+    contentSize := content size
     contentSize =:= 0 ifTrue: [^nil]
     snapshot := StoredSnapshot fromBinary: content
     // Read only events after the snapshot point
@@ -257,7 +257,7 @@ typed Actor subclass: EventStore
     readResult := File readBinary: (self httpConfigFilePath)
     readResult isError ifTrue: [^nil]
     content := readResult unwrap
-    content byteSize =:= 0 ifTrue: [^nil]
+    content size =:= 0 ifTrue: [^nil]
     result :: Dictionary := Binary deserialize: content
     result
 
@@ -342,7 +342,7 @@ typed Actor subclass: EventStore
         readResult isError not
           ifTrue: [
             content := readResult unwrap
-            contentSize := content byteSize
+            contentSize := content size
             contentSize > 0
               ifTrue: [
                 events := EventStore parseEtfBinary: content

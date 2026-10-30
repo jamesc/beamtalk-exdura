@@ -3,7 +3,7 @@
 
 [package]
 name = "exdura"
-version = "0.1.0"
+version = "0.2.0"
 
 [application]
 supervisor = "ExduraSupervisor"
@@ -13,4 +13,4 @@ console = true
 include-compiler = true
 
 [dependencies]
-http = "0.1.10"
+http = "0.2.0"
