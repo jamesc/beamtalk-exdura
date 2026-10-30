@@ -102,7 +102,7 @@ typed Actor subclass: ExduraHttpServer
   /// `{"workflowType": "...", "id": "...", "args": [...]}`.
   class handleStart: req :: HTTPRequest engine: engine :: WorkflowEngine registry: registry :: Dictionary(String, Workflow class) -> HTTPResponse =>
     [
-      data := (Json parse: req body) unwrap
+      data := (self parseJsonBody: req body) unwrap
       workflowType := data at: "workflowType" ifAbsent: [nil]
       workflowId := data at: "id" ifAbsent: [nil]
       (workflowType isNil or: [
@@ -176,7 +176,7 @@ typed Actor subclass: ExduraHttpServer
     [
       payload := req body isEmpty ifTrue: [
         nil
-      ] ifFalse: [(Json parse: req body) unwrap]
+      ] ifFalse: [(self parseJsonBody: req body) unwrap]
       engine
         bufferSignal: workflowId
         name: signalName
@@ -202,6 +202,27 @@ typed Actor subclass: ExduraHttpServer
     ] on: Error do: [:e | self errorResponse: 400 message: e message]
 
   // ── Response helpers ──
+
+  /// Parse a request body (`String | Binary`) as JSON.
+  ///
+  /// `HTTPRequest body` is a String when the bytes are valid UTF-8 and a
+  /// Binary otherwise, while `Json parse:` only accepts a String. Mirrors
+  /// `HTTPResponse bodyAsJson`: String bodies are parsed, non-UTF-8 Binary
+  /// bodies fail with an error (which the route handlers turn into a 400).
+  ///
+  /// ## Examples
+  /// ```beamtalk
+  /// data := (ExduraHttpServer parseJsonBody: req body) unwrap
+  /// ```
+  class parseJsonBody: body :: String | Binary -> Result(JsonValue, Error) =>
+    (body isKindOf: String) ifTrue: [
+      Json parse: body
+    ] ifFalse: [
+      [
+        Error signal: "body is not UTF-8 text"
+      ] on: Error do: [:e | Result error: e]
+    ]
+
   class jsonResponse: status :: Integer body: value :: Object -> HTTPResponse =>
     HTTPResponse
       new: #{

@@ -1,0 +1,14 @@
+/// BUnit tests for `ExduraHttpServer parseJsonBody:`, the `String | Binary`
+/// request-body parser shared by the JSON route handlers.
+TestCase subclass: ParseJsonBodyTest
+
+  testStringBodyParses =>
+    result := ExduraHttpServer parseJsonBody: (Json generate: #{"a" => 1})
+    self assert: result ok
+    parsed :: Dictionary := result unwrap
+    self assert: (parsed at: "a") equals: 1
+
+  testNonUtf8BinaryBodyFails =>
+    bin := Binary fromBytes: #(255, 254, 253, 0, 200)
+    result := ExduraHttpServer parseJsonBody: bin
+    self assert: result isError
