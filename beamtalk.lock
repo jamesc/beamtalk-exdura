@@ -41,13 +41,3 @@ url = "https://github.com/jamesc/beamtalk-mint.git"
 reference = "tag:v0.1.0"
 sha = "0a22305c2d780d6ca056985b1f30ae0d1b278be0"
 
-[[native_package]]
-name = "cowlib"
-version = "2.13.0"
-sha = ""
-
-[[native_package]]
-name = "gun"
-version = "2.1.0"
-sha = ""
-
