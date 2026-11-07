@@ -176,7 +176,7 @@ typed Actor subclass: ExduraHttpServer
     [
       // Read once: the engine stream is consume-once, so a second
       // `req body` would see an empty remainder (BT-4087 backend swap).
-      rawBody := req body.
+      rawBody := req body
       payload := rawBody isEmpty ifTrue: [
         nil
       ] ifFalse: [(self parseJsonBody: rawBody) unwrap]

@@ -27,11 +27,19 @@ sha = "34ebb37c8cd07c0c4dd28093c9519cbb5d912ef7"
 
 [[package]]
 name = "http"
-version = "0.3.1"
+version = "0.3.2"
 registry = "https://github.com/jamesc/beamtalk-registry"
 url = "https://github.com/jamesc/beamtalk-http.git"
-reference = "tag:v0.3.1"
-sha = "fc6ac6c1c979e49b91317a8a925377d125a1ca72"
+reference = "tag:v0.3.2"
+sha = "2f494a45df6f5033f7215acf084ac46889f8b6a6"
+
+[[package]]
+name = "mint"
+version = "0.1.0"
+registry = "https://github.com/jamesc/beamtalk-registry"
+url = "https://github.com/jamesc/beamtalk-mint.git"
+reference = "tag:v0.1.0"
+sha = "0a22305c2d780d6ca056985b1f30ae0d1b278be0"
 
 [[native_package]]
 name = "cowlib"
