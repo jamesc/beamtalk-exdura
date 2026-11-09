@@ -114,9 +114,11 @@ BEAMTALK LANGUAGE & SEMANTICS — enforce these invariants:
 - `^` is an EARLY return only — never on a method's last expression, where the value is
   returned implicitly. Inside a block, `^` exits the ENCLOSING METHOD; flag code that reads
   as if it only exits the block.
-- Assignment inside a block does not propagate to the enclosing scope. Flag
-  `items do: [:x | acc := acc + 1]` accumulator patterns — they leave `acc` unchanged; the
-  correct form is `inject:into:`.
+- Blocks passed to control-flow and collection messages (`do:`, `collect:`,
+  `inject:into:`, `ifTrue:`, `on:do:`, `at:ifAbsent:`, ...) DO write the enclosing method's
+  locals, so `items do: [:x | acc := acc + 1]` is correct — do not flag it. A block that
+  writes a local and is passed to a user-defined method, stored, or returned is a compile
+  error, so it cannot slip through silently.
 - An unrecognised message raises `does_not_understand`, it does not return nil. Flag code
   that assumes a silent failure; `respondsTo:` is the way to check first.
 - License headers: every `.bt`, `.erl` and `.hrl` source file needs
