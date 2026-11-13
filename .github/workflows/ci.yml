@@ -34,11 +34,11 @@ jobs:
         run: beamtalk fmt-check
 
       - name: Lint
-        run: beamtalk lint
+        run: beamtalk lint --warnings-as-errors
         continue-on-error: true
 
       - name: Build
         run: beamtalk build
 
       - name: Test
-        run: beamtalk test
+        run: beamtalk test --warnings-as-errors

@@ -14,3 +14,10 @@ include-compiler = true
 
 [dependencies]
 http = "0.3.4"
+
+[diagnostics]
+definite-assignment = "error"
+unguarded-late-read = "error"
+handleinfo-no-catch-all = "error"
+cascade-drops-update = "error"
+match-arm-block = "error"

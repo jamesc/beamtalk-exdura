@@ -10,7 +10,7 @@ build:
 
 # Run the test suite
 test:
-    beamtalk test
+    beamtalk test --warnings-as-errors
 
 # Check formatting
 fmt:
@@ -22,7 +22,7 @@ fmt-fix:
 
 # Lint source files
 lint:
-    beamtalk lint
+    beamtalk lint --warnings-as-errors
 
 # Remove build artifacts
 clean:
