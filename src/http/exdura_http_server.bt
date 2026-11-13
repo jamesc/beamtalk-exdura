@@ -103,6 +103,9 @@ typed Actor subclass: ExduraHttpServer
   class handleStart: req :: HTTPRequest engine: engine :: WorkflowEngine registry: registry :: Dictionary(String, Workflow class) -> HTTPResponse =>
     [
       data := (self parseJsonBody: req body) unwrap
+      (data isKindOf: Dictionary) ifFalse: [
+        ^self errorResponse: 400 message: "request body must be a JSON object"
+      ]
       workflowType := data at: "workflowType" ifAbsent: [nil]
       workflowId := data at: "id" ifAbsent: [nil]
       (workflowType isNil or: [

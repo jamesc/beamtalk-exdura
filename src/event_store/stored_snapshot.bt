@@ -17,8 +17,12 @@ typed Value subclass: StoredSnapshot
 
   /// Deserialize an ETF-encoded binary into a StoredSnapshot.
   ///
-  /// Casts away the Dynamic return of `Binary deserialize:` at a single
-  /// well-named boundary so callers can work in typed code.
+  /// Checks the Dynamic return of `Binary deserialize:` at a single
+  /// well-named boundary so callers can work in typed code. Signals an
+  /// Error if the binary does not decode to a StoredSnapshot.
   class fromBinary: content :: Binary -> StoredSnapshot =>
-    result :: StoredSnapshot := Binary deserialize: content
+    result := Binary deserialize: content
+    (result isKindOf: StoredSnapshot) ifFalse: [
+      Error signal: "snapshot binary does not contain a StoredSnapshot"
+    ]
     result

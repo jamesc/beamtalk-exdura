@@ -38,16 +38,26 @@ typed Object subclass: ExduraWorker
     ]
 
     // Siblings resolve each other by name (ADR 0079); see ExduraSupervisor.
-    // sup which: is typed -> Result(Object, Error); typing the local asserts
-    // the concrete class so downstream method sends type-check cleanly.
-    engine :: WorkflowEngine := (sup which: WorkflowEngine) valueOrDo: [:e |
+    // sup which: is typed -> Result(Object, Error), and answers `Result ok: nil`
+    // for a class with no running child; an isKindOf: guard checks the concrete
+    // class so downstream method sends type-check cleanly.
+    engine := (sup which: WorkflowEngine) valueOrDo: [:e |
       self error: "WorkflowEngine not found under ExduraSupervisor: {e}"
     ]
-    store :: EventStore := (sup which: EventStore) valueOrDo: [:e |
+    (engine isKindOf: WorkflowEngine) ifFalse: [
+      ^self error: "WorkflowEngine not running under ExduraSupervisor"
+    ]
+    store := (sup which: EventStore) valueOrDo: [:e |
       self error: "EventStore not found under ExduraSupervisor: {e}"
     ]
-    pool :: ActivityWorkerPool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
+    (store isKindOf: EventStore) ifFalse: [
+      ^self error: "EventStore not running under ExduraSupervisor"
+    ]
+    pool := (sup which: ActivityWorkerPool) valueOrDo: [:e |
       self error: "ActivityWorkerPool not found under ExduraSupervisor: {e}"
+    ]
+    (pool isKindOf: ActivityWorkerPool) ifFalse: [
+      ^self error: "ActivityWorkerPool not running under ExduraSupervisor"
     ]
 
     // Apply config
@@ -79,8 +89,11 @@ typed Object subclass: ExduraWorker
           #port => port,
           #workflowClasses => (workflowClasses collect: [:wc | wc name])
         }
-        http :: ExduraHttpServer := (sup which: ExduraHttpServer) valueOrDo: [:e |
+        http := (sup which: ExduraHttpServer) valueOrDo: [:e |
           self error: "ExduraHttpServer not found under ExduraSupervisor: {e}"
+        ]
+        (http isKindOf: ExduraHttpServer) ifFalse: [
+          ^self error: "ExduraHttpServer not running under ExduraSupervisor"
         ]
         http refreshFromDurableConfig
         client setHttpServer: http

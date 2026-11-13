@@ -258,7 +258,8 @@ typed Actor subclass: EventStore
     readResult isError ifTrue: [^nil]
     content := readResult unwrap
     content size =:= 0 ifTrue: [^nil]
-    result :: Dictionary := Binary deserialize: content
+    result := Binary deserialize: content
+    (result isKindOf: Dictionary) ifFalse: [^nil]
     result
 
   /// Path to the durable HTTP config file, if the HTTP API was ever

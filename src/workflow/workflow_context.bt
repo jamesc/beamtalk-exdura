@@ -571,7 +571,7 @@ typed Actor subclass: WorkflowContext
   /// ```
   waitForCondition: block :: Block(Dictionary(Symbol, Object), Object) timeout: ms :: Integer -> Nil =>
     deadline := (Time nowMs) + ms
-    (block value: self.workflowVars) ifTrue: [^nil]
+    ((block value: self.workflowVars) =:= true) ifTrue: [^nil]
     [true]
       whileTrue: [
         (Time nowMs) >= deadline ifTrue: [
@@ -595,7 +595,7 @@ typed Actor subclass: WorkflowContext
           ]
         self.receivedSignals := self.receivedSignals ++ self.deliveredSignals
         self.deliveredSignals := #()
-        (block value: self.workflowVars) ifTrue: [^nil]
+        ((block value: self.workflowVars) =:= true) ifTrue: [^nil]
         (self.engine isCancelled: self.workflowId) ifTrue: [
           CancellationError signal: "Workflow cancelled"
         ]
