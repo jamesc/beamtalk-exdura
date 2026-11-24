@@ -15,6 +15,7 @@
 /// }
 /// ```
 typed Value subclass: WorkflowExecution
+  uses: JsonMappable
   field: workflowId :: String = ""
   field: runId :: String = ""
   field: workflowType :: String = ""
@@ -28,19 +29,24 @@ typed Value subclass: WorkflowExecution
   field: closedAt :: Integer | Nil = nil
   field: searchAttributes :: Dictionary(String, Object) = #{}
 
+  /// JSON wire schema used by the HTTP client API (SPEC.md §7.2). `status`
+  /// is written as its string name; args, parentWorkflowId and
+  /// searchAttributes are intentionally not part of the wire shape.
+  ///
+  ///   Json generate: WorkflowExecution new
+  class jsonMapping -> JsonMapping =>
+    JsonMapping new
+      |> mapField: #workflowId
+      |> mapField: #runId
+      |> mapField: #workflowType
+      |> mapField: #taskQueue
+      |> mapField: #status
+         to: "status"
+         using: [:s :: Symbol | s asString]
+      |> mapField: #result
+      |> mapField: #error
+      |> mapField: #startedAt
+      |> mapField: #closedAt
+
   /// Display as WorkflowExecution(order-123 running)
   printString -> String => "WorkflowExecution({self workflowId} {self status})"
-
-  /// JSON representation used by the HTTP client API (SPEC.md §7.2).
-  asJson -> Dictionary(String, Object) =>
-    #{
-      "workflowId" => self.workflowId,
-      "runId" => self.runId,
-      "workflowType" => self.workflowType,
-      "taskQueue" => self.taskQueue,
-      "status" => self.status asString,
-      "result" => self.result,
-      "error" => self.error,
-      "startedAt" => self.startedAt,
-      "closedAt" => self.closedAt
-    }

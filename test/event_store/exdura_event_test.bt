@@ -59,3 +59,12 @@ TestCase subclass: ExduraEventTest
     e2 := e withEventId: 2
     self assert: e eventId equals: 1
     self assert: e2 eventId equals: 2
+
+  // BT-5139: JSON wire shape must not change (event store persists it).
+  testJsonShape =>
+    e := ExduraEvent
+      eventId: 1
+      eventType: #WorkflowStarted
+      timestamp: 1710000000
+      payload: #{#workflowId => "wf-1"}
+    self assert: (Json generate: e) equals: "\{""eventId"":1,""eventType"":""WorkflowStarted"",""payload"":\{""workflowId"":""wf-1""},""timestamp"":1710000000}"

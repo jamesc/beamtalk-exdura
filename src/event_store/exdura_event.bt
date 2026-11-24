@@ -14,19 +14,24 @@
 /// }
 /// ```
 typed Value subclass: ExduraEvent
+  uses: JsonMappable
   field: eventId :: Integer = 0
   field: eventType :: Symbol = #unknown
   field: timestamp :: Integer = 0
   field: payload :: Dictionary(Symbol, JsonValue) = #{}
 
+  /// JSON wire schema used by the HTTP client API and the persisted event
+  /// log (SPEC.md §7.2). `eventType` is written as its string name.
+  ///
+  ///   Json generate: (ExduraEvent eventId: 1 eventType: #WorkflowStarted timestamp: 5 payload: #{})
+  class jsonMapping -> JsonMapping =>
+    JsonMapping new
+      |> mapField: #eventId
+      |> mapField: #eventType
+         to: "eventType"
+         using: [:t :: Symbol | t asString]
+      |> mapField: #timestamp
+      |> mapField: #payload
+
   /// Display as ExduraEvent(1: WorkflowStarted)
   printString -> String => "ExduraEvent({self eventId}: {self eventType})"
-
-  /// JSON representation used by the HTTP client API (SPEC.md §7.2).
-  asJson -> Dictionary(String, Object) =>
-    #{
-      "eventId" => self.eventId,
-      "eventType" => self.eventType asString,
-      "timestamp" => self.timestamp,
-      "payload" => self.payload
-    }

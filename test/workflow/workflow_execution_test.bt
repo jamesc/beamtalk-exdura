@@ -45,3 +45,21 @@ TestCase subclass: WorkflowExecutionTest
     wf2 := wf withStatus: #completed
     self assert: wf status equals: #running
     self assert: wf2 status equals: #completed
+
+  // BT-5139: JSON wire shape must not change.
+  testJsonShapeDefault =>
+    self assert: (Json generate: WorkflowExecution new) equals: "\{""closedAt"":null,""error"":null,""result"":null,""runId"":"""",""startedAt"":0,""status"":""running"",""taskQueue"":"""",""workflowId"":"""",""workflowType"":""""}"
+
+  testJsonShapePopulated =>
+    wf := WorkflowExecution
+      new: #{
+        #workflowId => "wf-1",
+        #runId => "r",
+        #workflowType => "T",
+        #taskQueue => "q",
+        #status => #completed,
+        #result => 5,
+        #startedAt => 7,
+        #closedAt => 9
+      }
+    self assert: (Json generate: wf) equals: "\{""closedAt"":9,""error"":null,""result"":5,""runId"":""r"",""startedAt"":7,""status"":""completed"",""taskQueue"":""q"",""workflowId"":""wf-1"",""workflowType"":""T""}"
