@@ -200,7 +200,7 @@ TestCase subclass: ChildWorkflowTest
         #history => replayHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // Step 4: Verify replay didn't start a new child workflow
     // It should only add at most 1 new event (WorkflowCompleted from replay)

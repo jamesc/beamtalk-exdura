@@ -140,7 +140,7 @@ TestCase subclass: DurableTimerTest
       }
     runner go!
     // Wait for runner to complete
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
     // Stop engine before assertions to drain in-flight actors
     [self.engine stop] on: Error do: [:e | nil]
     self.engine := nil
@@ -204,7 +204,7 @@ TestCase subclass: DurableTimerTest
         #history => partialHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // Only the second activity should execute (first was replayed from history)
     self assert: (self callCount - countBeforeReplay) equals: 1
