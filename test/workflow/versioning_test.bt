@@ -116,7 +116,7 @@ TestCase subclass: VersioningTest
         #history => replayHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // The replayed workflow should produce v1-result (original version)
     // because the VersionMarker in history recorded version 1
@@ -201,7 +201,7 @@ TestCase subclass: VersioningTest
         #history => replayHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // The replay should return v1-result because version 1 was recorded
     eventsAfter := self.store readEvents: "wf-ver-replay" fromSeq: 1

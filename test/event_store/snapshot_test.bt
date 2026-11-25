@@ -187,7 +187,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-exec" events: #(startEvent)
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
     exec := self.store getExecution: "wf-snap-exec"
     self assert: exec status equals: #completed
 
@@ -236,7 +236,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-snap-replay" events: #(startEvent)
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
     exec := self.store getExecution: "wf-snap-replay"
     self assert: exec status equals: #completed
     originalResult := exec result
@@ -305,7 +305,7 @@ TestCase subclass: SnapshotTest
       }
     self.store appendEvents: "wf-no-snap" events: #(startEvent)
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
     exec := self.store getExecution: "wf-no-snap"
     self assert: exec status equals: #completed
     self assert: exec result equals: 5

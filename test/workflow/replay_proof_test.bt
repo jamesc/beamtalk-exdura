@@ -112,7 +112,7 @@ TestCase subclass: ReplayProofTest
         #history => replayHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // Step 4: Verify activities were NOT re-executed
     self assert: (self callCount - countBeforeReplay) equals: 0
@@ -142,7 +142,7 @@ TestCase subclass: ReplayProofTest
         #history => replayHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // The replay records a new WorkflowCompleted event — get its result
     eventsAfter := self.store readEvents: "wf-proof-3" fromSeq: 1
@@ -193,7 +193,7 @@ TestCase subclass: ReplayProofTest
         #history => partialHistory
       }
     runner go!
-    WorkflowRunner performLocally: #await:timeout: withArguments: #(semName, 10000)
+    WorkflowRunner await: semName timeout: 10000
 
     // Step 4: Only the SECOND activity should have executed live
     self assert: (self callCount - countBeforeReplay) equals: 1
