@@ -105,6 +105,35 @@ TestCase subclass: VersioningTest
     self assert: recorded isInteger
     self assert: recorded equals: 1
 
+  /// BT-5330: a corrupt (non-Integer) recorded version fails the replay
+  /// instead of leaking a non-Integer into the workflow's branching.
+  testCorruptVersionMarkerFailsReplay =>
+    self.engine
+      startWorkflow: VersionedWorkflowV1
+      id: "wf-ver-bad"
+      args: #("test")
+    self awaitWorkflow: "wf-ver-bad" timeout: 10000
+    history := self.store readEvents: "wf-ver-bad" fromSeq: 1
+    corrupt := history
+      collect: [:e |
+        e eventType =:= #VersionMarker ifTrue: [
+          e withPayload: #{#name => "payment-flow", #version => "1"}
+        ] ifFalse: [e]
+      ]
+    ctx := WorkflowContext spawnWith: #{#engine => self.engine}
+    ctx
+      initWith: self.engine
+      workflowId: "wf-ver-bad"
+      history: corrupt
+    self
+      should: [
+        ctx
+          version: "payment-flow"
+          defaultVersion: 1
+          maxVersion: 2
+      ]
+      raise: #user_error
+
   /// Replay returns the recorded version, not the current defaultVersion.
   testReplayReturnsRecordedVersionNotCurrentDefault =>
     // Step 1: Run workflow with defaultVersion 1
