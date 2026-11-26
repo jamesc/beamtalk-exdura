@@ -2,7 +2,8 @@
 ///
 /// Tracks identity, status, and lifecycle timestamps. Stored in the
 /// EventStore and updated as the workflow progresses through its states:
-/// #running → #completed | #failed | #cancelled.
+/// #running → #completed | #failed | #cancelled | #continued_as_new
+/// (see `WorkflowStatus`).
 ///
 /// ## Examples
 /// ```beamtalk
@@ -21,7 +22,7 @@ typed Value subclass: WorkflowExecution
   field: workflowType :: String = ""
   field: taskQueue :: String = ""
   field: args :: List = #()
-  field: status :: Symbol = #running
+  field: status :: WorkflowStatus = #running
   field: result :: Object | Nil = nil
   field: error :: String | Nil = nil
   field: parentWorkflowId :: String | Nil = nil
