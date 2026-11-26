@@ -482,7 +482,8 @@ typed Actor subclass: WorkflowContext
   ///
   /// During replay, returns the recorded version. During first execution,
   /// records the default version. Enables safe code changes for in-flight
-  /// workflows per SPEC §6.4.
+  /// workflows per SPEC §6.4. A recorded marker whose version is not an
+  /// Integer raises an error rather than being returned.
   ///
   /// ## Examples
   /// ```beamtalk
@@ -497,7 +498,13 @@ typed Actor subclass: WorkflowContext
           ifTrue: [
             markerEvent := self.eventHistory at: firstIdx
             self.replayCursor := firstIdx
-            ^markerEvent payload at: #version
+            // The payload is a JsonValue read back from persisted history;
+            // narrow it so a corrupt marker fails loudly instead of leaking
+            // a non-Integer to the workflow's branching logic.
+            ^(markerEvent payload at: #version) match: [
+              v :: Integer -> v;
+              _ -> self error: "VersionMarker version payload is not an Integer"
+            ]
           ]
       ]
     // ── Live execution ──
