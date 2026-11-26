@@ -63,16 +63,18 @@ typed Actor subclass: ExduraHttpServer
 
   /// Carry a shape-1 instance across a hot reload.
   ///
-  /// Shape 1 had no `listening` flag: a bound listener was recorded only by
-  /// the presence of the `late` `httpServer` slot. Structural reconcile
-  /// alone would default `listening` to `false`, so a live, bound server
-  /// reloaded into shape 2 would try to rebind its own port on the next
-  /// `startListening`. Derive the flag from the slot instead.
+  /// No shape version was declared when the `listening` flag was added, so
+  /// "shape 1" covers both layouts: instances that predate the flag record a
+  /// bound listener only by the presence of the `late` `httpServer` slot.
+  /// For those, derive the flag from the slot. Instances that already carry
+  /// `listening` keep their live value.
   ///
   ///   ExduraHttpServer migrateShape: #{#port => 0} from: 1
   ///   // => #{#port => 0, #listening => false, ...}
   class migrateFromV1: old :: Dictionary -> Dictionary =>
-    old at: #listening put: (old includesKey: #httpServer)
+    (old includesKey: #listening) ifTrue: [
+      old
+    ] ifFalse: [old at: #listening put: (old includesKey: #httpServer)]
 
   /// A crashed HTTP listener must come back up, not silently disappear.
   class supervisionPolicy -> Symbol => #permanent
