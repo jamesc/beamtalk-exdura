@@ -44,6 +44,7 @@
 /// http destroy
 /// ```
 typed Actor subclass: ExduraHttpServer
+  shapeVersion: 2
   late state: httpServer :: HTTPServer
   state: port :: Integer | Nil = nil
   state: workflowClasses :: List(Workflow class) | Nil = nil
@@ -59,6 +60,19 @@ typed Actor subclass: ExduraHttpServer
   // (`initialize` itself now tests `hasField: #engine`/`#store`), so this
   // could become a `hasField:` test.
   state: listening :: Boolean = false
+
+  /// Carry a shape-1 instance across a hot reload.
+  ///
+  /// Shape 1 had no `listening` flag: a bound listener was recorded only by
+  /// the presence of the `late` `httpServer` slot. Structural reconcile
+  /// alone would default `listening` to `false`, so a live, bound server
+  /// reloaded into shape 2 would try to rebind its own port on the next
+  /// `startListening`. Derive the flag from the slot instead.
+  ///
+  ///   ExduraHttpServer migrateShape: #{#port => 0} from: 1
+  ///   // => #{#port => 0, #listening => false, ...}
+  class migrateFromV1: old :: Dictionary -> Dictionary =>
+    old at: #listening put: (old includesKey: #httpServer)
 
   /// A crashed HTTP listener must come back up, not silently disappear.
   class supervisionPolicy -> Symbol => #permanent

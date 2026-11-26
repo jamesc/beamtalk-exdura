@@ -64,11 +64,12 @@ typed Value subclass: ChildWorkflowHandle
         exec := self eventStore getExecution: self childWorkflowId
         exec isNil
           ifFalse: [
-            exec status match: [
+            exec status matchExhaustive: [
+              #running -> nil;
               #completed -> [^exec result] value;
               #failed -> self error: "Child workflow failed: {exec result}";
               #cancelled -> self error: "Child workflow cancelled: {self childWorkflowId}";
-              _ -> nil
+              #continued_as_new -> nil
             ]
           ]
         Timer sleep: 100
@@ -89,11 +90,12 @@ typed Value subclass: ChildWorkflowHandle
         exec := self eventStore getExecution: self childWorkflowId
         exec isNil
           ifFalse: [
-            exec status match: [
+            exec status matchExhaustive: [
+              #running -> nil;
               #completed -> [^exec result] value;
               #failed -> self error: "Child workflow failed: {exec result}";
               #cancelled -> self error: "Child workflow cancelled: {self childWorkflowId}";
-              _ -> nil
+              #continued_as_new -> nil
             ]
           ]
         (Time nowMs) >= deadline ifTrue: [

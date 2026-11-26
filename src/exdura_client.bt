@@ -207,12 +207,10 @@ typed Actor subclass: ExduraClient
       sup -> ^sup stop
     ]
     // Non-supervised: clean up components individually
-    poolResult := Result tryDo: [self.engine activityPool]
-    poolResult isOk
-      ifTrue: [
-        p := poolResult unwrap
-        Result tryDo: [p destroy]
-      ]
+    (Result tryDo: [self.engine activityPool]) match: [
+      Result ok: p -> Result tryDo: [p destroy];
+      Result error: _ -> nil
+    ]
     [self.engine stop] on: Error do: [:e | nil]
     [self.eventStore destroyWithFiles] on: Error do: [:e | nil]
     [self.eventStore stop] on: Error do: [:e | nil]

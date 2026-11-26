@@ -39,12 +39,12 @@ typed Value subclass: WorkflowHandle
         exec := self client getExecution: self workflowId
         exec isNil
           ifFalse: [
-            exec status match: [
+            exec status matchExhaustive: [
+              #running -> nil;
               #completed -> [^exec result] value;
               #failed -> self error: "Workflow failed: {exec result}";
               #cancelled -> self error: "Workflow cancelled: {self workflowId}";
-              #continued_as_new -> nil;
-              _ -> nil
+              #continued_as_new -> nil
             ]
           ]
         Timer sleep: 100
@@ -63,12 +63,12 @@ typed Value subclass: WorkflowHandle
         exec := self client getExecution: self workflowId
         exec isNil
           ifFalse: [
-            exec status match: [
+            exec status matchExhaustive: [
+              #running -> nil;
               #completed -> [^exec result] value;
               #failed -> self error: "Workflow failed: {exec result}";
               #cancelled -> self error: "Workflow cancelled: {self workflowId}";
-              #continued_as_new -> nil;
-              _ -> nil
+              #continued_as_new -> nil
             ]
           ]
         (Time nowMs) >= deadline ifTrue: [

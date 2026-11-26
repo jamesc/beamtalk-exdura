@@ -173,3 +173,24 @@ TestCase subclass: ExduraHttpServerTest
 
     exec := self awaitStatus: "http-cancel-1" timeout: 5000
     self assert: exec status equals: #cancelled
+
+  // === shapeVersion: 2 (ADR 0123) ===
+  // Shape 1 predates the `listening` flag: a bound listener was recorded only
+  // by the presence of the `late` `httpServer` slot.
+  testMigrateFromV1DerivesListeningFromHttpServerSlot =>
+    bound := ExduraHttpServer migrateShape: #{
+      #httpServer => "listener",
+      #port => 4100
+    } from: 1
+    self assert: (bound at: #listening) equals: true
+    self assert: (bound at: #port) equals: 4100
+
+  testMigrateFromV1WithoutListenerIsNotListening =>
+    unbound := ExduraHttpServer migrateShape: #{
+      #port => 0,
+      #workflowClasses => #()
+    } from: 1
+    self assert: (unbound at: #listening) equals: false
+    self assert: (unbound at: #workflowClasses) equals: #()
+
+  testShapeVersionIsTwo => self assert: ExduraHttpServer shapeVersion equals: 2

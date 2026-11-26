@@ -1,0 +1,16 @@
+/// Lifecycle states of a workflow execution.
+///
+/// `#running` is the only open state; the other four are terminal.
+/// `#continued_as_new` marks a run that handed off to a fresh run of the
+/// same workflow. Declared as a closed union so a `matchExhaustive:` over
+/// `WorkflowExecution status` fails to compile when a state is added and
+/// not handled.
+///
+///   exec status matchExhaustive: [
+///     #running -> nil;
+///     #completed -> exec result;
+///     #failed -> self error: "failed";
+///     #cancelled -> self error: "cancelled";
+///     #continued_as_new -> nil
+///   ]
+type WorkflowStatus = #running | #completed | #failed | #cancelled | #continued_as_new
